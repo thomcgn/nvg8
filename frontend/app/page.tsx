@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import React, { useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 
@@ -105,7 +105,9 @@ export default function Home() {
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       placeholder="vorname.nachname@traeger.de"
-                      className="w-full rounded-lg border border-gray-300 px-4 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                      className="w-full rounded-lg border border-gray-300 px-4 py-2
+               placeholder-gray-700 text-black
+               focus:ring-2 focus:ring-indigo-500 focus:outline-none"
                   />
                 </div>
 
@@ -119,7 +121,9 @@ export default function Home() {
                       required
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      className="w-full rounded-lg border border-gray-300 px-4 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                      className="w-full rounded-lg border border-gray-300 px-4 py-2
+               placeholder-gray-700 text-black
+               focus:ring-2 focus:ring-indigo-500 focus:outline-none"
                   />
                 </div>
 

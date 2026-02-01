@@ -1,16 +1,24 @@
 "use client";
 
-import Link from "next/link";
-
 export default function Sidebar() {
+    const handleNewCaseClick = () => {
+        window.dispatchEvent(new CustomEvent("start-new-case"));
+    };
+
     return (
-        <aside className="w-64 bg-gray-600 text-white min-h-screen flex flex-col p-6">
-            <h2 className="text-2xl font-bold mb-8">Navig8tor</h2>
-            <nav className="flex flex-col gap-4">
-                <Link href="/dashboard" className="hover:bg-indigo-600 px-3 py-2 rounded">Dashboard</Link>
-                <Link href="/dashboard/users" className="hover:bg-indigo-600 px-3 py-2 rounded">Benutzer</Link>
-                <Link href="/dashboard/cases" className="hover:bg-indigo-600 px-3 py-2 rounded">Fälle</Link>
-                <Link href="/dashboard/settings" className="hover:bg-indigo-600 px-3 py-2 rounded">Einstellungen</Link>
+        <aside className="w-64 bg-white border-r px-6 py-8">
+            <h2 className="text-xl font-bold text-gray-900 mb-8">Navig8tor</h2>
+
+            <nav className="space-y-4 text-gray-700">
+                <div className="font-medium text-indigo-600">Übersicht</div>
+                <div className="hover:text-gray-900 cursor-pointer">Fälle</div>
+                <div
+                    className="hover:text-gray-900 cursor-pointer"
+                    onClick={handleNewCaseClick}
+                >
+                    Neuer Fall
+                </div>
+                <div className="hover:text-gray-900 cursor-pointer">Stammdaten</div>
             </nav>
         </aside>
     );

@@ -2,16 +2,20 @@ package org.thomcgn.backend.auth.data;
 
 import jakarta.persistence.*;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
+import org.thomcgn.backend.model.Person;
 
 
+import java.time.LocalDateTime;
 import java.util.UUID;
+@EqualsAndHashCode(callSuper = true)
 @Data
 @Entity
 @Table(name="users")
-public class User {
+public class User extends Person {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private long id;
+    private Long id;
     @Column(unique = true, nullable = false)
     private String email;
     @Column(nullable = false)
@@ -20,5 +24,6 @@ public class User {
     @Column(nullable = false)
     private Role role;
     private boolean enabled = true;
+    private LocalDateTime lastLogin;
 
 }

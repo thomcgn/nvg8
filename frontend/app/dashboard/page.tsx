@@ -1,88 +1,54 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import Sidebar from "./components/Sidebar";
-import Navbar from "./components/Navbar";
-import Card from "./components/Card";
-import { FaUsers, FaFolderOpen } from "react-icons/fa";
+import { useState } from "react";
+import StatCard from "./components/StatCard";
+import CaseTable from "./components/CaseTable";
+import CaseWizard from "../cases/components/CaseWizard"; // Wizard import
+import { FaUsers, FaFolderOpen, FaExclamationTriangle } from "react-icons/fa";
+import { Case } from "@/app/dashboard/components/types";
 
-interface Case {
-    id: number;
-    title: string;
-    status: string;
+const mockCases: Case[] = [
+    { id: 1, childName: "Lena M.", age: 4, status: "AKUT", lastActivity: "heute" },
+    { id: 2, childName: "Tom S.", age: 9, status: "BEOBACHTUNG", lastActivity: "gestern" },
+    { id: 3, childName: "Amir K.", age: 2, status: "RUHEND", lastActivity: "12.01.2026" },
+];
+
+interface DashboardPageProps {
+    startWizard?: () => void; // Callback von Sidebar
 }
 
-interface User {
-    id: number;
-    email: string;
-    roles: string[];
-}
+export default function DashboardPage({ startWizard }: DashboardPageProps) {
+    const [showWizard, setShowWizard] = useState(false);
 
-export default function DashboardPage() {
-    const [users, setUsers] = useState<User[]>([]);
-    const [cases, setCases] = useState<Case[]>([]);
-    const [loading, setLoading] = useState(true);
+    // Wird vom Layout / Sidebar aufgerufen
+    const openWizard = () => {
+        setShowWizard(true);
+        startWizard?.(); // optional, falls du im Layout noch was triggern willst
+    };
 
-    const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
-    const token = typeof window !== "undefined" ? localStorage.getItem("jwt") : null;
-
-    useEffect(() => {
-        if (!token) return;
-
-        const fetchData = async () => {
-            try {
-                const [usersRes, casesRes] = await Promise.all([
-                    fetch(`${API_URL}/users`, { headers: { Authorization: `Bearer ${token}` } }),
-                    fetch(`${API_URL}/cases`, { headers: { Authorization: `Bearer ${token}` } }),
-                ]);
-
-                if (!usersRes.ok || !casesRes.ok) throw new Error("Fehler beim Laden der Daten");
-
-                setUsers(await usersRes.json());
-                setCases(await casesRes.json());
-            } catch (err) {
-                console.error(err);
-            } finally {
-                setLoading(false);
-            }
-        };
-
-        fetchData();
-    }, [token, API_URL]);
+    const cancelWizard = () => setShowWizard(false);
 
     return (
-        <div className="flex">
-            <Sidebar />
-
-            <div className="flex-1 flex flex-col">
-                <Navbar />
-
-                <main className="p-6 bg-gray-600 flex-1">
-                    <h2 className="text-2xl font-bold mb-6">Übersicht</h2>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
-                        <Card title="Benutzer gesamt" value={users.length} icon={<FaUsers />} />
-                        <Card title="Fälle gesamt" value={cases.length} icon={<FaFolderOpen />} />
-                        <Card title="Offene Fälle" value={cases.filter(c => c.status === "offen").length} />
-                        <Card title="Abgeschlossene Fälle" value={cases.filter(c => c.status === "abgeschlossen").length} />
-                    </div>
-
-                    <section className="bg-white rounded shadow p-4">
-                        <h3 className="text-xl text-black font-semibold mb-4">Neueste Fälle</h3>
-                        {loading ? (
-                            <p className="text-black">Lade Daten...</p>
-                        ) : (
-                            <ul className="divide-y">
-                                {cases.slice(0, 5).map(c => (
-                                    <li key={c.id} className="py-2">
-                                        <strong>{c.title}</strong> – {c.status}
-                                    </li>
-                                ))}
-                            </ul>
-                        )}
+        <>
+            {showWizard ? (
+                <CaseWizard onCancel={cancelWizard} />
+            ) : (
+                <>
+                    {/* STATCARDS */}
+                    <section className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+                        <StatCard title="Meine offenen Fälle" value={7} icon={<FaFolderOpen />} />
+                        <StatCard title="Akut gefährdet" value={2} icon={<FaExclamationTriangle />} />
+                        <StatCard title="Abgeschlossen (30 Tage)" value={5} />
+                        <StatCard title="Kinder gesamt" value={18} icon={<FaUsers />} />
                     </section>
-                </main>
-            </div>
-        </div>
+
+                    {/* CASETABLE */}
+                    <section className="bg-white rounded-lg shadow p-6">
+                        <h3 className="text-lg font-semibold text-gray-900 mb-4">Meine Fälle</h3>
+                        <CaseTable cases={mockCases} />
+                    </section>
+                </>
+            )}
+        </>
     );
 }

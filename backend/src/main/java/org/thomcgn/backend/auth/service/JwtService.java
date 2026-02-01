@@ -1,5 +1,6 @@
 package org.thomcgn.backend.auth.service;
 
+import io.jsonwebtoken.SignatureAlgorithm;
 import org.springframework.stereotype.Service;
 import org.thomcgn.backend.auth.data.User;
 
@@ -24,10 +25,12 @@ public class JwtService {
     public String generateToken(User user) {
         return Jwts.builder()
                 .setSubject(String.valueOf(user.getId()))
+                .claim("email", user.getEmail())
                 .claim("role", user.getRole().name())
+                .claim("name", user.getVorname() + " " + user.getNachname())
                 .setIssuedAt(new Date())
                 .setExpiration(new Date(System.currentTimeMillis() + EXPIRATION_MS))
-                .signWith(key)
+                .signWith(key, SignatureAlgorithm.HS256)
                 .compact();
     }
 

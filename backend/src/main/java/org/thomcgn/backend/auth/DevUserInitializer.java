@@ -16,11 +16,21 @@ public class DevUserInitializer {
         return args -> {
             if (repo.count() == 0) {
                 User user = new User();
-                user.setEmail("fachkraft@test.de");
-                user.setPasswordHash(encoder.encode("test123"));
-                user.setRole(Role.FACHKRAFT);
+                user.setEmail("admin@nvg8.de");
+                user.setPasswordHash(encoder.encode("admin"));
+                user.setRole(Role.ADMIN);
+
+                // Person-Daten
+                user.setVorname("Tom");
+                user.setNachname("Kramer");
+                user.setStrasse("Musterstraße");
+                user.setHausnummer("12A");
+                user.setPlz("12345");
+                user.setOrt("Köln");
+                user.setTelefon("01234/56789");
+
                 repo.save(user);
-                System.out.println("✅ Dev-User angelegt: fachkraft@test.de / test123");
+
             }
         };
     }
