@@ -26,7 +26,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
             const payload = JSON.parse(atob(token.split(".")[1]));
             setUserName(payload?.name || "–");
             setUserRole(payload?.role || "–");
-            setLastLogin(payload?.lastLogin || "–"); // später optional aus API
+            setLastLogin(payload?.lastLogin || "–"); // optional aus API
         } catch (err) {
             console.error("Fehler beim Lesen des Tokens:", err);
             router.replace("/");
@@ -35,13 +35,8 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
     return (
         <div className="flex min-h-screen bg-gray-100">
-            <Sidebar />
-
-            <div className="flex-1 flex flex-col">
-                <Navbar userName={userName} userRole={userRole} lastLogin={lastLogin} />
-
-                <main className="p-8 flex-1">{children}</main>
-            </div>
+            {/* Sidebar wird von DashboardPage mit Callback gesteuert */}
+            {children}
         </div>
     );
 }
