@@ -31,10 +31,12 @@ export default function Home() {
       }
 
       const data = await res.json();
-      const token = data.token;
 
-      // JWT im localStorage speichern (für MVP; später httpOnly Cookie empfohlen)
-      localStorage.setItem("jwt", token);
+      // JWT + Userinfos speichern
+      localStorage.setItem("jwt", data.token);
+      localStorage.setItem("userName", data.name);
+      localStorage.setItem("userRole", data.role);
+      localStorage.setItem("lastLogin", data.lastLogin);
 
       // Weiterleitung zum Dashboard
       router.push("/dashboard");
@@ -105,9 +107,7 @@ export default function Home() {
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       placeholder="vorname.nachname@traeger.de"
-                      className="w-full rounded-lg border border-gray-300 px-4 py-2
-               placeholder-gray-700 text-black
-               focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                      className="w-full rounded-lg border border-gray-300 px-4 py-2 placeholder-gray-700 text-black focus:ring-2 focus:ring-indigo-500 focus:outline-none"
                   />
                 </div>
 
@@ -121,9 +121,8 @@ export default function Home() {
                       required
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      className="w-full rounded-lg border border-gray-300 px-4 py-2
-               placeholder-gray-700 text-black
-               focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                      placeholder="Passwort"
+                      className="w-full rounded-lg border border-gray-300 px-4 py-2 placeholder-gray-700 text-black focus:ring-2 focus:ring-indigo-500 focus:outline-none"
                   />
                 </div>
 
