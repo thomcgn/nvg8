@@ -1,7 +1,4 @@
-version: "3.9"
-
 services:
-
   postgres:
     image: postgres:16
     container_name: nvg8-postgres
@@ -12,8 +9,6 @@ services:
       POSTGRES_PASSWORD: devpass
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
     networks:
       - nvg8-network
 
@@ -29,8 +24,6 @@ services:
       SPRING_DATASOURCE_PASSWORD: devpass
       SPRING_JPA_HIBERNATE_DDL_AUTO: update
       SERVER_PORT: 8080
-    ports:
-      - "8080:8080"
     networks:
       - nvg8-network
 
@@ -38,17 +31,30 @@ services:
     build: ./frontend
     container_name: nvg8-frontend
     restart: unless-stopped
-    environment:
-      NEXT_PUBLIC_API_URL: http://localhost:8080
-    ports:
-      - "3000:3000"
     depends_on:
       - backend
     networks:
       - nvg8-network
 
+  nginx:
+    image: nginx:stable-alpine
+    container_name: nvg8-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+      - certs:/etc/letsencrypt
+    depends_on:
+      - backend
+      - frontend
+    networks:
+      - nvg8-network
+
 volumes:
   postgres_data:
+  certs:
 
 networks:
   nvg8-network:
