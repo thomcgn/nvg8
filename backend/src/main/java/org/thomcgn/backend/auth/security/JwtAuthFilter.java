@@ -2,6 +2,7 @@ package org.thomcgn.backend.auth.security;
 
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
+import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -28,31 +29,69 @@ public class JwtAuthFilter extends OncePerRequestFilter {
     }
 
     @Override
-    protected void doFilterInternal(HttpServletRequest request,
-                                    HttpServletResponse response,
-                                    FilterChain filterChain)
-            throws ServletException, IOException {
+    protected void doFilterInternal(
+            HttpServletRequest request,
+            HttpServletResponse response,
+            FilterChain filterChain
+    ) throws ServletException, IOException {
 
+        String token = null;
+
+        /* -------------------------------------------------
+         * 1️⃣ JWT aus Authorization-Header lesen (optional)
+         *    Unterstützt z.B. Postman / Swagger
+         * ------------------------------------------------- */
         String authHeader = request.getHeader("Authorization");
-
         if (authHeader != null && authHeader.startsWith("Bearer ")) {
-            String token = authHeader.substring(7);
+            token = authHeader.substring(7);
+        }
+
+        /* -------------------------------------------------
+         * 2️⃣ Falls kein Header vorhanden:
+         *    JWT aus HTTP-only Cookie lesen (Standard für Web)
+         * ------------------------------------------------- */
+        if (token == null && request.getCookies() != null) {
+            for (Cookie cookie : request.getCookies()) {
+                if ("token".equals(cookie.getName())) {
+                    token = cookie.getValue();
+                    break;
+                }
+            }
+        }
+
+        /* -------------------------------------------------
+         * 3️⃣ Token validieren und SecurityContext setzen
+         * ------------------------------------------------- */
+        if (token != null) {
             try {
                 var claims = jwtService.parseToken(token);
+
                 Long userId = Long.parseLong(claims.getSubject());
                 User user = userRepository.findById(userId).orElse(null);
 
                 if (user != null) {
-                    var authorities = List.of(new SimpleGrantedAuthority("ROLE_" + user.getRole().name()));
-                    var authToken = new UsernamePasswordAuthenticationToken(user, null, authorities);
-                    SecurityContextHolder.getContext().setAuthentication(authToken);
+                    var authorities = List.of(
+                            new SimpleGrantedAuthority("ROLE_" + user.getRole().name())
+                    );
+
+                    var authentication = new UsernamePasswordAuthenticationToken(
+                            user,
+                            null,
+                            authorities
+                    );
+
+                    SecurityContextHolder.getContext().setAuthentication(authentication);
                 }
 
             } catch (Exception e) {
-                // Invalid token -> kein AuthenticationContext gesetzt, Request wird 401 wenn nötig
+                // Token ungültig / abgelaufen → keine Authentifizierung
+                // Request läuft weiter, aber als "anonym"
             }
         }
 
+        /* -------------------------------------------------
+         * 4️⃣ Request an nächsten Filter weiterreichen
+         * ------------------------------------------------- */
         filterChain.doFilter(request, response);
     }
 }

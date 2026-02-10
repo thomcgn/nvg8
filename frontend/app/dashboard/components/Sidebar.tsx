@@ -1,10 +1,10 @@
 "use client";
 
-interface SidebarProps {
-    onStartWizard?: () => void; // Callback für "Neuer Fall"
-}
-
 import { useRouter } from "next/navigation";
+
+interface SidebarProps {
+    onStartWizard?: () => void;
+}
 
 export default function Sidebar({ onStartWizard }: SidebarProps) {
     const router = useRouter();
@@ -21,18 +21,24 @@ export default function Sidebar({ onStartWizard }: SidebarProps) {
                     Übersicht
                 </div>
 
-                <div className="cursor-pointer hover:text-gray-900">
+                <div
+                    onClick={() => router.push("/dashboard/cases")}
+                    className="cursor-pointer hover:text-gray-900"
+                >
                     Fälle
                 </div>
 
                 <div
-                    onClick={() => onStartWizard?.()} // Wizard starten
+                    onClick={() => onStartWizard?.()}
                     className="cursor-pointer font-medium text-indigo-600"
                 >
                     Neuer Fall
                 </div>
 
-                <div className="cursor-pointer hover:text-gray-900">
+                <div
+                    onClick={() => router.push("/dashboard/stammdaten")}
+                    className="cursor-pointer hover:text-gray-900"
+                >
                     Stammdaten
                 </div>
             </nav>

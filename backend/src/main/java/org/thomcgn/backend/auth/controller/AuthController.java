@@ -1,5 +1,7 @@
 package org.thomcgn.backend.auth.controller;
 
+import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -23,6 +25,10 @@ public class AuthController {
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
 
+    // DEV-Flag aus application.properties oder ENV
+    @Value("${app.devMode:true}")
+    private boolean devMode;
+
     public AuthController(
             UserRepository userRepository,
             PasswordEncoder passwordEncoder,
@@ -34,7 +40,7 @@ public class AuthController {
     }
 
     @PostMapping("/login")
-    public ResponseEntity<LoginResponse> login(@RequestBody LoginRequest request) {
+    public ResponseEntity<LoginResponse> login(@RequestBody LoginRequest request, HttpServletResponse response) {
         User user = userRepository.findByEmail(request.email())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Ungültige Zugangsdaten"));
 
@@ -42,23 +48,31 @@ public class AuthController {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Ungültige Zugangsdaten");
         }
 
-        // Letzten Login speichern
         LocalDateTime previousLogin = user.getLastLogin();
         user.setLastLogin(LocalDateTime.now());
         userRepository.save(user);
 
-        // JWT erstellen mit vorherigem Login
         String token = jwtService.generateToken(user, previousLogin);
 
-        // Response bauen
-        LoginResponse response = new LoginResponse(
+        // Cookie richtig setzen je nach DEV/PROD
+        String sameSite = devMode ? "Lax" : "None";
+        String secure = devMode ? "" : "Secure; ";
+        String cookieValue = String.format(
+                "token=%s; HttpOnly; %sPath=/; Max-Age=%d; SameSite=%s",
                 token,
+                secure,
+                60 * 60,
+                sameSite
+        );
+
+        response.setHeader("Set-Cookie", cookieValue);
+
+        return ResponseEntity.ok(new LoginResponse(
+                null, // Token im Body nicht nötig
                 user.getVorname() + " " + user.getNachname(),
                 user.getRole().name(),
                 previousLogin
-        );
-
-        return ResponseEntity.ok(response);
+        ));
     }
 
     @GetMapping("/me")
