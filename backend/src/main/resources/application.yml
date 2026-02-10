@@ -9,3 +9,13 @@ spring:
       ddl-auto: ${SPRING_JPA_HIBERNATE_DDL_AUTO:update}
     show-sql: true
     database-platform: org.hibernate.dialect.PostgreSQLDialect
+
+# DEV/PROD Flag
+app:
+  devMode: ${APP_DEV_MODE:true}
+
+# CORS global config
+cors:
+  allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000}
+  allowed-methods: GET,POST,PUT,DELETE,OPTIONS
+  allow-credentials: true

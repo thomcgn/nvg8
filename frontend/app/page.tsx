@@ -23,6 +23,7 @@ export default function Home() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password }),
+        credentials: "include", // wichtig für Cookie
       });
 
       if (!res.ok) {
@@ -30,15 +31,11 @@ export default function Home() {
         throw new Error(errData?.message || "Login fehlgeschlagen");
       }
 
+      // Response enthält jetzt nur noch Userinfos, JWT kommt automatisch als HTTP-only Cookie
       const data = await res.json();
 
-      // JWT + Userinfos speichern
-      localStorage.setItem("jwt", data.token);
-      localStorage.setItem("userName", data.name);
-      localStorage.setItem("userRole", data.role);
-      localStorage.setItem("lastLogin", data.lastLogin);
-
-      // Weiterleitung zum Dashboard
+      // Optional: Userinfos im State oder Context speichern
+      // localStorage wird hier nicht mehr benötigt
       router.push("/dashboard");
     } catch (err: any) {
       setError(err.message);
@@ -49,7 +46,7 @@ export default function Home() {
 
   return (
       <main className="min-h-screen bg-gray-100 flex flex-col items-center justify-center px-4">
-        {/* HEADER */}
+        {/* Header */}
         <header className="mb-6 text-center">
           <h1 className="text-3xl md:text-4xl font-semibold text-gray-900">
             Navig8tor – Fallkompass
@@ -59,9 +56,8 @@ export default function Home() {
           </p>
         </header>
 
-        {/* CONTAINER */}
         <div className="w-full max-w-6xl grid grid-cols-1 md:grid-cols-2 rounded-2xl overflow-hidden shadow-2xl bg-white">
-          {/* HERO */}
+          {/* Hero */}
           <section className="relative min-h-105">
             <Image
                 src="/hero2.jpg"
@@ -83,7 +79,7 @@ export default function Home() {
             </div>
           </section>
 
-          {/* LOGIN */}
+          {/* Login */}
           <section className="flex items-center justify-center p-8">
             <div className="w-full max-w-sm">
               <h3 className="text-2xl font-semibold text-gray-900 mb-2">
