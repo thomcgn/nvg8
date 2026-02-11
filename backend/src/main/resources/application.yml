@@ -4,18 +4,22 @@ spring:
     username: ${SPRING_DATASOURCE_USERNAME:dev}
     password: ${SPRING_DATASOURCE_PASSWORD:devpass}
     driver-class-name: org.postgresql.Driver
+
   jpa:
     hibernate:
       ddl-auto: ${SPRING_JPA_HIBERNATE_DDL_AUTO:update}
     show-sql: true
     database-platform: org.hibernate.dialect.PostgreSQLDialect
 
-# DEV/PROD Flag
 app:
   devMode: ${APP_DEV_MODE:true}
 
-# CORS global config
+  # Admin Bootstrap (einmalig per ENV aktivieren)
+  bootstrapAdmin: ${APP_BOOTSTRAP_ADMIN:false}
+  bootstrapAdminEmail: ${APP_BOOTSTRAP_ADMIN_EMAIL:admin@nvg8.de}
+  bootstrapAdminPassword: ${APP_BOOTSTRAP_ADMIN_PASSWORD:}
+
 cors:
   allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000}
-  allowed-methods: GET,POST,PUT,DELETE,OPTIONS
-  allow-credentials: true
+  allowed-methods: ${CORS_ALLOWED_METHODS:GET,POST,PUT,DELETE,OPTIONS}
+  allow-credentials: ${CORS_ALLOW_CREDENTIALS:true}

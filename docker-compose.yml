@@ -1,5 +1,4 @@
 services:
-
   postgres:
     image: postgres:16
     container_name: nvg8-postgres
@@ -23,22 +22,14 @@ services:
       SPRING_DATASOURCE_PASSWORD: devpass
       SPRING_JPA_HIBERNATE_DDL_AUTO: update
 
-      # Prod/Dev Flag für Cookie SameSite/Secure in deinem Controller
       APP_DEV_MODE: "false"
 
-      # CORS
       CORS_ALLOWED_ORIGINS: "https://nvg8.witchplease.de"
-      CORS_ALLOWED_METHODS: "GET,POST,PUT,DELETE,OPTIONS"
-      CORS_ALLOW_CREDENTIALS: "true"
 
-      # Bootstrap Admin (einmalig!)
-      APP_BOOTSTRAPADMIN_ENABLED: "true"
-      APP_BOOTSTRAPADMIN_EMAIL: "admin@nvg8.de"
-      APP_BOOTSTRAPADMIN_PASSWORD: "adminNVG8"
-
-      # (optional) Security Debug kurzzeitig
-      # LOGGING_LEVEL_ORG_SPRINGFRAMEWORK_SECURITY: "DEBUG"
-
+      # ✅ Bootstrap Admin (einmalig)
+      APP_BOOTSTRAP_ADMIN: "true"
+      APP_BOOTSTRAP_ADMIN_EMAIL: "admin@nvg8.de"
+      APP_BOOTSTRAP_ADMIN_PASSWORD: "adminNVG8"
     ports:
       - "127.0.0.1:8080:8080"
 
