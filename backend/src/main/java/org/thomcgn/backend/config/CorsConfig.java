@@ -32,7 +32,7 @@ public class CorsConfig {
                 .map(String::trim)
                 .toList();
 
-        // Wichtig: bei Credentials lieber Patterns
+        // bei Cookies ist Pattern oft besser (https://…)
         config.setAllowedOriginPatterns(origins);
 
         config.setAllowedMethods(Arrays.stream(allowedMethods.split(","))
