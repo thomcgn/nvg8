@@ -26,7 +26,7 @@ services:
       APP_DEV_MODE: "false"
       CORS_ALLOWED_ORIGINS: "https://nvg8.witchplease.de"
     ports:
-      - "8080:8080"
+      - "127.0.0.1:8080:8080"
 
   frontend:
     build: ./frontend
@@ -35,7 +35,7 @@ services:
     depends_on:
       - backend
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
 
 volumes:
   postgres_data:
