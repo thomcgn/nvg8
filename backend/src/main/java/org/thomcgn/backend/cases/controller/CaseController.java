@@ -6,7 +6,9 @@ import org.springframework.web.bind.annotation.*;
 import org.thomcgn.backend.auth.data.User;
 import org.thomcgn.backend.cases.dto.DraftRequest;
 import org.thomcgn.backend.cases.model.CaseFile;
+import org.thomcgn.backend.cases.model.Erziehungsperson;
 import org.thomcgn.backend.cases.model.Kind;
+import org.thomcgn.backend.cases.repo.ErziehungspersonRepository;
 import org.thomcgn.backend.cases.services.CaseService;
 import org.thomcgn.backend.cases.repo.KindRepository;
 
@@ -18,10 +20,12 @@ public class CaseController {
 
     private final CaseService caseService;
     private final KindRepository kindRepository;
+    private final ErziehungspersonRepository erziehungspersonRepository;
 
-    public CaseController(CaseService caseService, KindRepository kindRepository) {
+    public CaseController(CaseService caseService, KindRepository kindRepository, ErziehungspersonRepository erziehungspersonRepository) {
         this.caseService = caseService;
         this.kindRepository = kindRepository;
+        this.erziehungspersonRepository = erziehungspersonRepository;
     }
 
     // Alle Kinder abrufen (für Wizard Dropdown)
@@ -29,6 +33,9 @@ public class CaseController {
     public List<Kind> getAllChildren() {
         return kindRepository.findAll();
     }
+
+    @GetMapping("/erziehungspersonen")
+    public List<Erziehungsperson> getAllErziehungspersonen(){return erziehungspersonRepository.findAll();}
 
     // Draft-Fall erstellen
     @PostMapping("/draft")
