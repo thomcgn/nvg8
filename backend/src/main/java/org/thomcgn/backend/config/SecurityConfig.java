@@ -1,4 +1,4 @@
-package org.thomcgn.backend.auth.security;
+package org.thomcgn.backend.config;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
