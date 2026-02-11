@@ -11,7 +11,6 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
 
   const router = useRouter();
-  //const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -31,11 +30,8 @@ export default function Home() {
         throw new Error(errData?.message || "Login fehlgeschlagen");
       }
 
-      // Response enthält jetzt nur noch Userinfos, JWT kommt automatisch als HTTP-only Cookie
       const data = await res.json();
 
-      // Optional: Userinfos im State oder Context speichern
-      // localStorage wird hier nicht mehr benötigt
       router.push("/dashboard");
     } catch (err: any) {
       setError(err.message);
