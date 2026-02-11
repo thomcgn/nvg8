@@ -25,6 +25,11 @@ services:
 
       APP_DEV_MODE: "false"
       CORS_ALLOWED_ORIGINS: "https://nvg8.witchplease.de"
+
+      # --- 1x Admin Bootstrap (nur beim ersten Deploy aktiv lassen!) ---
+      APP_BOOTSTRAP_ADMIN: "true"
+      APP_BOOTSTRAP_ADMIN_EMAIL: "admin@nvg8.de"
+      APP_BOOTSTRAP_ADMIN_PASSWORD: "adminNVG8"
     ports:
       - "127.0.0.1:8080:8080"
 
