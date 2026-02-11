@@ -5,6 +5,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
@@ -76,10 +77,17 @@ public class AuthController {
     }
 
     @GetMapping("/me")
-    public ResponseEntity<UserInfoResponse> me(@AuthenticationPrincipal User user) {
-        if (user == null) {
+    public ResponseEntity<UserInfoResponse> me(
+            @AuthenticationPrincipal UserDetails principal
+    ) {
+
+        if (principal == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
+
+        var user = userRepository.findByEmail(principal.getUsername())
+                .orElseThrow(() ->
+                        new ResponseStatusException(HttpStatus.UNAUTHORIZED));
 
         return ResponseEntity.ok(new UserInfoResponse(
                 user.getVorname() + " " + user.getNachname(),
@@ -87,4 +95,5 @@ public class AuthController {
                 user.getLastLogin()
         ));
     }
+
 }
