@@ -1,5 +1,3 @@
-# docker-compose.yml
-
 services:
 
   postgres:
@@ -12,10 +10,6 @@ services:
       POSTGRES_PASSWORD: devpass
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
-    networks:
-      - nvg8-network
 
   backend:
     build: ./backend
@@ -28,28 +22,17 @@ services:
       SPRING_DATASOURCE_USERNAME: dev
       SPRING_DATASOURCE_PASSWORD: devpass
       SPRING_JPA_HIBERNATE_DDL_AUTO: update
-      SERVER_PORT: 8080
     ports:
       - "8080:8080"
-    networks:
-      - nvg8-network
 
   frontend:
     build: ./frontend
     container_name: nvg8-frontend
     restart: unless-stopped
-    environment:
-      NEXT_PUBLIC_API_URL: https://nvg8.witchplease.de/api
-    ports:
-      - "3000:3000"
     depends_on:
       - backend
-    networks:
-      - nvg8-network
+    ports:
+      - "3000:3000"
 
 volumes:
   postgres_data:
-
-networks:
-  nvg8-network:
-    driver: bridge
