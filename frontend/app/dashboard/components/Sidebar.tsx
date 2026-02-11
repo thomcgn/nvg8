@@ -1,46 +1,96 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
+import { FaHome, FaFolderOpen, FaPlus, FaDatabase } from "react-icons/fa";
 
 interface SidebarProps {
     onStartWizard?: () => void;
+
+    // optional: only used when sidebar is rendered as a drawer on mobile
+    onClose?: () => void;
+    variant?: "sidebar" | "drawer";
 }
 
-export default function Sidebar({ onStartWizard }: SidebarProps) {
+export default function Sidebar({
+                                    onStartWizard,
+                                    onClose,
+                                    variant = "sidebar",
+                                }: SidebarProps) {
     const router = useRouter();
+    const pathname = usePathname();
+
+    const isDrawer = variant === "drawer";
+
+    const Item = ({
+                      label,
+                      href,
+                      icon,
+                  }: {
+        label: string;
+        href?: string;
+        icon?: React.ReactNode;
+    }) => {
+        const active = href ? pathname === href : false;
+
+        return (
+            <button
+                type="button"
+                onClick={() => {
+                    if (href) router.push(href);
+                    onClose?.();
+                }}
+                className={[
+                    "w-full flex items-center gap-3 rounded-lg px-3 py-2 text-left text-sm font-medium",
+                    active ? "bg-gray-100 text-gray-900" : "text-gray-700 hover:bg-gray-50 hover:text-gray-900",
+                ].join(" ")}
+            >
+                <span className="text-base">{icon}</span>
+                <span className="truncate">{label}</span>
+            </button>
+        );
+    };
 
     return (
-        <aside className="w-64 bg-white border-r px-6 py-8">
-            <h2 className="text-xl font-bold text-gray-900 mb-8">Navig8tor</h2>
+        <aside
+            className={[
+                "bg-white border-r",
+                isDrawer ? "h-full w-full px-4 py-4" : "w-64 px-6 py-8",
+            ].join(" ")}
+        >
+            <div className="flex items-center justify-between mb-6">
+                <h2 className="text-lg font-bold text-gray-900">Navig8tor</h2>
 
-            <nav className="space-y-4 text-gray-700">
-                <div
-                    onClick={() => router.push("/dashboard")}
-                    className="cursor-pointer hover:text-gray-900"
-                >
-                    Übersicht
-                </div>
+                {isDrawer && (
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        className="rounded-md border px-3 py-2 text-sm font-medium bg-white"
+                        aria-label="Menü schließen"
+                    >
+                        ✕
+                    </button>
+                )}
+            </div>
 
-                <div
-                    onClick={() => router.push("/dashboard/cases")}
-                    className="cursor-pointer hover:text-gray-900"
-                >
-                    Fälle
-                </div>
+            <nav className="space-y-1">
+                <Item label="Übersicht" href="/dashboard" icon={<FaHome />} />
+                <Item label="Fälle" href="/dashboard/cases" icon={<FaFolderOpen />} />
 
-                <div
-                    onClick={() => onStartWizard?.()}
-                    className="cursor-pointer font-medium text-indigo-600"
+                <button
+                    type="button"
+                    onClick={() => {
+                        onStartWizard?.();
+                        onClose?.();
+                    }}
+                    className="w-full flex items-center gap-3 rounded-lg px-3 py-2 text-left text-sm font-semibold text-indigo-700 hover:bg-indigo-50"
                 >
-                    Neuer Fall
-                </div>
+          <span className="text-base">
+            <FaPlus />
+          </span>
+                    <span className="truncate">Neuer Fall</span>
+                </button>
 
-                <div
-                    onClick={() => router.push("/dashboard/stammdaten")}
-                    className="cursor-pointer hover:text-gray-900"
-                >
-                    Stammdaten
-                </div>
+                <Item label="Stammdaten" href="/dashboard/stammdaten" icon={<FaDatabase />} />
             </nav>
         </aside>
     );
