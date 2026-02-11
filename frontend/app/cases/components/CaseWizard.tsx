@@ -1,55 +1,76 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Case } from "@/app/dashboard/components/types";
 
 interface CaseWizardProps {
     onCancel: () => void;
 }
 
+type Kind = { id: number; name: string };
+
 export default function CaseWizard({ onCancel }: CaseWizardProps) {
     const [step, setStep] = useState(1);
-    const [kinder, setKinder] = useState<{ id: number; name: string }[]>([]);
+
+    const [kinder, setKinder] = useState<Kind[]>([]);
     const [selectedKind, setSelectedKind] = useState<number | null>(null);
+
     const [description, setDescription] = useState("");
     const [loading, setLoading] = useState(false);
 
-    const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
-
     useEffect(() => {
-        // Kinder aus API laden
-        fetch(`${API_URL}/kinder`)
-            .then((res) => res.json())
-            .then((data) => setKinder(data))
-            .catch(console.error);
+        const loadKinder = async () => {
+            try {
+                const res = await fetch("/api/cases/kinder", {
+                    credentials: "include",
+                    cache: "no-store",
+                });
+
+                if (!res.ok) {
+                    const text = await res.text().catch(() => "");
+                    throw new Error(`Fehler beim Laden der Kinder (${res.status}) ${text}`);
+                }
+
+                const data = (await res.json()) as Kind[];
+                setKinder(data);
+            } catch (e) {
+                console.error(e);
+            }
+        };
+
+        loadKinder();
     }, []);
 
     const nextStep = () => setStep((prev) => Math.min(prev + 1, 3));
     const prevStep = () => setStep((prev) => Math.max(prev - 1, 1));
 
+    // ✅ Cookie Auth (HttpOnly) -> credentials include
+    // ✅ Kein localStorage jwt, kein Authorization Header
     const createDraft = async () => {
         if (!selectedKind) return alert("Bitte ein Kind auswählen");
 
         setLoading(true);
         try {
-            const token = localStorage.getItem("jwt");
-            const res = await fetch(`${API_URL}/cases/draft`, {
+            const res = await fetch("/api/cases/draft", {
                 method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    Authorization: `Bearer ${token}`,
-                },
-                body: JSON.stringify({ kindId: selectedKind }),
+                headers: { "Content-Type": "application/json" },
+                credentials: "include",
+                body: JSON.stringify({
+                    kindId: selectedKind,
+                    description, // ✅ Beschreibung gleich mitsenden
+                }),
             });
 
-            if (!res.ok) throw new Error("Fehler beim Erstellen des Draft-Falls");
+            if (!res.ok) {
+                const text = await res.text().catch(() => "");
+                throw new Error(`Fehler beim Erstellen des Draft-Falls (${res.status}) ${text}`);
+            }
 
             const draft = await res.json();
             alert("Draft-Fall erstellt! ID: " + draft.id);
-            onCancel(); // Wizard schließen
+            onCancel();
         } catch (err: any) {
             console.error(err);
-            alert(err.message);
+            alert(err?.message || "Unbekannter Fehler");
         } finally {
             setLoading(false);
         }
@@ -75,7 +96,7 @@ export default function CaseWizard({ onCancel }: CaseWizardProps) {
                     <select
                         className="w-full border p-2 rounded"
                         value={selectedKind ?? ""}
-                        onChange={(e) => setSelectedKind(Number(e.target.value))}
+                        onChange={(e) => setSelectedKind(e.target.value ? Number(e.target.value) : null)}
                     >
                         <option value="">-- Bitte auswählen --</option>
                         {kinder.map((k) => (
@@ -104,7 +125,7 @@ export default function CaseWizard({ onCancel }: CaseWizardProps) {
                 <div>
                     <h3 className="text-lg font-semibold mb-4">Überprüfung & Abschluss</h3>
                     <p>Bitte alle Angaben prüfen und den Draft-Fall erstellen.</p>
-                    <p>Kind: {kinder.find((k) => k.id === selectedKind)?.name}</p>
+                    <p>Kind: {kinder.find((k) => k.id === selectedKind)?.name ?? "–"}</p>
                     <p>Beschreibung: {description || "–"}</p>
                 </div>
             )}
@@ -120,18 +141,12 @@ export default function CaseWizard({ onCancel }: CaseWizardProps) {
                 </button>
 
                 <div className="flex gap-2">
-                    <button
-                        onClick={onCancel}
-                        className="px-4 py-2 bg-red-500 text-white rounded"
-                    >
+                    <button onClick={onCancel} className="px-4 py-2 bg-red-500 text-white rounded">
                         Abbrechen
                     </button>
 
                     {step < 3 ? (
-                        <button
-                            onClick={nextStep}
-                            className="px-4 py-2 bg-indigo-600 text-white rounded"
-                        >
+                        <button onClick={nextStep} className="px-4 py-2 bg-indigo-600 text-white rounded">
                             Weiter
                         </button>
                     ) : (

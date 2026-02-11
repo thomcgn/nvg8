@@ -13,7 +13,7 @@ import org.thomcgn.backend.cases.repo.KindRepository;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/cases")
+@RequestMapping("/cases")
 public class CaseController {
 
     private final CaseService caseService;
