@@ -1,174 +1,102 @@
 package org.thomcgn.backend.kinderschutz.forms.service;
 
-import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.thomcgn.backend.cases.repo.KinderschutzFallRepository;
-import org.thomcgn.backend.kinderschutz.api.dto.*;
-import org.thomcgn.backend.kinderschutz.api.mapper.KSCatalogMapper;
 import org.thomcgn.backend.kinderschutz.catalog.KSInstrument;
 import org.thomcgn.backend.kinderschutz.catalog.KSItem;
-import org.thomcgn.backend.kinderschutz.catalog.KSSection;
 import org.thomcgn.backend.kinderschutz.catalog.repo.KSInstrumentRepository;
 import org.thomcgn.backend.kinderschutz.catalog.repo.KSItemRepository;
-import org.thomcgn.backend.kinderschutz.catalog.repo.KSSectionRepository;
-import org.thomcgn.backend.kinderschutz.forms.model.*;
+import org.thomcgn.backend.kinderschutz.forms.exceptions.KSVersionConflictException;
+import org.thomcgn.backend.kinderschutz.forms.model.KSFormAnswer;
+import org.thomcgn.backend.kinderschutz.forms.model.KSFormAnswerRevision;
+import org.thomcgn.backend.kinderschutz.forms.model.KSFormInstance;
+import org.thomcgn.backend.kinderschutz.forms.model.KSFormStatus;
 import org.thomcgn.backend.kinderschutz.forms.repo.KSFormAnswerRepository;
+import org.thomcgn.backend.kinderschutz.forms.repo.KSFormAnswerRevisionRepository;
 import org.thomcgn.backend.kinderschutz.forms.repo.KSFormInstanceRepository;
 
-import java.util.*;
-import java.util.function.Function;
-import java.util.stream.Collectors;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 
 @Service
 @RequiredArgsConstructor
 public class KSFormService {
 
-    private final KinderschutzFallRepository fallRepo;
-
-    private final KSInstrumentRepository instrumentRepo;
-    private final KSSectionRepository sectionRepo;
-    private final KSItemRepository itemRepo;
-
     private final KSFormInstanceRepository instanceRepo;
     private final KSFormAnswerRepository answerRepo;
+    private final KSFormAnswerRevisionRepository revisionRepo;
 
-    // ---------- Schema ----------
-    public KSInstrumentSchemaDTO loadSchema(String code, String version) {
-        KSInstrument inst = instrumentRepo.findByCodeAndVersion(code, version)
-                .orElseThrow(() -> new IllegalArgumentException("Instrument nicht gefunden: " + code + "@" + version));
+    private final KSInstrumentRepository instrumentRepo;
+    private final KSItemRepository itemRepo;
+    private final KinderschutzFallRepository fallRepo;
 
-        List<KSSection> sections = sectionRepo.findByInstrument_CodeAndInstrument_VersionOrderByOrderIndexAsc(code, version);
-        List<KSItem> items = itemRepo.findBySection_Instrument_CodeAndSection_Instrument_VersionOrderBySection_OrderIndexAscOrderIndexAsc(code, version);
-
-        Map<Long, List<KSItem>> itemsBySectionId = items.stream()
-                .collect(Collectors.groupingBy(i -> i.getSection().getId()));
-
-        // Tree bauen: parentId -> children
-        Map<Long, List<KSSection>> childrenByParentId = new HashMap<>();
-        List<KSSection> roots = new ArrayList<>();
-
-        for (KSSection s : sections) {
-            if (s.getParent() == null) roots.add(s);
-            else childrenByParentId.computeIfAbsent(s.getParent().getId(), k -> new ArrayList<>()).add(s);
-        }
-
-        // sort children by orderIndex
-        childrenByParentId.values().forEach(list ->
-                list.sort(Comparator.comparing(KSSection::getOrderIndex, Comparator.nullsLast(Integer::compareTo))));
-
-        List<KSSectionDTO> rootDtos = roots.stream()
-                .sorted(Comparator.comparing(KSSection::getOrderIndex, Comparator.nullsLast(Integer::compareTo)))
-                .map(r -> toSectionTree(r, childrenByParentId, itemsBySectionId))
-                .toList();
-
-        return new KSInstrumentSchemaDTO(inst.getCode(), inst.getVersion(), inst.getTitel(), rootDtos);
-    }
-
-    private KSSectionDTO toSectionTree(
-            KSSection s,
-            Map<Long, List<KSSection>> childrenByParentId,
-            Map<Long, List<KSItem>> itemsBySectionId
-    ) {
-        List<KSItemDTO> itemDtos = Optional.ofNullable(itemsBySectionId.get(s.getId()))
-                .orElse(List.of()).stream()
-                .sorted(Comparator.comparing(KSItem::getOrderIndex, Comparator.nullsLast(Integer::compareTo)))
-                .map(KSCatalogMapper::toItemDTO)
-                .toList();
-
-        List<KSSectionDTO> childDtos = Optional.ofNullable(childrenByParentId.get(s.getId()))
-                .orElse(List.of()).stream()
-                .map(ch -> toSectionTree(ch, childrenByParentId, itemsBySectionId))
-                .toList();
-
-        return KSCatalogMapper.toSectionDTO(s, itemDtos, childDtos);
-    }
-
-    // ---------- Instance erstellen ----------
     @Transactional
-    public Long createOrGetDraft(Long fallId, String code, String version) {
-        return instanceRepo.findFirstByFall_IdAndInstrumentCodeAndInstrumentVersionOrderByCreatedAtDesc(fallId, code, version)
-                .filter(i -> i.getStatus() == FormStatus.DRAFT)
-                .map(KSFormInstance::getId)
+    public KSFormInstance getOrCreate(Long fallId, Long instrumentId) {
+        return instanceRepo.findByFallIdAndInstrumentId(fallId, instrumentId)
                 .orElseGet(() -> {
                     var fall = fallRepo.findById(fallId).orElseThrow();
-                    KSFormInstance inst = new KSFormInstance();
-                    inst.setFall(fall);
-                    inst.setInstrumentCode(code);
-                    inst.setInstrumentVersion(version);
-                    inst.setStatus(FormStatus.DRAFT);
-                    return instanceRepo.save(inst).getId();
+                    KSInstrument inst = instrumentRepo.findById(instrumentId).orElseThrow();
+                    KSFormInstance fi = new KSFormInstance();
+                    fi.setFall(fall);
+                    fi.setInstrument(inst);
+                    fi.setStatus(KSFormStatus.DRAFT);
+                    return instanceRepo.save(fi);
                 });
     }
 
-    // ---------- Instance laden (Schema + Antworten) ----------
-    public KSFormInstanceDTO loadInstance(Long instanceId) {
-        KSFormInstance inst = instanceRepo.findById(instanceId).orElseThrow();
-        KSInstrumentSchemaDTO schema = loadSchema(inst.getInstrumentCode(), inst.getInstrumentVersion());
-
-        List<KSAnswerDTO> answers = inst.getAnswers().stream()
-                .map(a -> new KSAnswerDTO(
-                        a.getItem().getId(),
-                        a.getTriState(),
-                        a.getValueText(),
-                        a.getValueDate(),
-                        a.getValueUserRef(),
-                        a.getComment()
-                ))
-                .toList();
-
-        return new KSFormInstanceDTO(
-                inst.getId(),
-                inst.getFall().getId(),
-                inst.getInstrumentCode(),
-                inst.getInstrumentVersion(),
-                inst.getStatus(),
-                answers,
-                schema
-        );
-    }
-
-    // ---------- Speichern ----------
     @Transactional
-    public void save(Long instanceId, SaveKSFormDTO dto) {
+    public long saveAnswers(Long instanceId, long expectedVersion, Map<String, String> answersByItemNo) {
         KSFormInstance inst = instanceRepo.findById(instanceId).orElseThrow();
 
-        if (inst.getStatus() == FormStatus.SUBMITTED) {
-            throw new IllegalStateException("Form ist bereits SUBMITTED und kann nicht mehr geändert werden.");
+        // Optimistic check (zusätzlich zur @Version für klaren 409)
+        if (inst.getVersion() != null && inst.getVersion() != expectedVersion) {
+            throw new KSVersionConflictException(inst.getVersion());
         }
 
-        // Existing answers map for quick update
-        Map<Long, KSFormAnswer> byItemId = inst.getAnswers().stream()
-                .collect(Collectors.toMap(a -> a.getItem().getId(), Function.identity()));
+        // Map itemNo -> KSItem (schnell, weil Instrument bereits fest)
+        List<KSItem> items = itemRepo.findBySectionInstrumentId(inst.getInstrument().getId());
+        Map<String, KSItem> itemByNo = new HashMap<>();
+        for (KSItem it : items) itemByNo.put(it.getItemNo(), it);
 
-        for (KSAnswerDTO a : dto.answers()) {
-            if (a.itemId() == null) continue;
+        // Upsert answers + create revisions (append-only)
+        for (var e : answersByItemNo.entrySet()) {
+            String itemNo = e.getKey();
+            String value = e.getValue(); // String TriState oder Text
 
-            KSFormAnswer entity = byItemId.get(a.itemId());
-            if (entity == null) {
-                entity = new KSFormAnswer();
-                entity.setInstance(inst);
+            KSItem item = itemByNo.get(itemNo);
+            if (item == null) continue; // oder throw
 
-                // lightweight reference
-                KSItem itemRef = new KSItem();
-                itemRef.setId(a.itemId());
-                entity.setItem(itemRef);
+            KSFormAnswer ans = answerRepo.findByInstanceIdAndItemId(instanceId, item.getId())
+                    .orElseGet(() -> {
+                        KSFormAnswer a = new KSFormAnswer();
+                        a.setInstance(inst);
+                        a.setItem(item);
+                        return a;
+                    });
 
-                inst.getAnswers().add(entity);
-                byItemId.put(a.itemId(), entity);
-            }
+            // Only write if changed (reduziert noise)
+            String old = ans.getValue();
+            if (Objects.equals(old, value)) continue;
 
-            entity.setTriState(a.triState());
-            entity.setValueText(a.text());
-            entity.setValueDate(a.date());
-            entity.setValueUserRef(a.userRef());
-            entity.setComment(a.comment());
+            ans.setValue(value);
+            answerRepo.save(ans);
+
+            KSFormAnswerRevision rev = new KSFormAnswerRevision();
+            rev.setInstanceId(instanceId);
+            rev.setInstanceVersion(expectedVersion + 1); // wir bumpen gleich
+            rev.setItem(item);
+            rev.setValue(value);
+            revisionRepo.save(rev);
         }
 
-        if (dto.status() != null) {
-            inst.setStatus(dto.status());
-        }
+        // Touch instance -> bump @Version
+        inst.setStatus(inst.getStatus()); // noop, aber dirty-check; alternativ: inst.setUpdatedAt(now)
+        KSFormInstance saved = instanceRepo.saveAndFlush(inst);
 
-        instanceRepo.save(inst);
+        return saved.getVersion();
     }
 }

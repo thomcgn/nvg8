@@ -6,7 +6,5 @@ import org.thomcgn.backend.kinderschutz.catalog.KSItem;
 import java.util.List;
 
 public interface KSItemRepository extends JpaRepository<KSItem, Long> {
-    List<KSItem> findBySection_Instrument_CodeAndSection_Instrument_VersionOrderBySection_OrderIndexAscOrderIndexAsc(
-            String code, String version
-    );
+    List<KSItem> findBySectionInstrumentId(Long instrumentId);
 }
