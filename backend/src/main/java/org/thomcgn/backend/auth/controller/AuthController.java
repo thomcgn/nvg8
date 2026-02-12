@@ -96,4 +96,21 @@ public class AuthController {
         ));
     }
 
+    @PostMapping("/logout")
+    public ResponseEntity<Void> logout(HttpServletResponse response) {
+
+        String sameSite = devMode ? "Lax" : "None";
+        String secure = devMode ? "" : "Secure; ";
+
+        // Cookie löschen: Max-Age=0 + leerer Wert
+        String cookieValue = String.format(
+                "token=; HttpOnly; %sPath=/; Max-Age=0; SameSite=%s",
+                secure,
+                sameSite
+        );
+
+        response.setHeader("Set-Cookie", cookieValue);
+        return ResponseEntity.noContent().build();
+    }
+
 }
