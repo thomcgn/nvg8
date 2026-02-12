@@ -2,6 +2,7 @@ package org.thomcgn.backend.kinderschutz.catalog;
 
 import jakarta.persistence.*;
 import lombok.Data;
+import org.thomcgn.backend.kinderschutz.api.dto.Polarity;
 
 @Entity
 @Table(name = "ks_items")
@@ -25,6 +26,10 @@ public class KSItem {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private AnswerType answerType; // TRI_STATE, TEXT, DATE, PERSON_REF etc.
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private Polarity polarity;
 
     private Integer orderIndex = 0;
 
