@@ -10,4 +10,8 @@ public record KSSectionDTO(
         String hintText,
         List<KSItemDTO> items,
         List<KSSectionDTO> children
-) {}
+) {
+    public int orderIndexSafe() {
+        return orderIndex == null ? 0 : orderIndex;
+    }
+}
