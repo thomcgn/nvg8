@@ -1,28 +1,20 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 
 interface NavbarProps {
     userName: string;
     userRole: string;
-    lastLogin?: string; // optional if you want to pass it, but we’ll also read from localStorage
-    onOpenMenu?: () => void; // optional for mobile
+    lastLogin?: string; // kommt vom Secu/UserInfo
+    onOpenMenu?: () => void;
 }
 
-export default function Navbar({ userName, userRole, onOpenMenu }: NavbarProps) {
-    const [lastLogin, setLastLogin] = useState<string>("–");
-
-    useEffect(() => {
-        const lastLoginRaw = localStorage.getItem("lastLogin");
-        const formatted = lastLoginRaw
-            ? new Date(lastLoginRaw).toLocaleTimeString("de-DE", {
-                hour: "2-digit",
-                minute: "2-digit",
-            })
-            : "–";
-        setLastLogin(formatted);
-    }, []);
-
+export default function Navbar({
+                                   userName,
+                                   userRole,
+                                   lastLogin = "–",
+                                   onOpenMenu,
+                               }: NavbarProps) {
     const todayFormatted = useMemo(() => {
         return new Date().toLocaleDateString("de-DE", {
             weekday: "long",
@@ -32,11 +24,21 @@ export default function Navbar({ userName, userRole, onOpenMenu }: NavbarProps) 
         });
     }, []);
 
+    const logout = async () => {
+        try {
+            await fetch("/api/auth/logout", {
+                method: "POST",
+                credentials: "include",
+            });
+        } finally {
+            window.location.href = "/";
+        }
+    };
+
     return (
         <nav className="bg-white border-b shadow-sm">
             <div className="flex items-center justify-between px-4 sm:px-6 py-3">
                 <div className="flex items-center gap-3 min-w-0">
-                    {/* Mobile menu button (only if provided) */}
                     {onOpenMenu && (
                         <button
                             type="button"
@@ -60,11 +62,7 @@ export default function Navbar({ userName, userRole, onOpenMenu }: NavbarProps) 
                 </div>
 
                 <button
-                    onClick={() => {
-                        localStorage.removeItem("jwt");
-                        localStorage.removeItem("lastLogin");
-                        location.href = "/";
-                    }}
+                    onClick={logout}
                     className="bg-red-500 text-white px-3 sm:px-4 py-2 rounded-md text-sm font-medium hover:bg-red-600"
                 >
                     Logout

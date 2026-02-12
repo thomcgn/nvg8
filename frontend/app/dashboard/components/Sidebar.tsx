@@ -1,5 +1,6 @@
 "use client";
 
+import React from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { FaHome, FaFolderOpen, FaPlus, FaDatabase } from "react-icons/fa";
 
@@ -41,13 +42,28 @@ export default function Sidebar({
                 }}
                 className={[
                     "w-full flex items-center gap-3 rounded-lg px-3 py-2 text-left text-sm font-medium",
-                    active ? "bg-gray-100 text-gray-900" : "text-gray-700 hover:bg-gray-50 hover:text-gray-900",
+                    active
+                        ? "bg-gray-100 text-gray-900"
+                        : "text-gray-700 hover:bg-gray-50 hover:text-gray-900",
                 ].join(" ")}
             >
                 <span className="text-base">{icon}</span>
                 <span className="truncate">{label}</span>
             </button>
         );
+    };
+
+    const handleNewCase = () => {
+        // Wenn die Seite den Wizard direkt steuern kann (DashboardPage), nutze das.
+        if (onStartWizard) {
+            onStartWizard();
+            onClose?.();
+            return;
+        }
+
+        // Sonst: immer zuverlässig auf Dashboard navigieren + Wizard anfordern
+        router.push("/dashboard?wizard=1");
+        onClose?.();
     };
 
     return (
@@ -78,10 +94,7 @@ export default function Sidebar({
 
                 <button
                     type="button"
-                    onClick={() => {
-                        onStartWizard?.();
-                        onClose?.();
-                    }}
+                    onClick={handleNewCase}
                     className="w-full flex items-center gap-3 rounded-lg px-3 py-2 text-left text-sm font-semibold text-indigo-700 hover:bg-indigo-50"
                 >
           <span className="text-base">
