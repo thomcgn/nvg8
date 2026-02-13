@@ -2,45 +2,35 @@
 
 import { useState } from "react";
 import Secu, { UserInfo } from "@/app/auth/Nvg8Auth";
-import Sidebar from "../components/Sidebar";
-import Navbar from "../components/Navbar";
+
+import DashboardShell from "@/app/dashboard/components/DashboardShell";
 import KinderTable from "./components/KinderTable";
 import ErziehungspersonTable from "./components/ErziehungspersonTable";
+
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 export default function StammdatenPage() {
     const [activeTab, setActiveTab] = useState<"kinder" | "erziehungspersonen">("kinder");
 
     return (
-        <Secu fallback={<div>Lade Benutzerdaten…</div>}>
+        <Secu fallback={<div className="p-6">Lade Benutzerdaten…</div>}>
             {(user: UserInfo) => (
-                <div className="flex min-h-screen bg-gray-100">
-                    <Sidebar />
-                    <div className="flex-1 flex flex-col">
-                        <Navbar userName={user.name} userRole={user.role} lastLogin={user.lastLogin} />
+                <DashboardShell userName={user.name} userRole={user.role} lastLogin={user.lastLogin}>
+                    <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="space-y-4">
+                        <TabsList>
+                            <TabsTrigger value="kinder">Kinder</TabsTrigger>
+                            <TabsTrigger value="erziehungspersonen">Erziehungspersonen</TabsTrigger>
+                        </TabsList>
 
-                        <main className="p-8 flex-1">
-                            {/* Tabs */}
-                            <div className="mb-6 flex gap-4 border-b">
-                                <button
-                                    className={`px-4 py-2 text-black ${activeTab === "kinder" ? "border-b-2 border-indigo-600 font-semibold" : "text-black"}`}
-                                    onClick={() => setActiveTab("kinder")}
-                                >
-                                    Kinder
-                                </button>
-                                <button
-                                    className={`px-4 py-2 text-black ${activeTab === "erziehungspersonen" ? "border-b-2 border-indigo-600 font-semibold" : "text-black"}`}
-                                    onClick={() => setActiveTab("erziehungspersonen")}
-                                >
-                                    Erziehungspersonen
-                                </button>
-                            </div>
+                        <TabsContent value="kinder">
+                            <KinderTable />
+                        </TabsContent>
 
-                            {/* Tabellen */}
-                            {activeTab === "kinder" && <KinderTable />}
-                            {activeTab === "erziehungspersonen" && <ErziehungspersonTable />}
-                        </main>
-                    </div>
-                </div>
+                        <TabsContent value="erziehungspersonen">
+                            <ErziehungspersonTable />
+                        </TabsContent>
+                    </Tabs>
+                </DashboardShell>
             )}
         </Secu>
     );

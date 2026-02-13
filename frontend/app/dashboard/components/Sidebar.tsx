@@ -4,10 +4,11 @@ import React from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { FaHome, FaFolderOpen, FaPlus, FaDatabase } from "react-icons/fa";
 
+import { Button } from "@/components/ui/button";
+import { Separator } from "@/components/ui/separator";
+
 interface SidebarProps {
     onStartWizard?: () => void;
-
-    // optional: only used when sidebar is rendered as a drawer on mobile
     onClose?: () => void;
     variant?: "sidebar" | "drawer";
 }
@@ -19,49 +20,41 @@ export default function Sidebar({
                                 }: SidebarProps) {
     const router = useRouter();
     const pathname = usePathname();
-
     const isDrawer = variant === "drawer";
 
-    const Item = ({
-                      label,
-                      href,
-                      icon,
-                  }: {
+    const NavItem = ({
+                         label,
+                         href,
+                         icon,
+                     }: {
         label: string;
-        href?: string;
+        href: string;
         icon?: React.ReactNode;
     }) => {
-        const active = href ? pathname === href : false;
+        const active = pathname === href;
 
         return (
-            <button
+            <Button
                 type="button"
+                variant={active ? "secondary" : "ghost"}
+                className="w-full justify-start gap-3"
                 onClick={() => {
-                    if (href) router.push(href);
+                    router.push(href);
                     onClose?.();
                 }}
-                className={[
-                    "w-full flex items-center gap-3 rounded-lg px-3 py-2 text-left text-sm font-medium",
-                    active
-                        ? "bg-gray-100 text-gray-900"
-                        : "text-gray-700 hover:bg-gray-50 hover:text-gray-900",
-                ].join(" ")}
             >
                 <span className="text-base">{icon}</span>
                 <span className="truncate">{label}</span>
-            </button>
+            </Button>
         );
     };
 
     const handleNewCase = () => {
-        // Wenn die Seite den Wizard direkt steuern kann (DashboardPage), nutze das.
         if (onStartWizard) {
             onStartWizard();
             onClose?.();
             return;
         }
-
-        // Sonst: immer zuverlässig auf Dashboard navigieren + Wizard anfordern
         router.push("/dashboard?wizard=1");
         onClose?.();
     };
@@ -69,41 +62,41 @@ export default function Sidebar({
     return (
         <aside
             className={[
-                "bg-white border-r",
-                isDrawer ? "h-full w-full px-4 py-4" : "w-64 px-6 py-8",
+                "h-full bg-background",
+                isDrawer ? "w-full p-4" : "w-64 p-6 border-r",
             ].join(" ")}
         >
-            <div className="flex items-center justify-between mb-6">
-                <h2 className="text-lg font-bold text-gray-900">Navig8tor</h2>
+            <div className="flex items-center justify-between">
+                <div className="min-w-0">
+                    <div className="text-lg font-semibold leading-none">Navig8tor</div>
+                    <div className="text-xs text-muted-foreground mt-1">Dashboard</div>
+                </div>
 
                 {isDrawer && (
-                    <button
-                        type="button"
-                        onClick={onClose}
-                        className="rounded-md border px-3 py-2 text-sm font-medium bg-white"
-                        aria-label="Menü schließen"
-                    >
+                    <Button variant="ghost" size="icon" onClick={onClose} aria-label="Menü schließen">
                         ✕
-                    </button>
+                    </Button>
                 )}
             </div>
 
-            <nav className="space-y-1">
-                <Item label="Übersicht" href="/dashboard" icon={<FaHome />} />
-                <Item label="Fälle" href="/dashboard/cases" icon={<FaFolderOpen />} />
+            <Separator className="my-4" />
 
-                <button
+            <nav className="space-y-1">
+                <NavItem label="Übersicht" href="/dashboard" icon={<FaHome />} />
+                <NavItem label="Fälle" href="/dashboard/cases" icon={<FaFolderOpen />} />
+
+                <Button
                     type="button"
                     onClick={handleNewCase}
-                    className="w-full flex items-center gap-3 rounded-lg px-3 py-2 text-left text-sm font-semibold text-indigo-700 hover:bg-indigo-50"
+                    className="w-full justify-start gap-3"
                 >
           <span className="text-base">
             <FaPlus />
           </span>
                     <span className="truncate">Neuer Fall</span>
-                </button>
+                </Button>
 
-                <Item label="Stammdaten" href="/dashboard/stammdaten" icon={<FaDatabase />} />
+                <NavItem label="Stammdaten" href="/dashboard/stammdaten" icon={<FaDatabase />} />
             </nav>
         </aside>
     );

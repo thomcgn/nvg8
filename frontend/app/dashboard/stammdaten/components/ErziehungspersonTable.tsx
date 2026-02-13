@@ -2,10 +2,23 @@
 
 import { useEffect, useState } from "react";
 
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
+} from "@/components/ui/table";
+
 export interface Erziehungsperson {
     id: number;
     name: string;
-    beziehung: string; // Mutter, Vater, Pflegeperson
+    beziehung: string;
     sorgerecht: string; // Voll, Teil, Kein
     aufenthaltsbestimmungsrecht: string; // Ja/Nein
     kontaktsperre: boolean;
@@ -15,7 +28,6 @@ export default function ErziehungspersonTable() {
     const [personen, setPersonen] = useState<Erziehungsperson[]>([]);
     const [loading, setLoading] = useState(true);
 
-    // 🔹 MOCK DATEN
     const mockData: Erziehungsperson[] = [
         {
             id: 1,
@@ -44,72 +56,75 @@ export default function ErziehungspersonTable() {
     ];
 
     useEffect(() => {
-        // Fake-Ladezeit simulieren
         const timer = setTimeout(() => {
             setPersonen(mockData);
             setLoading(false);
         }, 500);
-
         return () => clearTimeout(timer);
     }, []);
 
-    if (loading) return <div>Lade Erziehungspersonen…</div>;
-
     return (
-        <div className="overflow-x-auto">
-            <table className="min-w-full bg-white rounded-lg shadow">
-                <thead>
-                <tr className="bg-gray-100">
-                    <th className="px-4 py-2 text-left text-black">Name</th>
-                    <th className="px-4 py-2 text-left text-black">Beziehung</th>
-                    <th className="px-4 py-2 text-left text-black">Sorgerecht</th>
-                    <th className="px-4 py-2 text-left text-black">Aufenthaltsbestimmungsrecht</th>
-                    <th className="px-4 py-2 text-left text-black">Kontaktsperre</th>
-                    <th className="px-4 py-2 text-left text-black">Aktionen</th>
-                </tr>
-                </thead>
+        <Card>
+            <CardHeader className="flex-row items-center justify-between space-y-0">
+                <CardTitle>Erziehungspersonen</CardTitle>
+            </CardHeader>
 
-                <tbody>
-                {personen.map((p) => (
-                    <tr key={p.id} className="border-t hover:bg-gray-50 transition">
-                        <td className="px-4 py-2 text-black font-medium">{p.name}</td>
-                        <td className="px-4 py-2 text-black">{p.beziehung}</td>
-                        <td className="px-4 py-2">{p.sorgerecht ?(
-                            <span className="text-red-600 font-semibold">Ja</span>
-                        ) : (
-                            <span className="text-green-600">Nein</span>
-                        )}
-                        </td>
-                        <td className="px-4 py-2">{p.aufenthaltsbestimmungsrecht}</td>
+            <CardContent>
+                {loading ? (
+                    <div className="space-y-2">
+                        <Skeleton className="h-10 w-full" />
+                        <Skeleton className="h-10 w-full" />
+                        <Skeleton className="h-10 w-full" />
+                    </div>
+                ) : personen.length === 0 ? (
+                    <div className="text-sm text-muted-foreground">Keine Erziehungspersonen vorhanden.</div>
+                ) : (
+                    <div className="rounded-md border overflow-x-auto">
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead>Name</TableHead>
+                                    <TableHead>Beziehung</TableHead>
+                                    <TableHead>Sorgerecht</TableHead>
+                                    <TableHead>Aufenthaltsbestimmungsrecht</TableHead>
+                                    <TableHead>Kontaktsperre</TableHead>
+                                    <TableHead className="text-right">Aktionen</TableHead>
+                                </TableRow>
+                            </TableHeader>
 
-                        <td className="px-4 py-2">
-                            {p.kontaktsperre ? (
-                                <span className="text-green-600 font-semibold">Ja</span>
-                            ) : (
-                                <span className="text-red-600">Nein</span>
-                            )}
-                        </td>
-
-                        <td className="px-4 py-2 flex gap-2">
-                            <button className="px-2 py-1 bg-indigo-500 text-white rounded hover:bg-indigo-600 transition">
-                                Bearbeiten
-                            </button>
-                            <button className="px-2 py-1 bg-red-500 text-white rounded hover:bg-red-600 transition">
-                                Löschen
-                            </button>
-                        </td>
-                    </tr>
-                ))}
-
-                {personen.length === 0 && (
-                    <tr>
-                        <td className="px-4 py-3 text-gray-500" colSpan={6}>
-                            Keine Erziehungspersonen vorhanden.
-                        </td>
-                    </tr>
+                            <TableBody>
+                                {personen.map((p) => (
+                                    <TableRow key={p.id}>
+                                        <TableCell className="font-medium">{p.name}</TableCell>
+                                        <TableCell>{p.beziehung}</TableCell>
+                                        <TableCell>
+                                            <Badge variant="outline">{p.sorgerecht}</Badge>
+                                        </TableCell>
+                                        <TableCell>
+                                            <Badge variant={p.aufenthaltsbestimmungsrecht === "Ja" ? "default" : "secondary"}>
+                                                {p.aufenthaltsbestimmungsrecht}
+                                            </Badge>
+                                        </TableCell>
+                                        <TableCell>
+                                            <Badge variant={p.kontaktsperre ? "destructive" : "secondary"}>
+                                                {p.kontaktsperre ? "Ja" : "Nein"}
+                                            </Badge>
+                                        </TableCell>
+                                        <TableCell className="text-right space-x-2">
+                                            <Button variant="outline" size="sm">
+                                                Bearbeiten
+                                            </Button>
+                                            <Button variant="destructive" size="sm">
+                                                Löschen
+                                            </Button>
+                                        </TableCell>
+                                    </TableRow>
+                                ))}
+                            </TableBody>
+                        </Table>
+                    </div>
                 )}
-                </tbody>
-            </table>
-        </div>
+            </CardContent>
+        </Card>
     );
 }
