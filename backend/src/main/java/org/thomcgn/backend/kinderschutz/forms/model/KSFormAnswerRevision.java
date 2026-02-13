@@ -7,27 +7,29 @@ import org.thomcgn.backend.kinderschutz.catalog.KSItem;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "ks_form_answer_revisions",
-        indexes = @Index(name="idx_rev_instance_version", columnList="instance_id, instance_version"))
+@Table(name = "ks_form_answer_revisions")
 @Data
 public class KSFormAnswerRevision {
 
-    @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name="instance_id", nullable=false)
-    private Long instanceId;
+    @ManyToOne(optional = false, fetch = FetchType.LAZY)
+    @JoinColumn(name = "instance_id")
+    private KSFormInstance instance;
 
-    @Column(name="instance_version", nullable=false)
+    @Column(name = "instance_version", nullable = false)
     private Long instanceVersion;
 
     @ManyToOne(optional = false, fetch = FetchType.LAZY)
-    @JoinColumn(name="item_id")
+    @JoinColumn(name = "item_id")
     private KSItem item;
 
     @Lob
-    @Column(name="value_string")
+    @Column(name = "value_string")
     private String value;
 
-    private LocalDateTime changedAt = LocalDateTime.now();
+    @Column(name = "changed_at", nullable = false)
+    private LocalDateTime changedAt;
 }
