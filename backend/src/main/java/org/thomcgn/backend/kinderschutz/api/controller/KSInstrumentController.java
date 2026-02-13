@@ -49,8 +49,8 @@ public class KSInstrumentController {
                 inst.getVersion(),
                 inst.getApplicability() != null ? inst.getApplicability().getMinAgeMonths() : null,
                 inst.getApplicability() != null ? inst.getApplicability().getMaxAgeMonths() : null,
-                inst.getApplicability() != null ? inst.getApplicability().isRequiresSchoolContext() : false,
-                inst.getApplicability() != null ? inst.getApplicability().isRequiresKitaContext() : false,
+                inst.getApplicability() != null ? inst.getApplicability().getRequiresSchoolContext() : false,
+                inst.getApplicability() != null ? inst.getApplicability().getRequiresKitaContext(): false,
                 tree
         );
     }
