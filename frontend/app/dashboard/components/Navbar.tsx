@@ -1,11 +1,12 @@
 "use client";
 
 import { useMemo } from "react";
+import { Button } from "@/components/ui/button";
 
 interface NavbarProps {
     userName: string;
     userRole: string;
-    lastLogin?: string; // kommt vom Secu/UserInfo
+    lastLogin?: string;
     onOpenMenu?: () => void;
 }
 
@@ -26,48 +27,43 @@ export default function Navbar({
 
     const logout = async () => {
         try {
-            await fetch("/api/auth/logout", {
-                method: "POST",
-                credentials: "include",
-            });
+            await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
         } finally {
             window.location.href = "/";
         }
     };
 
     return (
-        <nav className="bg-white border-b shadow-sm">
+        <header className="sticky top-0 z-40 w-full border-b bg-background/80 backdrop-blur">
             <div className="flex items-center justify-between px-4 sm:px-6 py-3">
                 <div className="flex items-center gap-3 min-w-0">
                     {onOpenMenu && (
-                        <button
+                        <Button
                             type="button"
+                            variant="outline"
+                            className="lg:hidden"
                             onClick={onOpenMenu}
-                            className="lg:hidden inline-flex items-center justify-center rounded-md border px-3 py-2 text-sm font-medium bg-white"
                             aria-label="Menü öffnen"
                         >
                             ☰
-                        </button>
+                        </Button>
                     )}
 
                     <div className="min-w-0">
-                        <p className="text-xs sm:text-sm text-gray-500">Angemeldet als</p>
-                        <h2 className="text-sm sm:text-lg font-semibold text-gray-900 truncate">
+                        <p className="text-xs sm:text-sm text-muted-foreground">Angemeldet als</p>
+                        <h2 className="text-sm sm:text-lg font-semibold truncate">
                             {userName} · {userRole}
                         </h2>
-                        <p className="text-xs sm:text-sm text-gray-500 truncate">
+                        <p className="text-xs sm:text-sm text-muted-foreground truncate">
                             {todayFormatted} · Letzter Login: {lastLogin}
                         </p>
                     </div>
                 </div>
 
-                <button
-                    onClick={logout}
-                    className="bg-red-500 text-white px-3 sm:px-4 py-2 rounded-md text-sm font-medium hover:bg-red-600"
-                >
+                <Button variant="destructive" onClick={logout}>
                     Logout
-                </button>
+                </Button>
             </div>
-        </nav>
+        </header>
     );
 }

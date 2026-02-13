@@ -4,8 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
 import Secu from "../auth/Nvg8Auth";
-import Sidebar from "./components/Sidebar";
-import Navbar from "./components/Navbar";
+import DashboardShell from "./components/DashboardShell";
 import StatCard from "./components/StatCard";
 import CaseTable from "./components/CaseTable";
 import CaseWizard from "../cases/components/CaseWizard";
@@ -25,12 +24,9 @@ export default function DashboardPage() {
     const searchParams = useSearchParams();
     const router = useRouter();
 
-    // Wenn wir von einer anderen Seite mit ?wizard=1 kommen, Wizard öffnen
     useEffect(() => {
         if (searchParams.get("wizard") === "1") {
             setShowWizard(true);
-
-            // optional: URL bereinigen (damit reload nicht immer wieder öffnet)
             router.replace("/dashboard");
         }
     }, [searchParams, router]);
@@ -38,35 +34,32 @@ export default function DashboardPage() {
     const cancelWizard = () => setShowWizard(false);
 
     return (
-        <Secu fallback={<div>Lade Dashboard…</div>}>
+        <Secu fallback={<div className="p-6">Lade Dashboard…</div>}>
             {(user) => (
-                <div className="flex min-h-screen bg-gray-100">
-                    <Sidebar onStartWizard={() => setShowWizard(true)} />
+                <DashboardShell
+                    userName={user.name}
+                    userRole={user.role}
+                    lastLogin={user.lastLogin}
+                    onStartWizard={() => setShowWizard(true)}
+                >
+                    {showWizard ? (
+                        <CaseWizard onCancel={cancelWizard} />
+                    ) : (
+                        <>
+                            <section className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 lg:gap-6 mb-6 lg:mb-8">
+                                <StatCard title="Meine offenen Fälle" value={7} icon={<FaFolderOpen />} />
+                                <StatCard title="Akut gefährdet" value={2} icon={<FaExclamationTriangle />} />
+                                <StatCard title="Abgeschlossen (30 Tage)" value={5} />
+                                <StatCard title="Kinder gesamt" value={18} icon={<FaUsers />} />
+                            </section>
 
-                    <div className="flex-1 flex flex-col">
-                        <Navbar userName={user.name} userRole={user.role} lastLogin={user.lastLogin} />
-
-                        <main className="p-8 flex-1">
-                            {showWizard ? (
-                                <CaseWizard onCancel={cancelWizard} />
-                            ) : (
-                                <>
-                                    <section className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-                                        <StatCard title="Meine offenen Fälle" value={7} icon={<FaFolderOpen />} />
-                                        <StatCard title="Akut gefährdet" value={2} icon={<FaExclamationTriangle />} />
-                                        <StatCard title="Abgeschlossen (30 Tage)" value={5} />
-                                        <StatCard title="Kinder gesamt" value={18} icon={<FaUsers />} />
-                                    </section>
-
-                                    <section className="bg-white rounded-lg shadow p-6">
-                                        <h3 className="text-lg font-semibold text-gray-900 mb-4">Meine Fälle</h3>
-                                        <CaseTable cases={mockCases} />
-                                    </section>
-                                </>
-                            )}
-                        </main>
-                    </div>
-                </div>
+                            <section className="space-y-4">
+                                <h3 className="text-lg font-semibold">Meine Fälle</h3>
+                                <CaseTable cases={mockCases} />
+                            </section>
+                        </>
+                    )}
+                </DashboardShell>
             )}
         </Secu>
     );

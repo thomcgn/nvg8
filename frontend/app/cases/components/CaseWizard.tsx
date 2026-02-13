@@ -2,20 +2,31 @@
 
 import { useEffect, useMemo, useState } from "react";
 
+import PersonFields, { emptyPerson, PersonBase } from "@/app/components/PersonFields";
+
+import { toast } from "sonner";
+
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Progress } from "@/components/ui/progress";
+import { Separator } from "@/components/ui/separator";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Badge } from "@/components/ui/badge";
+
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
+
 interface CaseWizardProps {
     onCancel: () => void;
 }
-
-type PersonBase = {
-    vorname: string;
-    nachname: string;
-    strasse: string;
-    hausnummer: string;
-    plz: string;
-    ort: string;
-    telefon: string;
-    email: string;
-};
 
 type Kind = PersonBase & {
     id: number;
@@ -27,107 +38,8 @@ type Erziehungsperson = PersonBase & {
     rolle?: string; // Enum string
 };
 
-const emptyPerson: PersonBase = {
-    vorname: "",
-    nachname: "",
-    strasse: "",
-    hausnummer: "",
-    plz: "",
-    ort: "",
-    telefon: "",
-    email: "",
-};
-
-/**
- * ✅ WICHTIG:
- * Diese Komponente MUSS außerhalb von CaseWizard definiert sein,
- * sonst verliert der Input bei jedem Re-Render den Fokus.
- */
-function PersonFields({
-                          value,
-                          onChange,
-                          prefix,
-                      }: {
-    value: PersonBase;
-    onChange: (v: PersonBase) => void;
-    prefix: string;
-}) {
-    return (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <div>
-                <label className="block text-sm font-semibold text-black mb-1">{prefix} Vorname</label>
-                <input
-                    className="w-full border p-2 rounded text-black placeholder:text-black/50"
-                    value={value.vorname}
-                    onChange={(e) => onChange({ ...value, vorname: e.target.value })}
-                />
-            </div>
-            <div>
-                <label className="block text-sm font-semibold text-black mb-1">{prefix} Nachname</label>
-                <input
-                    className="w-full border p-2 rounded text-black placeholder:text-black/50"
-                    value={value.nachname}
-                    onChange={(e) => onChange({ ...value, nachname: e.target.value })}
-                />
-            </div>
-
-            <div>
-                <label className="block text-sm font-semibold text-black mb-1">Straße</label>
-                <input
-                    className="w-full border p-2 rounded text-black placeholder:text-black/50"
-                    value={value.strasse}
-                    onChange={(e) => onChange({ ...value, strasse: e.target.value })}
-                />
-            </div>
-            <div>
-                <label className="block text-sm font-semibold text-black mb-1">Hausnummer</label>
-                <input
-                    className="w-full border p-2 rounded text-black placeholder:text-black/50"
-                    value={value.hausnummer}
-                    onChange={(e) => onChange({ ...value, hausnummer: e.target.value })}
-                />
-            </div>
-
-            <div>
-                <label className="block text-sm font-semibold text-black mb-1">PLZ</label>
-                <input
-                    className="w-full border p-2 rounded text-black placeholder:text-black/50"
-                    value={value.plz}
-                    onChange={(e) => onChange({ ...value, plz: e.target.value })}
-                />
-            </div>
-            <div>
-                <label className="block text-sm font-semibold text-black mb-1">Ort</label>
-                <input
-                    className="w-full border p-2 rounded text-black placeholder:text-black/50"
-                    value={value.ort}
-                    onChange={(e) => onChange({ ...value, ort: e.target.value })}
-                />
-            </div>
-
-            <div>
-                <label className="block text-sm font-semibold text-black mb-1">Telefon</label>
-                <input
-                    className="w-full border p-2 rounded text-black placeholder:text-black/50"
-                    value={value.telefon}
-                    onChange={(e) => onChange({ ...value, telefon: e.target.value })}
-                />
-            </div>
-            <div>
-                <label className="block text-sm font-semibold text-black mb-1">E-Mail</label>
-                <input
-                    type="email"
-                    className="w-full border p-2 rounded text-black placeholder:text-black/50"
-                    value={value.email}
-                    onChange={(e) => onChange({ ...value, email: e.target.value })}
-                />
-            </div>
-        </div>
-    );
-}
-
 export default function CaseWizard({ onCancel }: CaseWizardProps) {
-    const [step, setStep] = useState(1);
+    const [step, setStep] = useState<1 | 2 | 3>(1);
 
     const [kinder, setKinder] = useState<Kind[]>([]);
     const [selectedKind, setSelectedKind] = useState<number | null>(null);
@@ -135,23 +47,22 @@ export default function CaseWizard({ onCancel }: CaseWizardProps) {
     const [erziehungspersonen, setErziehungspersonen] = useState<Erziehungsperson[]>([]);
     const [selectedErziehungspersonIds, setSelectedErziehungspersonIds] = useState<number[]>([]);
 
-    // ✅ Create Kind UI
+    // Create Kind UI
     const [showCreateKind, setShowCreateKind] = useState(false);
     const [creatingKind, setCreatingKind] = useState(false);
     const [newKind, setNewKind] = useState<PersonBase>(emptyPerson);
     const [newKindGeburtsdatum, setNewKindGeburtsdatum] = useState<string>("");
 
-    // ✅ Create Erziehungsperson UI
+    // Create Erziehungsperson UI
     const [showCreateErz, setShowCreateErz] = useState(false);
     const [creatingErz, setCreatingErz] = useState(false);
     const [newErz, setNewErz] = useState<PersonBase>(emptyPerson);
     const [newErzRolle, setNewErzRolle] = useState<string>("ELTERN");
 
     const [description, setDescription] = useState("");
-    const [loading, setLoading] = useState(false);
+    const [submittingDraft, setSubmittingDraft] = useState(false);
 
-    const nextStep = () => setStep((prev) => Math.min(prev + 1, 3));
-    const prevStep = () => setStep((prev) => Math.max(prev - 1, 1));
+    const progressValue = (step / 3) * 100;
 
     const kindLabel = (k: Kind) => `${k.vorname} ${k.nachname}`.trim() || `Kind #${k.id}`;
     const erzLabel = (p: Erziehungsperson) =>
@@ -161,6 +72,9 @@ export default function CaseWizard({ onCancel }: CaseWizardProps) {
         () => kinder.find((k) => k.id === selectedKind) ?? null,
         [kinder, selectedKind]
     );
+
+    const nextStep = () => setStep((prev) => (prev < 3 ? ((prev + 1) as any) : prev));
+    const prevStep = () => setStep((prev) => (prev > 1 ? ((prev - 1) as any) : prev));
 
     useEffect(() => {
         const loadAll = async () => {
@@ -174,6 +88,9 @@ export default function CaseWizard({ onCancel }: CaseWizardProps) {
                 if (eRes.ok) setErziehungspersonen((await eRes.json()) as Erziehungsperson[]);
             } catch (e) {
                 console.error(e);
+                toast.error("Laden fehlgeschlagen", {
+                    description: "Kinder oder Erziehungspersonen konnten nicht geladen werden.",
+                });
             }
         };
 
@@ -197,13 +114,20 @@ export default function CaseWizard({ onCancel }: CaseWizardProps) {
         );
     };
 
-    // ✅ Kann beliebig oft hintereinander genutzt werden.
-    // keepOpen=true => Formular bleibt offen, Felder werden geleert, neu angelegte Person bleibt ausgewählt.
     const createErziehungsperson = async ({ keepOpen }: { keepOpen: boolean }) => {
         if (!newErz.vorname.trim() || !newErz.nachname.trim()) {
-            return alert("Bitte Vorname und Nachname der Erziehungsperson ausfüllen.");
+            toast.error("Pflichtfelder fehlen", {
+                description: "Bitte Vorname und Nachname der Erziehungsperson ausfüllen.",
+            });
+            return;
         }
-        if (!newErzRolle.trim()) return alert("Bitte eine Rolle auswählen.");
+
+        if (!newErzRolle.trim()) {
+            toast.error("Rolle fehlt", {
+                description: "Bitte eine Rolle auswählen.",
+            });
+            return;
+        }
 
         setCreatingErz(true);
         try {
@@ -211,31 +135,32 @@ export default function CaseWizard({ onCancel }: CaseWizardProps) {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 credentials: "include",
-                body: JSON.stringify({
-                    ...newErz,
-                    rolle: newErzRolle,
-                }),
+                body: JSON.stringify({ ...newErz, rolle: newErzRolle }),
             });
 
             if (!res.ok) {
                 const text = await res.text().catch(() => "");
-                throw new Error(`Fehler beim Anlegen der Erziehungsperson (${res.status}) ${text}`);
+                throw new Error(`Fehler beim Anlegen (${res.status}) ${text}`);
             }
 
             const created = (await res.json()) as Erziehungsperson;
 
-            // ✅ Liste ergänzen + automatisch auswählen (und damit später mit Kind verknüpfen)
             setErziehungspersonen((prev) => [created, ...prev]);
             setSelectedErziehungspersonIds((prev) =>
                 prev.includes(created.id) ? prev : [...prev, created.id]
             );
 
-            // ✅ für "weitere anlegen": Felder leeren, Formular offen lassen
             resetCreateErzForm();
             setShowCreateErz(keepOpen);
+
+            toast.success("Erziehungsperson angelegt", {
+                description: `${erzLabel(created)} wurde hinzugefügt und ausgewählt.`,
+            });
         } catch (err: any) {
             console.error(err);
-            alert(err?.message || "Unbekannter Fehler beim Anlegen der Erziehungsperson");
+            toast.error("Anlegen fehlgeschlagen", {
+                description: err?.message || "Unbekannter Fehler beim Anlegen der Erziehungsperson.",
+            });
         } finally {
             setCreatingErz(false);
         }
@@ -243,11 +168,24 @@ export default function CaseWizard({ onCancel }: CaseWizardProps) {
 
     const createKind = async () => {
         if (!newKind.vorname.trim() || !newKind.nachname.trim()) {
-            return alert("Bitte Vorname und Nachname des Kindes ausfüllen.");
+            toast.error("Pflichtfelder fehlen", {
+                description: "Bitte Vorname und Nachname des Kindes ausfüllen.",
+            });
+            return;
         }
-        if (!newKindGeburtsdatum) return alert("Bitte Geburtsdatum angeben.");
+
+        if (!newKindGeburtsdatum) {
+            toast.error("Geburtsdatum fehlt", {
+                description: "Bitte Geburtsdatum angeben.",
+            });
+            return;
+        }
+
         if (selectedErziehungspersonIds.length === 0) {
-            return alert("Ein Kind benötigt mindestens eine Erziehungsperson.");
+            toast.error("Zuordnung fehlt", {
+                description: "Ein Kind benötigt mindestens eine Erziehungsperson.",
+            });
+            return;
         }
 
         setCreatingKind(true);
@@ -259,34 +197,69 @@ export default function CaseWizard({ onCancel }: CaseWizardProps) {
                 body: JSON.stringify({
                     ...newKind,
                     geburtsdatum: newKindGeburtsdatum,
-                    erziehungspersonIds: selectedErziehungspersonIds, // ✅ mehrere möglich
+                    erziehungspersonIds: selectedErziehungspersonIds,
                 }),
             });
 
             if (!res.ok) {
                 const text = await res.text().catch(() => "");
-                throw new Error(`Fehler beim Anlegen des Kindes (${res.status}) ${text}`);
+                throw new Error(`Fehler beim Anlegen (${res.status}) ${text}`);
             }
 
             const created = (await res.json()) as Kind;
+
             setKinder((prev) => [created, ...prev]);
             setSelectedKind(created.id);
 
             resetCreateKindForm();
             setShowCreateKind(false);
             setShowCreateErz(false);
+
+            toast.success("Kind angelegt", {
+                description: `${kindLabel(created)} wurde erstellt und ausgewählt.`,
+            });
         } catch (err: any) {
             console.error(err);
-            alert(err?.message || "Unbekannter Fehler beim Anlegen des Kindes");
+            toast.error("Anlegen fehlgeschlagen", {
+                description: err?.message || "Unbekannter Fehler beim Anlegen des Kindes.",
+            });
         } finally {
             setCreatingKind(false);
         }
     };
 
-    const createDraft = async () => {
-        if (!selectedKind) return alert("Bitte ein Kind auswählen");
+    const validateBeforeNext = () => {
+        if (step === 1) {
+            if (!selectedKind) {
+                toast.error("Kind fehlt", {
+                    description: "Bitte ein Kind auswählen (oder anlegen).",
+                });
+                return false;
+            }
+        }
+        if (step === 2) {
+            if (!description.trim()) {
+                toast.error("Beschreibung fehlt", {
+                    description: "Bitte eine kurze Beobachtung / Einschätzung eintragen.",
+                });
+                return false;
+            }
+        }
+        return true;
+    };
 
-        setLoading(true);
+    const onNext = () => {
+        if (!validateBeforeNext()) return;
+        nextStep();
+    };
+
+    const createDraft = async () => {
+        if (!selectedKind) {
+            toast.error("Kind fehlt", { description: "Bitte ein Kind auswählen." });
+            return;
+        }
+
+        setSubmittingDraft(true);
         try {
             const res = await fetch("/api/cases/draft", {
                 method: "POST",
@@ -297,254 +270,241 @@ export default function CaseWizard({ onCancel }: CaseWizardProps) {
 
             if (!res.ok) {
                 const text = await res.text().catch(() => "");
-                throw new Error(`Fehler beim Erstellen des Draft-Falls (${res.status}) ${text}`);
+                throw new Error(`Fehler beim Erstellen (${res.status}) ${text}`);
             }
 
             const draft = await res.json();
-            alert("Draft-Fall erstellt! ID: " + draft.id);
+
+            toast.success("Draft-Fall erstellt", {
+                description: `ID: ${draft?.id ?? "–"}`,
+            });
+
             onCancel();
         } catch (err: any) {
             console.error(err);
-            alert(err?.message || "Unbekannter Fehler");
+            toast.error("Erstellen fehlgeschlagen", {
+                description: err?.message || "Unbekannter Fehler beim Erstellen des Draft-Falls.",
+            });
         } finally {
-            setLoading(false);
+            setSubmittingDraft(false);
         }
     };
 
     return (
-        <div className="bg-white text-black rounded-lg shadow p-8 max-w-3xl mx-auto">
-            {/* Fortschrittsanzeige */}
-            <div className="mb-6">
-                <div className="h-2 bg-gray-200 rounded-full">
-                    <div
-                        className="h-2 bg-indigo-600 rounded-full"
-                        style={{ width: `${(step / 3) * 100}%` }}
-                    />
+        <Card className="max-w-3xl mx-auto">
+            <CardHeader>
+                <CardTitle>Neuen Fall anlegen</CardTitle>
+            </CardHeader>
+
+            <CardContent className="space-y-6">
+                <div className="space-y-2">
+                    <Progress value={progressValue} />
+                    <div className="text-sm text-muted-foreground">
+                        Schritt <span className="font-medium text-foreground">{step}</span> von 3
+                    </div>
                 </div>
-                <p className="text-sm text-black mt-1">Schritt {step} von 3</p>
-            </div>
 
-            {step === 1 && (
-                <div>
-                    <h3 className="text-lg font-semibold mb-4 text-black">Kind auswählen</h3>
+                <Separator />
 
-                    <select
-                        className="w-full border p-2 rounded text-black"
-                        value={selectedKind ?? ""}
-                        onChange={(e) => setSelectedKind(e.target.value ? Number(e.target.value) : null)}
-                    >
-                        <option value="">-- Bitte auswählen --</option>
-                        {kinder.map((k) => (
-                            <option key={k.id} value={k.id}>
-                                {kindLabel(k)}
-                            </option>
-                        ))}
-                    </select>
+                {step === 1 && (
+                    <div className="space-y-4">
+                        <div className="flex items-center justify-between gap-2">
+                            <h3 className="text-base font-semibold">Kind auswählen</h3>
+                            <Badge variant="outline">Stammdaten</Badge>
+                        </div>
 
-                    <div className="mt-4">
-                        <button
-                            type="button"
-                            onClick={() => setShowCreateKind((v) => !v)}
-                            className="text-indigo-700 hover:underline text-sm font-semibold"
-                        >
+                        <div className="space-y-2">
+                            <Label>Kind</Label>
+                            <Select
+                                value={selectedKind ? String(selectedKind) : ""}
+                                onValueChange={(v) => setSelectedKind(v ? Number(v) : null)}
+                            >
+                                <SelectTrigger>
+                                    <SelectValue placeholder="-- Bitte auswählen --" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {kinder.map((k) => (
+                                        <SelectItem key={k.id} value={String(k.id)}>
+                                            {kindLabel(k)}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        <Button variant="link" className="px-0" onClick={() => setShowCreateKind((v) => !v)}>
                             {showCreateKind ? "Kind anlegen ausblenden" : "+ Kind anlegen"}
-                        </button>
+                        </Button>
 
                         {showCreateKind && (
-                            <div className="mt-3 border rounded p-4 bg-white">
-                                <p className="text-sm text-black mb-3">
-                                    Du kannst <b>eine oder mehrere</b> Erziehungspersonen zuordnen (z.B. beide Elternteile).
-                                    Mindestens <b>eine</b> ist Pflicht.
+                            <div className="rounded-lg border p-4 space-y-5">
+                                <p className="text-sm text-muted-foreground">
+                                    Du kannst <b>eine oder mehrere</b> Erziehungspersonen zuordnen. Mindestens <b>eine</b> ist Pflicht.
                                 </p>
 
-                                <div className="mb-4">
-                                    <label className="block text-sm font-semibold text-black mb-1">Geburtsdatum</label>
-                                    <input
+                                <div className="space-y-2">
+                                    <Label>Geburtsdatum</Label>
+                                    <Input
                                         type="date"
-                                        className="w-full border p-2 rounded text-black"
                                         value={newKindGeburtsdatum}
                                         onChange={(e) => setNewKindGeburtsdatum(e.target.value)}
                                     />
                                 </div>
 
-                                <PersonFields value={newKind} onChange={setNewKind} prefix="Kind" />
+                                <PersonFields value={newKind} onChange={setNewKind} prefix="Kind" idPrefix="kind" />
 
-                                <div className="mt-5">
+                                <div className="space-y-3">
                                     <div className="flex items-center justify-between">
-                                        <h4 className="text-sm font-semibold text-black">Erziehungsperson(en) auswählen</h4>
-                                        <button
-                                            type="button"
-                                            onClick={() => setShowCreateErz(true)}
-                                            className="text-indigo-700 hover:underline text-sm font-semibold"
-                                        >
+                                        <h4 className="text-sm font-semibold">Erziehungsperson(en) auswählen</h4>
+                                        <Button variant="link" className="px-0" onClick={() => setShowCreateErz(true)}>
                                             + Erziehungsperson anlegen
-                                        </button>
+                                        </Button>
                                     </div>
 
                                     {erziehungspersonen.length > 0 ? (
-                                        <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-2">
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                                             {erziehungspersonen.map((p) => {
                                                 const checked = selectedErziehungspersonIds.includes(p.id);
                                                 return (
-                                                    <label
-                                                        key={p.id}
-                                                        className="flex items-center gap-2 border rounded p-2 bg-white text-black"
-                                                    >
-                                                        <input
-                                                            type="checkbox"
-                                                            checked={checked}
-                                                            onChange={() => toggleSelectedErz(p.id)}
-                                                        />
-                                                        <span className="text-sm text-black">{erzLabel(p)}</span>
+                                                    <label key={p.id} className="flex items-center gap-3 rounded-md border p-3">
+                                                        <Checkbox checked={checked} onCheckedChange={() => toggleSelectedErz(p.id)} />
+                                                        <span className="text-sm">{erzLabel(p)}</span>
                                                     </label>
                                                 );
                                             })}
                                         </div>
                                     ) : (
-                                        <p className="mt-2 text-sm text-black">
-                                            Keine Erziehungspersonen vorhanden – bitte jetzt anlegen (auch mehrere nacheinander).
+                                        <p className="text-sm text-muted-foreground">
+                                            Keine Erziehungspersonen vorhanden – bitte jetzt anlegen.
                                         </p>
                                     )}
 
                                     {(showCreateErz || erziehungspersonen.length === 0) && (
-                                        <div className="mt-3 border rounded p-4 bg-white">
-                                            <div className="mb-3">
-                                                <label className="block text-sm font-semibold text-black mb-1">Rolle</label>
-                                                <select
-                                                    className="w-full border p-2 rounded text-black"
-                                                    value={newErzRolle}
-                                                    onChange={(e) => setNewErzRolle(e.target.value)}
-                                                >
-                                                    <option value="ELTERN">ELTERN</option>
-                                                    <option value="BETREUER">BETREUER</option>
-                                                    <option value="VORMUND">VORMUND</option>
-                                                    <option value="PFLEGESCHWESTER">PFLEGESCHWESTER</option>
-                                                </select>
+                                        <div className="rounded-lg border p-4 space-y-4">
+                                            <div className="space-y-2">
+                                                <Label>Rolle</Label>
+                                                <Select value={newErzRolle} onValueChange={setNewErzRolle}>
+                                                    <SelectTrigger>
+                                                        <SelectValue />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem value="ELTERN">ELTERN</SelectItem>
+                                                        <SelectItem value="BETREUER">BETREUER</SelectItem>
+                                                        <SelectItem value="VORMUND">VORMUND</SelectItem>
+                                                        <SelectItem value="PFLEGESCHWESTER">PFLEGESCHWESTER</SelectItem>
+                                                    </SelectContent>
+                                                </Select>
                                             </div>
 
-                                            <PersonFields value={newErz} onChange={setNewErz} prefix="Erziehungsperson" />
+                                            <PersonFields value={newErz} onChange={setNewErz} prefix="Erziehungsperson" idPrefix="erz" />
 
-                                            <div className="mt-4 flex flex-wrap gap-2">
-                                                <button
-                                                    type="button"
-                                                    onClick={() => createErziehungsperson({ keepOpen: true })}
-                                                    disabled={creatingErz}
-                                                    className="px-4 py-2 bg-indigo-700 text-white rounded disabled:opacity-50"
-                                                >
+                                            <div className="flex flex-wrap gap-2">
+                                                <Button type="button" onClick={() => createErziehungsperson({ keepOpen: true })} disabled={creatingErz}>
                                                     {creatingErz ? "Speichern..." : "Speichern & weitere anlegen"}
-                                                </button>
+                                                </Button>
 
-                                                <button
+                                                <Button
                                                     type="button"
+                                                    variant="secondary"
                                                     onClick={() => createErziehungsperson({ keepOpen: false })}
                                                     disabled={creatingErz}
-                                                    className="px-4 py-2 bg-indigo-100 text-indigo-900 rounded disabled:opacity-50"
                                                 >
                                                     {creatingErz ? "Speichern..." : "Speichern & schließen"}
-                                                </button>
+                                                </Button>
 
                                                 {erziehungspersonen.length > 0 && (
-                                                    <button
+                                                    <Button
                                                         type="button"
+                                                        variant="outline"
                                                         onClick={() => {
                                                             resetCreateErzForm();
                                                             setShowCreateErz(false);
                                                         }}
                                                         disabled={creatingErz}
-                                                        className="px-4 py-2 bg-gray-200 text-black rounded disabled:opacity-50"
                                                     >
                                                         Abbrechen
-                                                    </button>
+                                                    </Button>
                                                 )}
                                             </div>
 
-                                            <p className="text-xs text-black mt-2">
-                                                Jede neu angelegte Erziehungsperson wird automatisch ausgewählt und beim Kind verknüpft.
+                                            <p className="text-xs text-muted-foreground">
+                                                Jede neu angelegte Erziehungsperson wird automatisch ausgewählt.
                                             </p>
                                         </div>
                                     )}
                                 </div>
 
-                                <div className="mt-5 flex gap-2">
-                                    <button
-                                        type="button"
-                                        onClick={createKind}
-                                        disabled={creatingKind}
-                                        className="px-4 py-2 bg-green-700 text-white rounded disabled:opacity-50"
-                                    >
+                                <div className="flex flex-wrap gap-2">
+                                    <Button onClick={createKind} disabled={creatingKind}>
                                         {creatingKind ? "Anlegen..." : "Kind anlegen"}
-                                    </button>
+                                    </Button>
 
-                                    <button
-                                        type="button"
+                                    <Button
+                                        variant="outline"
                                         onClick={() => {
                                             resetCreateKindForm();
                                             setShowCreateKind(false);
                                             setShowCreateErz(false);
                                         }}
                                         disabled={creatingKind}
-                                        className="px-4 py-2 bg-gray-200 text-black rounded disabled:opacity-50"
                                     >
                                         Abbrechen
-                                    </button>
+                                    </Button>
                                 </div>
                             </div>
                         )}
                     </div>
+                )}
+
+                {step === 2 && (
+                    <div className="space-y-3">
+                        <h3 className="text-base font-semibold">Beobachtung / Einschätzung</h3>
+                        <Textarea
+                            rows={6}
+                            placeholder="Beschreibung der Beobachtung"
+                            value={description}
+                            onChange={(e) => setDescription(e.target.value)}
+                        />
+                    </div>
+                )}
+
+                {step === 3 && (
+                    <div className="space-y-2">
+                        <h3 className="text-base font-semibold">Überprüfung & Abschluss</h3>
+                        <div className="text-sm text-muted-foreground">Bitte alle Angaben prüfen und den Draft-Fall erstellen.</div>
+
+                        <div className="text-sm">
+                            <span className="font-medium">Kind:</span> {selectedKindObj ? kindLabel(selectedKindObj) : "–"}
+                        </div>
+
+                        <div className="text-sm">
+                            <span className="font-medium">Beschreibung:</span> {description || "–"}
+                        </div>
+                    </div>
+                )}
+
+                <Separator />
+
+                <div className="flex items-center justify-between gap-3">
+                    <Button variant="outline" onClick={prevStep} disabled={step === 1}>
+                        Zurück
+                    </Button>
+
+                    <div className="flex gap-2">
+                        <Button variant="destructive" onClick={onCancel}>
+                            Abbrechen
+                        </Button>
+
+                        {step < 3 ? (
+                            <Button onClick={onNext}>Weiter</Button>
+                        ) : (
+                            <Button onClick={createDraft} disabled={submittingDraft}>
+                                {submittingDraft ? "Erstellen..." : "Erstellen"}
+                            </Button>
+                        )}
+                    </div>
                 </div>
-            )}
-
-            {step === 2 && (
-                <div>
-                    <h3 className="text-lg font-semibold mb-4 text-black">Beobachtung / Einschätzung</h3>
-                    <textarea
-                        rows={5}
-                        className="w-full border p-2 rounded text-black placeholder:text-black/50"
-                        placeholder="Beschreibung der Beobachtung"
-                        value={description}
-                        onChange={(e) => setDescription(e.target.value)}
-                    />
-                </div>
-            )}
-
-            {step === 3 && (
-                <div>
-                    <h3 className="text-lg font-semibold mb-4 text-black">Überprüfung & Abschluss</h3>
-                    <p className="text-black">Bitte alle Angaben prüfen und den Draft-Fall erstellen.</p>
-                    <p className="text-black">Kind: {selectedKindObj ? kindLabel(selectedKindObj) : "–"}</p>
-                    <p className="text-black">Beschreibung: {description || "–"}</p>
-                </div>
-            )}
-
-            <div className="mt-6 flex justify-between">
-                <button
-                    onClick={prevStep}
-                    disabled={step === 1}
-                    className="px-4 py-2 bg-gray-200 text-black rounded disabled:opacity-50"
-                >
-                    Zurück
-                </button>
-
-                <div className="flex gap-2">
-                    <button onClick={onCancel} className="px-4 py-2 bg-red-600 text-white rounded">
-                        Abbrechen
-                    </button>
-
-                    {step < 3 ? (
-                        <button onClick={nextStep} className="px-4 py-2 bg-indigo-700 text-white rounded">
-                            Weiter
-                        </button>
-                    ) : (
-                        <button
-                            onClick={createDraft}
-                            disabled={loading}
-                            className="px-4 py-2 bg-green-700 text-white rounded disabled:opacity-50"
-                        >
-                            {loading ? "Erstellen..." : "Erstellen"}
-                        </button>
-                    )}
-                </div>
-            </div>
-        </div>
+            </CardContent>
+        </Card>
     );
 }
