@@ -1,16 +1,17 @@
-export async function apiFetch<T>(input: RequestInfo, init?: RequestInit): Promise<T> {
-    const res = await fetch(input, {
+export async function apiJson<T>(url: string, init?: RequestInit): Promise<T> {
+    const res = await fetch(url, {
         ...init,
         headers: {
             "Content-Type": "application/json",
-            ...(init?.headers || {}),
+            ...(init?.headers ?? {}),
         },
-        credentials: "include",
+        credentials: "include", // JWT cookie
     });
 
     if (!res.ok) {
-        const msg = await res.text().catch(() => "");
-        throw new Error(msg || `HTTP ${res.status}`);
+        const text = await res.text().catch(() => "");
+        throw new Error(text || `HTTP ${res.status}`);
     }
-    return await res.json() as Promise<T>;
+
+    return res.json() as Promise<T>;
 }

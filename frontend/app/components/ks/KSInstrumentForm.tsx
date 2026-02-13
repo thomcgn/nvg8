@@ -3,66 +3,133 @@
 import * as React from "react";
 import { useForm } from "react-hook-form";
 import { Button } from "@/components/ui/button";
-import { api } from "@/lib/api";
-import type { KSInstrumentTreeDTO, SaveAnswersRequest } from "@/lib/types";
+import { apiJson } from "@/lib/http";
+import type {
+    KSInstrumentTreeDTO,
+    GetOrCreateInstanceResponse,
+    LoadInstanceResponse,
+    AutoSaveRequest,
+    AutoSaveResponse,
+} from "@/lib/types";
 import { KSSectionAccordion } from "./KSSectionAccordion";
 
 type FormValues = {
-    // answers.<itemNo>.answer + answers.<itemNo>.comment
-    answers: Record<string, { answer?: string; comment?: string }>;
+    // answers.<itemId> = value_string
+    answers: Record<string, string>;
 };
+
+function debounce<T extends (...args: any[]) => void>(fn: T, ms: number) {
+    let t: any;
+    return (...args: Parameters<T>) => {
+        clearTimeout(t);
+        t = setTimeout(() => fn(...args), ms);
+    };
+}
 
 export function KSInstrumentForm({
                                      fallId,
                                      instrument,
                                  }: {
-    fallId: string;
-    instrument: KSInstrumentTreeDTO;
+    fallId: string; // route param
+    instrument: KSInstrumentTreeDTO; // kommt z.B. aus load endpoint oder instrument endpoint
 }) {
-    const [formId, setFormId] = React.useState<number | null>(null);
+    const [instanceId, setInstanceId] = React.useState<number | null>(null);
+    const [version, setVersion] = React.useState<number>(0);
     const [saving, setSaving] = React.useState(false);
 
-    const { control, handleSubmit } = useForm<FormValues>({
+    const { control, handleSubmit, setValue, getValues, watch } = useForm<FormValues>({
         defaultValues: { answers: {} },
     });
 
-    // 1) FormInstance anlegen (einmalig), damit wir an Fallakte hängen
+    // 1) Instance get-or-create + load answers (damit du auch refresh/weiterarbeiten kannst)
     React.useEffect(() => {
         let mounted = true;
+
         (async () => {
-            const res = await api.createFormInstance(fallId, instrument.code, instrument.version);
-            if (mounted) setFormId(res.formId);
+            const created = await apiJson<GetOrCreateInstanceResponse>(
+                "/api/kinderschutz/forms/instances:get-or-create",
+                {
+                    method: "POST",
+                    body: JSON.stringify({
+                        fallId: Number(fallId),
+                        instrumentId: instrument.id,
+                    }),
+                }
+            );
+
+            const loaded = await apiJson<LoadInstanceResponse>(
+                `/api/kinderschutz/forms/instances/${created.instanceId}`
+            );
+
+            if (!mounted) return;
+
+            setInstanceId(loaded.instanceId);
+            setVersion(loaded.version);
+
+            // answers in RHF schreiben
+            for (const a of loaded.answers) {
+                if (a.value != null) setValue(`answers.${String(a.itemId)}`, a.value);
+            }
         })().catch(console.error);
-        return () => { mounted = false; };
-    }, [fallId, instrument.code, instrument.version]);
 
-    const onSubmit = async (values: FormValues) => {
-        if (!formId) return;
-        setSaving(true);
-        try {
-            // answers: Record(itemNo -> {answer, comment}) -> Array
-            const answersArray = Object.entries(values.answers || {})
-                .filter(([, v]) => v?.answer != null && v.answer !== "")
-                .map(([itemNo, v]) => ({
-                    // itemId optional, wenn du es serverseitig über itemNo auflösen willst
-                    itemId: 0,
-                    itemNo,
-                    answer: String(v.answer),
-                    comment: v.comment?.trim() || undefined,
-                }));
+        return () => {
+            mounted = false;
+        };
+    }, [fallId, instrument.id, setValue]);
 
-            const payload: SaveAnswersRequest = {
-                instrumentCode: instrument.code,
-                instrumentVersion: instrument.version,
-                answers: answersArray,
-            };
+    // 2) Autosave (watch -> debounce -> POST autosave)
+    const doAutosave = React.useMemo(
+        () =>
+            debounce(async () => {
+                if (!instanceId) return;
 
-            await api.saveAnswers(fallId, formId, payload);
-            // optional: toast
-            alert("Gespeichert.");
-        } finally {
-            setSaving(false);
-        }
+                const values = getValues().answers || {};
+                const payload: AutoSaveRequest = {
+                    instanceId,
+                    expectedVersion: version,
+                    answers: Object.entries(values).map(([itemId, value]) => ({
+                        itemId: Number(itemId),
+                        value: value ?? null,
+                    })),
+                };
+
+                setSaving(true);
+                try {
+                    const res = await apiJson<AutoSaveResponse>("/api/kinderschutz/forms/autosave", {
+                        method: "POST",
+                        body: JSON.stringify(payload),
+                    });
+                    setVersion(res.newVersion);
+                } catch (e: any) {
+                    // Bei 409: reload (einfachste robuste Strategie)
+                    const msg = String(e?.message ?? "");
+                    if (msg.includes("409") || msg.toLowerCase().includes("conflict")) {
+                        const loaded = await apiJson<LoadInstanceResponse>(
+                            `/api/kinderschutz/forms/instances/${instanceId}`
+                        );
+                        setVersion(loaded.version);
+                        for (const a of loaded.answers) {
+                            setValue(`answers.${String(a.itemId)}`, a.value ?? "");
+                        }
+                    } else {
+                        console.error(e);
+                    }
+                } finally {
+                    setSaving(false);
+                }
+            }, 800),
+        [getValues, instanceId, version, setValue]
+    );
+
+    React.useEffect(() => {
+        const sub = watch(() => doAutosave());
+        return () => sub.unsubscribe();
+    }, [watch, doAutosave]);
+
+    // 3) Optional: “Speichern”-Button = erzwingt Autosave sofort (kein anderes Endpoint nötig)
+    const onSubmit = async () => {
+        await doAutosave();
+        alert("Gespeichert.");
     };
 
     return (
@@ -72,10 +139,13 @@ export function KSInstrumentForm({
                     <div className="text-xl font-semibold">{instrument.titel}</div>
                     <div className="text-sm text-muted-foreground">
                         {instrument.code} · Version {instrument.version}
+                        {instanceId ? ` · Instance #${instanceId} · v${version}` : ""}
+                        {saving ? " · speichere…" : ""}
                     </div>
                 </div>
-                <Button type="submit" disabled={saving || !formId}>
-                    {saving ? "Speichern…" : "Speichern"}
+
+                <Button type="submit" disabled={!instanceId}>
+                    Speichern
                 </Button>
             </div>
 
