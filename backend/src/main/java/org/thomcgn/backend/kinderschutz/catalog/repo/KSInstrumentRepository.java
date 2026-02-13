@@ -8,9 +8,9 @@ import java.util.Optional;
 
 public interface KSInstrumentRepository extends JpaRepository<KSInstrument, Long> {
 
-    @EntityGraph(attributePaths = {
-            "sections",
-            "sections.items"
-    })
     Optional<KSInstrument> findByCodeAndVersion(String code, String version);
+
+    // Instrument inkl. Sections + Items in einem Rutsch (für Formular-Rendering)
+    @EntityGraph(attributePaths = {"sections", "sections.items"})
+    Optional<KSInstrument> findWithSectionsById(Long id);
 }

@@ -7,6 +7,8 @@ import java.util.List;
 import java.util.Optional;
 
 public interface KSFormAnswerRepository extends JpaRepository<KSFormAnswer, Long> {
+
     List<KSFormAnswer> findByInstanceId(Long instanceId);
+
     Optional<KSFormAnswer> findByInstanceIdAndItemId(Long instanceId, Long itemId);
 }
