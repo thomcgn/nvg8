@@ -1,14 +1,12 @@
 package org.thomcgn.backend.kinderschutz.api.dto;
 
-import org.thomcgn.backend.kinderschutz.forms.model.FormStatus;
-import java.util.List;
+import java.util.Map;
 
 public record KSFormInstanceDTO(
         Long id,
+        Long instrumentId,
         Long fallId,
-        String instrumentCode,
-        String instrumentVersion,
-        FormStatus status,
-        List<KSAnswerDTO> answers,
-        KSInstrumentSchemaDTO schema
+        Long version,
+        String status,
+        Map<String, String> answersByItemNo // itemNo -> valueString (z.B. "YES"/"NO"/"UNKNOWN" oder Freitext)
 ) {}
