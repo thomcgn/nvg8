@@ -1,4 +1,4 @@
-package org.thomcgn.backend.cases.model;
+package org.thomcgn.backend.cases.model.enums;
 
 public enum Beziehungstyp {
     MUTTER, VATER,

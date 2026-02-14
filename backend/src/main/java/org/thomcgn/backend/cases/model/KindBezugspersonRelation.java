@@ -2,6 +2,10 @@ package org.thomcgn.backend.cases.model;
 
 import jakarta.persistence.*;
 import lombok.Data;
+import org.thomcgn.backend.cases.model.enums.Beziehungstyp;
+import org.thomcgn.backend.cases.model.enums.Datenquelle;
+import org.thomcgn.backend.cases.model.enums.RolleImAlltag;
+import org.thomcgn.backend.cases.model.enums.SorgeStatus;
 
 import java.time.LocalDate;
 

@@ -2,6 +2,8 @@ package org.thomcgn.backend.cases.model;
 
 import jakarta.persistence.*;
 import lombok.Data;
+import org.thomcgn.backend.cases.model.enums.MassnahmenStatus;
+import org.thomcgn.backend.cases.model.enums.MassnahmenTyp;
 
 import java.time.LocalDate;
 

@@ -1,9 +1,10 @@
 import { Card, CardContent } from "@/components/ui/card";
+import React, {ReactNode} from "react";
 
 interface Props {
     title: string;
-    value: number;
-    icon?: React.ReactNode;
+    value: ReactNode;
+    icon?: ReactNode;
 }
 
 export default function StatCard({ title, value, icon }: Props) {

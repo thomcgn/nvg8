@@ -10,6 +10,33 @@ export type KSItemDTO = {
     akutKriterium?: boolean | null;
 };
 
+export type KindSummary = {
+    id: number;
+    vorname: string;
+    nachname: string;
+    geburtsdatum?: string | null; // yyyy-mm-dd
+};
+
+export type BezugspersonSummary = {
+    id: number;
+    vorname: string;
+    nachname: string;
+    organisation?: string | null;
+};
+
+export type BezugspersonResponse = {
+    id: number;
+    organisation?: string | null;
+    person: any; // PersonResponseBase (vom Backend)
+};
+
+export type KindResponse = {
+    id: number;
+    geburtsdatum?: string | null;
+    person: any; // PersonResponseBase (vom Backend)
+    bezugspersonen?: any[];
+};
+
 export type KSSectionDTO = {
     id: number;
     sectionNo: string;
@@ -51,3 +78,19 @@ export type AutoSaveResponse = {
     instanceId: number;
     newVersion: number;
 };
+
+export type CaseStatus =
+    | "ENTWURF"
+    | "IN_PRUEFUNG"
+    | "AKUT"
+    | "HILFEPLANUNG"
+    | "ABGESCHLOSSEN"
+    | "ARCHIVIERT";
+
+export interface Case {
+    id: number;
+    childName: string;
+    age: number;
+    status: CaseStatus;
+    lastActivity: string;
+}

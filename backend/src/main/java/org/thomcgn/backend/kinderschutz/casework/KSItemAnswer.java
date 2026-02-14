@@ -2,7 +2,7 @@ package org.thomcgn.backend.kinderschutz.casework;
 
 import jakarta.persistence.*;
 import lombok.Data;
-import org.thomcgn.backend.cases.model.Datenquelle;
+import org.thomcgn.backend.cases.model.enums.Datenquelle;
 import org.thomcgn.backend.kinderschutz.catalog.KSItem;
 
 import java.time.LocalDate;

@@ -1,4 +1,4 @@
-package org.thomcgn.backend.cases.model;
+package org.thomcgn.backend.cases.model.enums;
 
 public enum FallStatus {
     ENTWURF,           // noch nicht offiziell gestartet

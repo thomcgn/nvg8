@@ -3,7 +3,7 @@ package org.thomcgn.backend.cases.services;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.thomcgn.backend.auth.data.User;
-import org.thomcgn.backend.cases.model.FallStatus;
+import org.thomcgn.backend.cases.model.enums.FallStatus;
 import org.thomcgn.backend.cases.model.Kind;
 import org.thomcgn.backend.cases.model.KinderschutzFall;
 import org.thomcgn.backend.cases.repo.KinderschutzFallRepository;

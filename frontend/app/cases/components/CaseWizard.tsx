@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useState } from "react";
 
 import PersonFields, { emptyPerson, PersonBase } from "@/app/components/PersonFields";
-
 import { toast } from "sonner";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -15,37 +14,64 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
+import type {KindResponse, KindSummary, BezugspersonResponse, BezugspersonSummary} from "@/lib/types";
 
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 interface CaseWizardProps {
     onCancel: () => void;
 }
 
-type Kind = PersonBase & {
-    id: number;
-    geburtsdatum?: string; // ISO yyyy-mm-dd
-};
+// Enum-Werte passend zu deinem Backend: RolleImAlltag
+// ⚠️ Falls dein Backend andere Enum-Namen hat, hier anpassen.
+const ROLLEN_IM_ALLTAG = [
+    "ELTERNTEIL",
+    "PFLEGEFAMILIE",
+    "BETREUUNG",
+    "FAMILIENHILFE",
+    "EINRICHTUNG",
+    "SONSTIGE",
+] as const;
 
-type Erziehungsperson = PersonBase & {
-    id: number;
-    rolle?: string; // Enum string
-};
+type RolleImAlltag = (typeof ROLLEN_IM_ALLTAG)[number];
+
+async function readBodySafe(res: Response) {
+    const text = await res.text().catch(() => "");
+    return { text };
+}
+
+// Hilfsfunktionen: Response -> Summary
+function kindSummaryFromCreate(res: KindResponse): KindSummary {
+    const p = res?.person ?? {};
+    return {
+        id: res.id,
+        vorname: p.vorname ?? "",
+        nachname: p.nachname ?? "",
+        geburtsdatum: res.geburtsdatum ?? undefined,
+    };
+}
+
+function bpSummaryFromCreate(res: BezugspersonResponse): BezugspersonSummary {
+    const p = res?.person ?? {};
+    return {
+        id: res.id,
+        vorname: p.vorname ?? "",
+        nachname: p.nachname ?? "",
+        organisation: res.organisation ?? undefined,
+    };
+}
 
 export default function CaseWizard({ onCancel }: CaseWizardProps) {
     const [step, setStep] = useState<1 | 2 | 3>(1);
 
-    const [kinder, setKinder] = useState<Kind[]>([]);
+    const [kinder, setKinder] = useState<KindSummary[]>([]);
     const [selectedKind, setSelectedKind] = useState<number | null>(null);
 
-    const [erziehungspersonen, setErziehungspersonen] = useState<Erziehungsperson[]>([]);
-    const [selectedErziehungspersonIds, setSelectedErziehungspersonIds] = useState<number[]>([]);
+    const [bezugspersonen, setBezugspersonen] = useState<BezugspersonSummary[]>([]);
+    const [selectedBezugspersonIds, setSelectedBezugspersonIds] = useState<number[]>([]);
+
+    // Rolle pro Bezugsperson (für Relation)
+    const [rolleByBezugspersonId, setRolleByBezugspersonId] = useState<Record<number, RolleImAlltag>>({});
 
     // Create Kind UI
     const [showCreateKind, setShowCreateKind] = useState(false);
@@ -53,20 +79,24 @@ export default function CaseWizard({ onCancel }: CaseWizardProps) {
     const [newKind, setNewKind] = useState<PersonBase>(emptyPerson);
     const [newKindGeburtsdatum, setNewKindGeburtsdatum] = useState<string>("");
 
-    // Create Erziehungsperson UI
-    const [showCreateErz, setShowCreateErz] = useState(false);
-    const [creatingErz, setCreatingErz] = useState(false);
-    const [newErz, setNewErz] = useState<PersonBase>(emptyPerson);
-    const [newErzRolle, setNewErzRolle] = useState<string>("ELTERN");
+    // Create Bezugsperson UI
+    const [showCreateBp, setShowCreateBp] = useState(false);
+    const [creatingBp, setCreatingBp] = useState(false);
+    const [newBp, setNewBp] = useState<PersonBase>(emptyPerson);
+
+    // Default Rolle für neu hinzukommende/zugeordnete Bezugsperson
+    const [newRelationRole, setNewRelationRole] = useState<RolleImAlltag>("ELTERNTEIL");
 
     const [description, setDescription] = useState("");
     const [submittingDraft, setSubmittingDraft] = useState(false);
 
     const progressValue = (step / 3) * 100;
 
-    const kindLabel = (k: Kind) => `${k.vorname} ${k.nachname}`.trim() || `Kind #${k.id}`;
-    const erzLabel = (p: Erziehungsperson) =>
-        `${p.vorname} ${p.nachname}`.trim() || `Erziehungsperson #${p.id}`;
+    const kindLabel = (k: KindSummary) =>
+        `${k.vorname ?? ""} ${k.nachname ?? ""}`.trim() || `Kind #${k.id}`;
+
+    const bpLabel = (p: BezugspersonSummary) =>
+        `${p.vorname ?? ""} ${p.nachname ?? ""}`.trim() || `Bezugsperson #${p.id}`;
 
     const selectedKindObj = useMemo(
         () => kinder.find((k) => k.id === selectedKind) ?? null,
@@ -79,17 +109,29 @@ export default function CaseWizard({ onCancel }: CaseWizardProps) {
     useEffect(() => {
         const loadAll = async () => {
             try {
-                const [kRes, eRes] = await Promise.all([
+                const [kRes, bRes] = await Promise.all([
                     fetch("/api/cases/kinder", { credentials: "include", cache: "no-store" }),
                     fetch("/api/cases/erziehungspersonen", { credentials: "include", cache: "no-store" }),
                 ]);
 
-                if (kRes.ok) setKinder((await kRes.json()) as Kind[]);
-                if (eRes.ok) setErziehungspersonen((await eRes.json()) as Erziehungsperson[]);
-            } catch (e) {
-                console.error(e);
+                if (!kRes.ok) {
+                    const { text } = await readBodySafe(kRes);
+                    throw new Error(`GET /kinder failed: ${kRes.status} ${text}`);
+                }
+                if (!bRes.ok) {
+                    const { text } = await readBodySafe(bRes);
+                    throw new Error(`GET /erziehungspersonen failed: ${bRes.status} ${text}`);
+                }
+
+                const kinderJson = (await kRes.json()) as KindSummary[];
+                const bpJson = (await bRes.json()) as BezugspersonSummary[];
+
+                setKinder(kinderJson);
+                setBezugspersonen(bpJson);
+            } catch (e: any) {
+                console.error("[Wizard] loadAll error:", e);
                 toast.error("Laden fehlgeschlagen", {
-                    description: "Kinder oder Erziehungspersonen konnten nicht geladen werden.",
+                    description: e?.message || "Kinder oder Bezugspersonen konnten nicht geladen werden.",
                 });
             }
         };
@@ -100,74 +142,97 @@ export default function CaseWizard({ onCancel }: CaseWizardProps) {
     const resetCreateKindForm = () => {
         setNewKind(emptyPerson);
         setNewKindGeburtsdatum("");
-        setSelectedErziehungspersonIds([]);
+        setSelectedBezugspersonIds([]);
+        setRolleByBezugspersonId({});
     };
 
-    const resetCreateErzForm = () => {
-        setNewErz(emptyPerson);
-        setNewErzRolle("ELTERN");
+    const resetCreateBpForm = () => {
+        setNewBp(emptyPerson);
+        setNewRelationRole("ELTERNTEIL");
     };
 
-    const toggleSelectedErz = (id: number) => {
-        setSelectedErziehungspersonIds((prev) =>
-            prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
-        );
+    const ensureRoleDefault = (id: number, fallback: RolleImAlltag = "SONSTIGE") => {
+        setRolleByBezugspersonId((prev) => ({
+            ...prev,
+            [id]: prev[id] ?? fallback,
+        }));
     };
 
-    const createErziehungsperson = async ({ keepOpen }: { keepOpen: boolean }) => {
-        if (!newErz.vorname.trim() || !newErz.nachname.trim()) {
+    const toggleSelectedBp = (id: number) => {
+        setSelectedBezugspersonIds((prev) => {
+            const isSelected = prev.includes(id);
+            const next = isSelected ? prev.filter((x) => x !== id) : [...prev, id];
+
+            if (!isSelected) ensureRoleDefault(id, "ELTERNTEIL");
+
+            if (isSelected) {
+                setRolleByBezugspersonId((rprev) => {
+                    const copy = { ...rprev };
+                    delete copy[id];
+                    return copy;
+                });
+            }
+
+            return next;
+        });
+    };
+
+    const createBezugsperson = async ({ keepOpen }: { keepOpen: boolean }) => {
+        if (!newBp.vorname?.trim() || !newBp.nachname?.trim()) {
             toast.error("Pflichtfelder fehlen", {
-                description: "Bitte Vorname und Nachname der Erziehungsperson ausfüllen.",
+                description: "Bitte Vorname und Nachname der Bezugsperson ausfüllen.",
             });
             return;
         }
 
-        if (!newErzRolle.trim()) {
-            toast.error("Rolle fehlt", {
-                description: "Bitte eine Rolle auswählen.",
-            });
-            return;
-        }
-
-        setCreatingErz(true);
+        setCreatingBp(true);
         try {
+            // Backend erwartet BezugspersonCreateRequest:
+            // vorname, nachname, adresse..., telefon, email/kontaktEmail, plus meta-felder
+            // PersonFields liefert PersonBase -> wir schicken es 1:1 (wie bisher).
+            const payload = { ...newBp };
+
             const res = await fetch("/api/cases/erziehungspersonen", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 credentials: "include",
-                body: JSON.stringify({ ...newErz, rolle: newErzRolle }),
+                body: JSON.stringify(payload),
             });
 
-            if (!res.ok) {
-                const text = await res.text().catch(() => "");
-                throw new Error(`Fehler beim Anlegen (${res.status}) ${text}`);
-            }
+            const { text } = await readBodySafe(res);
+            if (!res.ok) throw new Error(`Fehler beim Anlegen (${res.status}) ${text}`);
 
-            const created = (await res.json()) as Erziehungsperson;
+            const created = JSON.parse(text) as BezugspersonResponse;
 
-            setErziehungspersonen((prev) => [created, ...prev]);
-            setSelectedErziehungspersonIds((prev) =>
-                prev.includes(created.id) ? prev : [...prev, created.id]
-            );
+            // Summary-Liste aktualisieren (für Auswahl)
+            const createdSummary = bpSummaryFromCreate(created);
+            setBezugspersonen((prev) => [createdSummary, ...prev]);
 
-            resetCreateErzForm();
-            setShowCreateErz(keepOpen);
+            // automatisch auswählen + Rolle für Relation setzen
+            setSelectedBezugspersonIds((prev) => (prev.includes(createdSummary.id) ? prev : [...prev, createdSummary.id]));
+            setRolleByBezugspersonId((prev) => ({
+                ...prev,
+                [createdSummary.id]: newRelationRole,
+            }));
 
-            toast.success("Erziehungsperson angelegt", {
-                description: `${erzLabel(created)} wurde hinzugefügt und ausgewählt.`,
+            toast.success("Bezugsperson angelegt", {
+                description: `${bpLabel(createdSummary)} wurde hinzugefügt und ausgewählt (${newRelationRole}).`,
             });
+
+            resetCreateBpForm();
+            setShowCreateBp(keepOpen);
         } catch (err: any) {
-            console.error(err);
+            console.error("[Wizard] createBezugsperson error:", err);
             toast.error("Anlegen fehlgeschlagen", {
-                description: err?.message || "Unbekannter Fehler beim Anlegen der Erziehungsperson.",
+                description: err?.message || "Unbekannter Fehler beim Anlegen der Bezugsperson.",
             });
         } finally {
-            setCreatingErz(false);
+            setCreatingBp(false);
         }
     };
 
     const createKind = async () => {
-        if (!newKind.vorname.trim() || !newKind.nachname.trim()) {
+        if (!newKind.vorname?.trim() || !newKind.nachname?.trim()) {
             toast.error("Pflichtfelder fehlen", {
                 description: "Bitte Vorname und Nachname des Kindes ausfüllen.",
             });
@@ -175,51 +240,72 @@ export default function CaseWizard({ onCancel }: CaseWizardProps) {
         }
 
         if (!newKindGeburtsdatum) {
-            toast.error("Geburtsdatum fehlt", {
-                description: "Bitte Geburtsdatum angeben.",
-            });
+            toast.error("Geburtsdatum fehlt", { description: "Bitte Geburtsdatum angeben." });
             return;
         }
 
-        if (selectedErziehungspersonIds.length === 0) {
-            toast.error("Zuordnung fehlt", {
-                description: "Ein Kind benötigt mindestens eine Erziehungsperson.",
+        if (selectedBezugspersonIds.length === 0) {
+            toast.error("Zuordnung fehlt", { description: "Ein Kind benötigt mindestens eine Bezugsperson." });
+            return;
+        }
+
+        const missingRole = selectedBezugspersonIds.find((id) => !rolleByBezugspersonId[id]);
+        if (missingRole) {
+            toast.error("Rolle fehlt", {
+                description: "Bitte für jede ausgewählte Bezugsperson eine Rolle (im Alltag) wählen.",
             });
             return;
         }
 
         setCreatingKind(true);
         try {
+            // Backend erwartet CreateKindRequest:
+            // vorname, nachname, geburtsdatum, person-felder..., bezugspersonen [{id, rolleImAlltag}]
+            const payload = {
+                ...newKind,
+                geburtsdatum: newKindGeburtsdatum,
+                bezugspersonen: selectedBezugspersonIds.map((id) => ({
+                    id,
+                    rolleImAlltag: rolleByBezugspersonId[id] ?? "SONSTIGE",
+                })),
+            };
+
             const res = await fetch("/api/cases/kinder", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 credentials: "include",
-                body: JSON.stringify({
-                    ...newKind,
-                    geburtsdatum: newKindGeburtsdatum,
-                    erziehungspersonIds: selectedErziehungspersonIds,
-                }),
+                body: JSON.stringify(payload),
             });
 
-            if (!res.ok) {
-                const text = await res.text().catch(() => "");
-                throw new Error(`Fehler beim Anlegen (${res.status}) ${text}`);
-            }
+            const { text } = await readBodySafe(res);
+            if (!res.ok) throw new Error(`Fehler beim Anlegen (${res.status}) ${text}`);
 
-            const created = (await res.json()) as Kind;
+            const created = JSON.parse(text) as KindResponse;
 
-            setKinder((prev) => [created, ...prev]);
-            setSelectedKind(created.id);
+            const createdSummary = kindSummaryFromCreate(created);
+
+            setKinder((prev) => {
+                const next = [createdSummary, ...prev];
+                const seen = new Set<number>();
+                return next.filter((k) => {
+                    if (k?.id == null) return true;
+                    if (seen.has(k.id)) return false;
+                    seen.add(k.id);
+                    return true;
+                });
+            });
+
+            setSelectedKind(createdSummary.id);
 
             resetCreateKindForm();
             setShowCreateKind(false);
-            setShowCreateErz(false);
+            setShowCreateBp(false);
 
             toast.success("Kind angelegt", {
-                description: `${kindLabel(created)} wurde erstellt und ausgewählt.`,
+                description: `${kindLabel(createdSummary)} wurde erstellt und ausgewählt.`,
             });
         } catch (err: any) {
-            console.error(err);
+            console.error("[Wizard] createKind error:", err);
             toast.error("Anlegen fehlgeschlagen", {
                 description: err?.message || "Unbekannter Fehler beim Anlegen des Kindes.",
             });
@@ -231,9 +317,7 @@ export default function CaseWizard({ onCancel }: CaseWizardProps) {
     const validateBeforeNext = () => {
         if (step === 1) {
             if (!selectedKind) {
-                toast.error("Kind fehlt", {
-                    description: "Bitte ein Kind auswählen (oder anlegen).",
-                });
+                toast.error("Kind fehlt", { description: "Bitte ein Kind auswählen (oder anlegen)." });
                 return false;
             }
         }
@@ -259,29 +343,36 @@ export default function CaseWizard({ onCancel }: CaseWizardProps) {
             return;
         }
 
+        if (!description.trim()) {
+            toast.error("Beschreibung fehlt", { description: "Bitte eine Beschreibung eingeben." });
+            return;
+        }
+
         setSubmittingDraft(true);
         try {
+            // defensiv: falls Backend DraftRequest nur {kindId} hat
+            const payload: any = { kindId: selectedKind };
+            // nur mitsenden, wenn Backend es akzeptiert (falls es später eingebaut wird)
+            payload.description = description;
+
             const res = await fetch("/api/cases/draft", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 credentials: "include",
-                body: JSON.stringify({ kindId: selectedKind, description }),
+                body: JSON.stringify(payload),
             });
 
-            if (!res.ok) {
-                const text = await res.text().catch(() => "");
-                throw new Error(`Fehler beim Erstellen (${res.status}) ${text}`);
-            }
+            const { text } = await readBodySafe(res);
+            if (!res.ok) throw new Error(`Fehler beim Erstellen (${res.status}) ${text}`);
 
-            const draft = await res.json();
-
+            const draft = JSON.parse(text);
             toast.success("Draft-Fall erstellt", {
                 description: `ID: ${draft?.id ?? "–"}`,
             });
 
             onCancel();
         } catch (err: any) {
-            console.error(err);
+            console.error("[Wizard] createDraft error:", err);
             toast.error("Erstellen fehlgeschlagen", {
                 description: err?.message || "Unbekannter Fehler beim Erstellen des Draft-Falls.",
             });
@@ -297,6 +388,7 @@ export default function CaseWizard({ onCancel }: CaseWizardProps) {
             </CardHeader>
 
             <CardContent className="space-y-6">
+                {/* Progress */}
                 <div className="space-y-2">
                     <Progress value={progressValue} />
                     <div className="text-sm text-muted-foreground">
@@ -306,6 +398,7 @@ export default function CaseWizard({ onCancel }: CaseWizardProps) {
 
                 <Separator />
 
+                {/* STEP 1 */}
                 {step === 1 && (
                     <div className="space-y-4">
                         <div className="flex items-center justify-between gap-2">
@@ -313,6 +406,7 @@ export default function CaseWizard({ onCancel }: CaseWizardProps) {
                             <Badge variant="outline">Stammdaten</Badge>
                         </div>
 
+                        {/* Select Kind */}
                         <div className="space-y-2">
                             <Label>Kind</Label>
                             <Select
@@ -324,7 +418,7 @@ export default function CaseWizard({ onCancel }: CaseWizardProps) {
                                 </SelectTrigger>
                                 <SelectContent>
                                     {kinder.map((k) => (
-                                        <SelectItem key={k.id} value={String(k.id)}>
+                                        <SelectItem key={`kind-${k.id}`} value={String(k.id)}>
                                             {kindLabel(k)}
                                         </SelectItem>
                                     ))}
@@ -339,7 +433,8 @@ export default function CaseWizard({ onCancel }: CaseWizardProps) {
                         {showCreateKind && (
                             <div className="rounded-lg border p-4 space-y-5">
                                 <p className="text-sm text-muted-foreground">
-                                    Du kannst <b>eine oder mehrere</b> Erziehungspersonen zuordnen. Mindestens <b>eine</b> ist Pflicht.
+                                    Du kannst <b>eine oder mehrere</b> Bezugspersonen zuordnen. Mindestens <b>eine</b> ist Pflicht.
+                                    Für jede Zuordnung wird eine <b>Rolle im Alltag</b> gespeichert (Relation Kind ↔ Bezugsperson).
                                 </p>
 
                                 <div className="space-y-2">
@@ -353,87 +448,120 @@ export default function CaseWizard({ onCancel }: CaseWizardProps) {
 
                                 <PersonFields value={newKind} onChange={setNewKind} prefix="Kind" idPrefix="kind" />
 
+                                {/* Bezugspersonen auswählen */}
                                 <div className="space-y-3">
                                     <div className="flex items-center justify-between">
-                                        <h4 className="text-sm font-semibold">Erziehungsperson(en) auswählen</h4>
-                                        <Button variant="link" className="px-0" onClick={() => setShowCreateErz(true)}>
-                                            + Erziehungsperson anlegen
+                                        <h4 className="text-sm font-semibold">Bezugsperson(en) auswählen</h4>
+
+                                        <Button variant="link" className="px-0" onClick={() => setShowCreateBp(true)}>
+                                            + Bezugsperson anlegen
                                         </Button>
                                     </div>
 
-                                    {erziehungspersonen.length > 0 ? (
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                                            {erziehungspersonen.map((p) => {
-                                                const checked = selectedErziehungspersonIds.includes(p.id);
+                                    {bezugspersonen.length > 0 ? (
+                                        <div className="grid grid-cols-1 gap-2">
+                                            {bezugspersonen.map((p) => {
+                                                const checked = selectedBezugspersonIds.includes(p.id);
+                                                const rolle = rolleByBezugspersonId[p.id] ?? "ELTERNTEIL";
+
                                                 return (
-                                                    <label key={p.id} className="flex items-center gap-3 rounded-md border p-3">
-                                                        <Checkbox checked={checked} onCheckedChange={() => toggleSelectedErz(p.id)} />
-                                                        <span className="text-sm">{erzLabel(p)}</span>
-                                                    </label>
+                                                    <div key={`bp-${p.id}`} className="rounded-md border p-3">
+                                                        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                                                            <label className="flex items-center gap-3">
+                                                                <Checkbox checked={checked} onCheckedChange={() => toggleSelectedBp(p.id)} />
+                                                                <span className="text-sm">{bpLabel(p)}</span>
+                                                            </label>
+
+                                                            <div className="w-full md:w-60">
+                                                                <Label className="sr-only">Rolle im Alltag</Label>
+                                                                <Select
+                                                                    value={rolle}
+                                                                    onValueChange={(v) =>
+                                                                        setRolleByBezugspersonId((prev) => ({
+                                                                            ...prev,
+                                                                            [p.id]: v as RolleImAlltag,
+                                                                        }))
+                                                                    }
+                                                                    disabled={!checked}
+                                                                >
+                                                                    <SelectTrigger>
+                                                                        <SelectValue placeholder="Rolle im Alltag" />
+                                                                    </SelectTrigger>
+                                                                    <SelectContent>
+                                                                        {ROLLEN_IM_ALLTAG.map((r) => (
+                                                                            <SelectItem key={r} value={r}>
+                                                                                {r}
+                                                                            </SelectItem>
+                                                                        ))}
+                                                                    </SelectContent>
+                                                                </Select>
+                                                            </div>
+                                                        </div>
+                                                    </div>
                                                 );
                                             })}
                                         </div>
                                     ) : (
-                                        <p className="text-sm text-muted-foreground">
-                                            Keine Erziehungspersonen vorhanden – bitte jetzt anlegen.
-                                        </p>
+                                        <p className="text-sm text-muted-foreground">Keine Bezugspersonen vorhanden – bitte jetzt anlegen.</p>
                                     )}
 
-                                    {(showCreateErz || erziehungspersonen.length === 0) && (
+                                    {/* Bezugsperson anlegen */}
+                                    {(showCreateBp || bezugspersonen.length === 0) && (
                                         <div className="rounded-lg border p-4 space-y-4">
                                             <div className="space-y-2">
-                                                <Label>Rolle</Label>
-                                                <Select value={newErzRolle} onValueChange={setNewErzRolle}>
+                                                <Label>Standard-Rolle (für diese Zuordnung)</Label>
+                                                <Select value={newRelationRole} onValueChange={(v) => setNewRelationRole(v as RolleImAlltag)}>
                                                     <SelectTrigger>
                                                         <SelectValue />
                                                     </SelectTrigger>
                                                     <SelectContent>
-                                                        <SelectItem value="ELTERN">ELTERN</SelectItem>
-                                                        <SelectItem value="BETREUER">BETREUER</SelectItem>
-                                                        <SelectItem value="VORMUND">VORMUND</SelectItem>
-                                                        <SelectItem value="PFLEGESCHWESTER">PFLEGESCHWESTER</SelectItem>
+                                                        {ROLLEN_IM_ALLTAG.map((r) => (
+                                                            <SelectItem key={r} value={r}>
+                                                                {r}
+                                                            </SelectItem>
+                                                        ))}
                                                     </SelectContent>
                                                 </Select>
+                                                <p className="text-xs text-muted-foreground">
+                                                    Diese Rolle wird automatisch für die neu angelegte Bezugsperson gesetzt (Relation).
+                                                </p>
                                             </div>
 
-                                            <PersonFields value={newErz} onChange={setNewErz} prefix="Erziehungsperson" idPrefix="erz" />
+                                            <PersonFields value={newBp} onChange={setNewBp} prefix="Bezugsperson" idPrefix="bp" />
 
                                             <div className="flex flex-wrap gap-2">
-                                                <Button type="button" onClick={() => createErziehungsperson({ keepOpen: true })} disabled={creatingErz}>
-                                                    {creatingErz ? "Speichern..." : "Speichern & weitere anlegen"}
+                                                <Button type="button" onClick={() => createBezugsperson({ keepOpen: true })} disabled={creatingBp}>
+                                                    {creatingBp ? "Speichern..." : "Speichern & weitere anlegen"}
                                                 </Button>
 
                                                 <Button
                                                     type="button"
                                                     variant="secondary"
-                                                    onClick={() => createErziehungsperson({ keepOpen: false })}
-                                                    disabled={creatingErz}
+                                                    onClick={() => createBezugsperson({ keepOpen: false })}
+                                                    disabled={creatingBp}
                                                 >
-                                                    {creatingErz ? "Speichern..." : "Speichern & schließen"}
+                                                    {creatingBp ? "Speichern..." : "Speichern & schließen"}
                                                 </Button>
 
-                                                {erziehungspersonen.length > 0 && (
+                                                {bezugspersonen.length > 0 && (
                                                     <Button
                                                         type="button"
                                                         variant="outline"
                                                         onClick={() => {
-                                                            resetCreateErzForm();
-                                                            setShowCreateErz(false);
+                                                            resetCreateBpForm();
+                                                            setShowCreateBp(false);
                                                         }}
-                                                        disabled={creatingErz}
+                                                        disabled={creatingBp}
                                                     >
                                                         Abbrechen
                                                     </Button>
                                                 )}
                                             </div>
-
-                                            <p className="text-xs text-muted-foreground">
-                                                Jede neu angelegte Erziehungsperson wird automatisch ausgewählt.
-                                            </p>
                                         </div>
                                     )}
                                 </div>
 
+                                {/* Kind anlegen */}
                                 <div className="flex flex-wrap gap-2">
                                     <Button onClick={createKind} disabled={creatingKind}>
                                         {creatingKind ? "Anlegen..." : "Kind anlegen"}
@@ -444,7 +572,7 @@ export default function CaseWizard({ onCancel }: CaseWizardProps) {
                                         onClick={() => {
                                             resetCreateKindForm();
                                             setShowCreateKind(false);
-                                            setShowCreateErz(false);
+                                            setShowCreateBp(false);
                                         }}
                                         disabled={creatingKind}
                                     >
@@ -456,6 +584,7 @@ export default function CaseWizard({ onCancel }: CaseWizardProps) {
                     </div>
                 )}
 
+                {/* STEP 2 */}
                 {step === 2 && (
                     <div className="space-y-3">
                         <h3 className="text-base font-semibold">Beobachtung / Einschätzung</h3>
@@ -468,6 +597,7 @@ export default function CaseWizard({ onCancel }: CaseWizardProps) {
                     </div>
                 )}
 
+                {/* STEP 3 */}
                 {step === 3 && (
                     <div className="space-y-2">
                         <h3 className="text-base font-semibold">Überprüfung & Abschluss</h3>
@@ -485,6 +615,7 @@ export default function CaseWizard({ onCancel }: CaseWizardProps) {
 
                 <Separator />
 
+                {/* Footer */}
                 <div className="flex items-center justify-between gap-3">
                     <Button variant="outline" onClick={prevStep} disabled={step === 1}>
                         Zurück

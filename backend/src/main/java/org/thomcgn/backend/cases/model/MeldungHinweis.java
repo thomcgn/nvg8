@@ -2,6 +2,7 @@ package org.thomcgn.backend.cases.model;
 
 import jakarta.persistence.*;
 import lombok.Data;
+import org.thomcgn.backend.cases.model.enums.Meldungsweg;
 
 import java.time.LocalDate;
 
