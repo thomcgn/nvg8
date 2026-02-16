@@ -1,3 +1,4 @@
+
 export type AnswerType = "TRI_STATE" | "TEXT" | "DATE" | "USER_REF";
 export type TriState = "JA" | "NEIN" | "UNBEKANNT";
 
@@ -7,8 +8,59 @@ export type KSItemDTO = {
     text: string;
     answerType: AnswerType;
     orderIndex?: number | null;
+    polarity?: string | null;
     akutKriterium?: boolean | null;
 };
+
+export type KSSectionDTO = {
+    id: number;
+    sectionNo: string;
+    title: string;
+    orderIndex: number | null;
+    hintText?: string | null;
+    items: KSItemDTO[];
+    children: KSSectionDTO[];
+};
+
+export type KSInstrumentDTO = {
+    id: number;
+    code: string;
+    titel: string;
+    typ: string;
+    version: string;
+    sections: KSSectionDTO[];
+};
+
+export type KSInstrumentTreeDTO = {
+    id: number;
+    code: string;
+    version: string;
+    titel: string;
+    sections: KSSectionDTO[];
+};
+
+export type KSFormLoadDTO = {
+    instanceId: number;
+    version: number;
+    fallId: number;
+    instrument: KSInstrumentDTO;
+    answers: { itemId: number; value: string | null }[];
+};
+
+export type GetOrCreateResp = {
+    instanceId: number;
+    version: number;
+};
+
+export type AutoSaveResp = {
+    instanceId: number;
+    newVersion: number;
+};
+
+export type FormValues = {
+    answers: Record<string, string>;
+};
+
 
 export type KindSummary = {
     id: number;
@@ -37,23 +89,7 @@ export type KindResponse = {
     bezugspersonen?: any[];
 };
 
-export type KSSectionDTO = {
-    id: number;
-    sectionNo: string;
-    title: string;
-    orderIndex?: number | null;
-    hintText?: string | null;
-    items: KSItemDTO[];
-    children: KSSectionDTO[];
-};
 
-export type KSInstrumentTreeDTO = {
-    id: number;
-    code: string;
-    version: string;
-    titel: string;
-    sections: KSSectionDTO[];
-};
 
 export type GetOrCreateInstanceResponse = {
     instanceId: number;
