@@ -1,2 +1,0 @@
--- Marker-Migration (optional)
--- Flyway baseline-on-migrate ist aktiv, diese Datei kann leer bleiben.
