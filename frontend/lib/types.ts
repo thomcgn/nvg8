@@ -129,4 +129,5 @@ export interface Case {
     age: number;
     status: CaseStatus;
     lastActivity: string;
+    kindId?: number;
 }
