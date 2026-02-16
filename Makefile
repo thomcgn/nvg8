@@ -128,3 +128,18 @@ dev-rebuild:
 
 dev-logs:
 	$(COMPOSE_DEV) logs -f --tail=200
+
+# Remove/recreate ONLY dev backend; keep DB volume; wipe build outputs so no stale code remains
+dev-back-fresh:
+	@echo "!!! DEV backend fresh (DB bleibt). Ctrl+C zum Abbrechen."
+	sleep 2
+	@echo "-> Entferne backend container..."
+	$(COMPOSE_DEV) rm -sf backend
+
+	@echo "-> Lösche lokale Build-Artefakte (backend/target)..."
+	rm -rf ./backend/target
+
+	@echo "-> (Optional) Maven local repo cache NICHT gelöscht (m2_cache bleibt)."
+	@echo "-> Starte backend neu..."
+	$(COMPOSE_DEV) up -d --no-deps backend
+	@echo "✅ DEV backend frisch gestartet (DB unverändert)."

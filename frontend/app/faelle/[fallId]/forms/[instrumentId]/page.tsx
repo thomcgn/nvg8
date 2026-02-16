@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
-import { apiFetch } from "@/lib/http";
 
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -12,70 +11,39 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 
-type AnswerType = "TRI_STATE" | "TEXT" | "DATE" | "USER_REF";
-type TriState = "JA" | "NEIN" | "UNBEKANNT";
-
-type KSItemDTO = {
-    id: number;
-    itemNo: string;
-    text: string;
-    answerType: AnswerType;
-    orderIndex: number | null;
-    polarity?: string | null;
-    akutKriterium?: boolean | null;
-};
-
-type KSSectionDTO = {
-    id: number;
-    sectionNo: string;
-    title: string;
-    orderIndex: number | null;
-    hintText?: string | null;
-    items: KSItemDTO[];
-    children: KSSectionDTO[];
-};
-
-type KSInstrumentDTO = {
-    id: number;
-    code: string;
-    titel: string;
-    typ: string;
-    version: string;
-    sections: KSSectionDTO[];
-};
-
-type KSFormLoadDTO = {
-    instanceId: number;
-    version: number;
-    fallId: number;
-    instrument: KSInstrumentDTO;
-    answers: { itemId: number; value: string | null }[];
-};
-
-type GetOrCreateResp = { instanceId: number; version: number };
-type AutoSaveResp = { instanceId: number; newVersion: number };
-
-type FormValues = {
-    // key = itemId als string
-    answers: Record<string, string>;
-};
+import type {
+    AutoSaveResp,
+    FormValues,
+    GetOrCreateResp,
+    KSFormLoadDTO,
+    KSSectionDTO,
+    TriState,
+} from "@/lib/types";
 
 function flattenSections(sections: KSSectionDTO[]): KSSectionDTO[] {
-    const out: KSSectionDTO[] = [];
+    const result: KSSectionDTO[] = [];
     const walk = (s: KSSectionDTO) => {
-        out.push(s);
-        s.children?.forEach(walk);
+        result.push(s);
+        s.children.forEach(walk);
     };
     sections.forEach(walk);
-    return out;
+    return result;
 }
 
-function debounce<T extends (...args: any[]) => void>(fn: T, ms: number) {
-    let t: any;
+function debounce<T extends (...args: unknown[]) => void>(fn: T, ms: number) {
+    let timer: ReturnType<typeof setTimeout>;
     return (...args: Parameters<T>) => {
-        clearTimeout(t);
-        t = setTimeout(() => fn(...args), ms);
+        clearTimeout(timer);
+        timer = setTimeout(() => fn(...args), ms);
     };
+}
+
+async function readBodySafe(res: Response): Promise<string> {
+    try {
+        return await res.text();
+    } catch {
+        return "";
+    }
 }
 
 export default function KSFormPage() {
@@ -88,47 +56,71 @@ export default function KSFormPage() {
     const [load, setLoad] = useState<KSFormLoadDTO | null>(null);
     const [activeSectionNo, setActiveSectionNo] = useState<string | null>(null);
     const [saving, setSaving] = useState(false);
+
     const versionRef = useRef<number>(0);
     const instanceRef = useRef<number>(0);
 
     const form = useForm<FormValues>({ defaultValues: { answers: {} } });
     const { watch, setValue, getValues } = form;
 
+    // INIT
     useEffect(() => {
-        const init = async () => {
-            // 1) get-or-create instance
-            const inst = await apiFetch<GetOrCreateResp>("/api/kinderschutz/forms/instances:get-or-create", {
-                method: "POST",
-                body: JSON.stringify({ fallId, instrumentId }),
-            });
+        const init = async (): Promise<void> => {
+            try {
+                // 1) get-or-create instance  ✅ POST /instances
+                const instRes = await fetch("/api/kinderschutz/forms/instances", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    credentials: "include",
+                    cache: "no-store",
+                    body: JSON.stringify({ fallId, instrumentId }),
+                });
 
-            instanceRef.current = inst.instanceId;
-
-            // 2) load instance + instrument tree + answers
-            const data = await apiFetch<KSFormLoadDTO>(`/api/kinderschutz/forms/instances/${inst.instanceId}`);
-
-            versionRef.current = data.version;
-            setLoad(data);
-
-            // default active section
-            const first = data.instrument.sections?.[0]?.sectionNo ?? null;
-            setActiveSectionNo(first);
-
-            // answers in RHF default setzen
-            for (const a of data.answers) {
-                if (a.value != null) {
-                    setValue(`answers.${String(a.itemId)}` as const, a.value);
+                if (!instRes.ok) {
+                    const text = await readBodySafe(instRes);
+                    throw new Error(`POST /instances failed: ${instRes.status} ${text}`);
                 }
+
+                const inst: GetOrCreateResp = await instRes.json();
+                instanceRef.current = inst.instanceId;
+
+                // 2) load instance ✅ GET /instances/{id}
+                const loadRes = await fetch(
+                    `/api/kinderschutz/forms/instances/${inst.instanceId}`,
+                    { credentials: "include", cache: "no-store" }
+                );
+
+                if (!loadRes.ok) {
+                    const text = await readBodySafe(loadRes);
+                    throw new Error(`GET /instances/{id} failed: ${loadRes.status} ${text}`);
+                }
+
+                const data: KSFormLoadDTO = await loadRes.json();
+                versionRef.current = data.version;
+                setLoad(data);
+
+                const first = data.instrument.sections[0]?.sectionNo ?? null;
+                setActiveSectionNo(first);
+
+                // Antworten in RHF setzen
+                for (const a of data.answers) {
+                    if (a.value !== null) {
+                        setValue(`answers.${String(a.itemId)}`, a.value, { shouldDirty: false });
+                    }
+                }
+            } catch (err) {
+                console.error(err);
+                router.push("/dashboard");
             }
         };
 
-        init().catch((e) => {
-            console.error(e);
-            router.push("/dashboard");
-        });
+        void init();
     }, [fallId, instrumentId, router, setValue]);
 
-    const allSections = useMemo(() => (load ? flattenSections(load.instrument.sections) : []), [load]);
+    const allSections = useMemo(
+        () => (load ? flattenSections(load.instrument.sections) : []),
+        [load]
+    );
 
     const activeSection = useMemo(() => {
         if (!load || !activeSectionNo) return null;
@@ -140,9 +132,9 @@ export default function KSFormPage() {
             debounce(async () => {
                 if (!load) return;
 
-                const values = getValues().answers || {};
+                const values = getValues().answers;
+
                 const payload = {
-                    instanceId: instanceRef.current,
                     expectedVersion: versionRef.current,
                     answers: Object.entries(values).map(([itemId, value]) => ({
                         itemId: Number(itemId),
@@ -152,25 +144,44 @@ export default function KSFormPage() {
 
                 setSaving(true);
                 try {
-                    const res = await apiFetch<AutoSaveResp>("/api/kinderschutz/forms/autosave", {
-                        method: "POST",
-                        body: JSON.stringify(payload),
-                    });
-                    versionRef.current = res.newVersion;
-                } catch (e: any) {
-                    // 409 Version conflict: simplest robust approach => reload
-                    if (String(e.message || "").includes("409") || String(e.message || "").includes("CONFLICT")) {
-                        const fresh = await apiFetch<KSFormLoadDTO>(`/api/kinderschutz/forms/instances/${instanceRef.current}`);
-                        versionRef.current = fresh.version;
-                        setLoad(fresh);
-
-                        // Werte neu setzen
-                        for (const a of fresh.answers) {
-                            setValue(`answers.${String(a.itemId)}` as const, a.value ?? "");
+                    // ✅ POST /instances/{id}/autosave  (passt zu deinem Controller!)
+                    const res = await fetch(
+                        `/api/kinderschutz/forms/instances/${instanceRef.current}/autosave`,
+                        {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            credentials: "include",
+                            body: JSON.stringify(payload),
                         }
-                    } else {
-                        console.error(e);
+                    );
+
+                    if (!res.ok) {
+                        const text = await readBodySafe(res);
+
+                        // Optional: bei 409 reload
+                        if (res.status === 409) {
+                            const freshRes = await fetch(
+                                `/api/kinderschutz/forms/instances/${instanceRef.current}`,
+                                { credentials: "include", cache: "no-store" }
+                            );
+                            if (freshRes.ok) {
+                                const fresh: KSFormLoadDTO = await freshRes.json();
+                                versionRef.current = fresh.version;
+                                setLoad(fresh);
+                                for (const a of fresh.answers) {
+                                    setValue(`answers.${String(a.itemId)}`, a.value ?? "", { shouldDirty: false });
+                                }
+                            }
+                            return;
+                        }
+
+                        throw new Error(`Autosave failed: ${res.status} ${text}`);
                     }
+
+                    const json: AutoSaveResp = await res.json();
+                    versionRef.current = json.newVersion;
+                } catch (e) {
+                    console.error(e);
                 } finally {
                     setSaving(false);
                 }
@@ -178,7 +189,6 @@ export default function KSFormPage() {
         [getValues, load, setValue]
     );
 
-    // watch -> autosave
     useEffect(() => {
         const sub = watch(() => {
             doAutosave();
@@ -190,11 +200,10 @@ export default function KSFormPage() {
 
     return (
         <div className="p-6 grid grid-cols-12 gap-6">
-            {/* Navigation */}
             <Card className="col-span-12 md:col-span-4 p-4">
                 <div className="font-semibold mb-2">{load.instrument.titel}</div>
                 <div className="text-xs text-muted-foreground mb-4">
-                    {load.instrument.code} · {load.instrument.version} · Instance #{load.instanceId} · v{versionRef.current}{" "}
+                    Instance #{load.instanceId} · v{versionRef.current}{" "}
                     {saving ? "· speichere…" : "· gespeichert"}
                 </div>
 
@@ -212,7 +221,6 @@ export default function KSFormPage() {
                 </div>
             </Card>
 
-            {/* Section Content */}
             <Card className="col-span-12 md:col-span-8 p-4">
                 {!activeSection ? (
                     <div>Keine Section gewählt.</div>
@@ -222,9 +230,11 @@ export default function KSFormPage() {
                             <div className="text-lg font-semibold">
                                 {activeSection.sectionNo} · {activeSection.title}
                             </div>
-                            {activeSection.hintText ? (
-                                <div className="text-sm text-muted-foreground mt-1">{activeSection.hintText}</div>
-                            ) : null}
+                            {activeSection.hintText && (
+                                <div className="text-sm text-muted-foreground mt-1">
+                                    {activeSection.hintText}
+                                </div>
+                            )}
                         </div>
 
                         <Separator />
@@ -238,23 +248,19 @@ export default function KSFormPage() {
                                         <div key={item.id} className="space-y-2">
                                             <div className="text-sm font-medium">
                                                 {item.itemNo} · {item.text}
-                                                {item.akutKriterium ? <span className="ml-2 text-red-600">(AKUT)</span> : null}
                                             </div>
                                             <Textarea
                                                 value={watch(field) || ""}
                                                 onChange={(e) => setValue(field, e.target.value)}
-                                                placeholder="Freitext…"
                                             />
                                         </div>
                                     );
                                 }
 
-                                // TRI_STATE als String
                                 return (
                                     <div key={item.id} className="space-y-2">
                                         <div className="text-sm font-medium">
                                             {item.itemNo} · {item.text}
-                                            {item.akutKriterium ? <span className="ml-2 text-red-600">(AKUT)</span> : null}
                                         </div>
 
                                         <RadioGroup

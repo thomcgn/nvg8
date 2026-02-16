@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
 import Secu from "../auth/Nvg8Auth";
@@ -12,21 +12,27 @@ import CaseWizard from "../cases/components/CaseWizard";
 import { FaUsers, FaFolderOpen, FaExclamationTriangle } from "react-icons/fa";
 import type { Case, CaseStatus, KindSummary } from "@/lib/types";
 
+const DEFAULT_INSTRUMENT_ID = 1;
+
 type DashboardStatsResponse = {
     meineOffenenFaelle: number;
     akutGefaehrdet: number;
     abgeschlossen30Tage: number;
 };
 
-// minimaler Ausschnitt aus KinderschutzFallResponse (für Dashboard)
 type MyFallResponse = {
     id: number;
-    status?: string | null;
-    updatedAt?: string | null;
-    kind?: { id: number; vorname: string; nachname: string; geburtsdatum?: string | null } | null;
+    status: CaseStatus | null;
+    updatedAt: string | null;
+    kind: {
+        id: number;
+        vorname: string;
+        nachname: string;
+        geburtsdatum: string | null;
+    } | null;
 };
 
-function calcAge(geburtsdatum?: string | null) {
+function calcAge(geburtsdatum: string | null): number {
     if (!geburtsdatum) return 0;
     const d = new Date(geburtsdatum);
     if (Number.isNaN(d.getTime())) return 0;
@@ -38,30 +44,19 @@ function calcAge(geburtsdatum?: string | null) {
     return Math.max(age, 0);
 }
 
-function formatLastActivity(updatedAt?: string | null) {
+function formatLastActivity(updatedAt: string | null): string {
     if (!updatedAt) return "—";
     const d = new Date(updatedAt);
     if (Number.isNaN(d.getTime())) return "—";
     return d.toLocaleDateString("de-DE");
 }
 
-async function readBodySafe(res: Response) {
-    const text = await res.text().catch(() => "");
-    return { text };
-}
-
-function normalizeStatus(value: any): CaseStatus {
-    if (
-        value === "ENTWURF" ||
-        value === "IN_PRUEFUNG" ||
-        value === "AKUT" ||
-        value === "HILFEPLANUNG" ||
-        value === "ABGESCHLOSSEN" ||
-        value === "ARCHIVIERT"
-    ) {
-        return value;
+async function readBodySafe(res: Response): Promise<string> {
+    try {
+        return await res.text();
+    } catch {
+        return "";
     }
-    return "ENTWURF";
 }
 
 export default function DashboardPage() {
@@ -89,7 +84,7 @@ export default function DashboardPage() {
         }
     }, [searchParams, router]);
 
-    const fetchAll = async () => {
+    const fetchAll = async (): Promise<void> => {
         setLoading(true);
         setError(null);
 
@@ -101,47 +96,41 @@ export default function DashboardPage() {
             ]);
 
             if (!statsRes.ok) {
-                const { text } = await readBodySafe(statsRes);
+                const text = await readBodySafe(statsRes);
                 throw new Error(`GET /api/cases/stats failed: ${statsRes.status} ${text}`);
             }
             if (!mineRes.ok) {
-                const { text } = await readBodySafe(mineRes);
+                const text = await readBodySafe(mineRes);
                 throw new Error(`GET /api/cases/mine failed: ${mineRes.status} ${text}`);
             }
             if (!kinderRes.ok) {
-                const { text } = await readBodySafe(kinderRes);
+                const text = await readBodySafe(kinderRes);
                 throw new Error(`GET /api/cases/kinder failed: ${kinderRes.status} ${text}`);
             }
 
-            const statsJson = (await statsRes.json()) as DashboardStatsResponse;
-            const mineJson = (await mineRes.json()) as MyFallResponse[];
-            const kinderJson = (await kinderRes.json()) as KindSummary[];
+            const statsJson: DashboardStatsResponse = await statsRes.json();
+            const mineJson: MyFallResponse[] = await mineRes.json();
+            const kinderJson: KindSummary[] = await kinderRes.json();
 
             setStats(statsJson);
-            setKinderGesamt(kinderJson?.length ?? 0);
+            setKinderGesamt(kinderJson.length);
 
-            const mapped: Case[] = (mineJson ?? []).map((f) => {
-                const k = f.kind;
-
-                const childName = k
-                    ? `${k.vorname ?? ""} ${k.nachname ?? ""}`.trim()
-                    : `Fall #${f.id}`;
-
-                const status = normalizeStatus(f.status);
+            const mapped: Case[] = mineJson.map((f) => {
+                const kind = f.kind;
+                const childName = kind ? `${kind.vorname} ${kind.nachname}`.trim() : `Fall #${f.id}`;
 
                 return {
                     id: f.id,
                     childName,
-                    age: calcAge(k?.geburtsdatum),
-                    status,
+                    age: calcAge(kind?.geburtsdatum ?? null),
+                    status: f.status ?? "ENTWURF",
                     lastActivity: formatLastActivity(f.updatedAt),
                 };
             });
 
             setCases(mapped);
-        } catch (e: any) {
-            console.error("[Dashboard] fetchAll error:", e);
-            setError(e?.message ?? "Dashboard konnte nicht geladen werden.");
+        } catch (e) {
+            setError(e instanceof Error ? e.message : "Dashboard konnte nicht geladen werden.");
             setCases([]);
             setStats({ meineOffenenFaelle: 0, akutGefaehrdet: 0, abgeschlossen30Tage: 0 });
             setKinderGesamt(0);
@@ -151,8 +140,17 @@ export default function DashboardPage() {
     };
 
     useEffect(() => {
-        fetchAll();
+        void fetchAll();
     }, []);
+
+    const onCancelWizard = () => {
+        setShowWizard(false);
+        void fetchAll();
+    };
+
+    const onClickCase = (c: Case) => {
+        router.push(`/faelle/${c.id}/forms/${DEFAULT_INSTRUMENT_ID}`);
+    };
 
     return (
         <Secu fallback={<div className="p-6">Lade Dashboard…</div>}>
@@ -164,32 +162,27 @@ export default function DashboardPage() {
                     onStartWizard={() => setShowWizard(true)}
                 >
                     {showWizard ? (
-                        <CaseWizard
-                            onCancel={() => {
-                                setShowWizard(false);
-                                fetchAll();
-                            }}
-                        />
+                        <CaseWizard onCancel={onCancelWizard} />
                     ) : (
                         <>
                             <section className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 lg:gap-6 mb-6 lg:mb-8">
                                 <StatCard
                                     title="Meine offenen Fälle"
-                                    value={loading ? "…" : stats.meineOffenenFaelle}
+                                    value={loading ? "…" : String(stats.meineOffenenFaelle)}
                                     icon={<FaFolderOpen />}
                                 />
                                 <StatCard
                                     title="Akut gefährdet"
-                                    value={loading ? "…" : stats.akutGefaehrdet}
+                                    value={loading ? "…" : String(stats.akutGefaehrdet)}
                                     icon={<FaExclamationTriangle />}
                                 />
                                 <StatCard
                                     title="Abgeschlossen (30 Tage)"
-                                    value={loading ? "…" : stats.abgeschlossen30Tage}
+                                    value={loading ? "…" : String(stats.abgeschlossen30Tage)}
                                 />
                                 <StatCard
                                     title="Kinder gesamt"
-                                    value={loading ? "…" : kinderGesamt}
+                                    value={loading ? "…" : String(kinderGesamt)}
                                     icon={<FaUsers />}
                                 />
                             </section>
@@ -203,11 +196,9 @@ export default function DashboardPage() {
                                         <div className="text-muted-foreground">{error}</div>
                                     </div>
                                 ) : loading ? (
-                                    <div className="rounded-md border p-4 text-sm text-muted-foreground">
-                                        Lade Fälle…
-                                    </div>
+                                    <div className="rounded-md border p-4 text-sm text-muted-foreground">Lade Fälle…</div>
                                 ) : (
-                                    <CaseTable cases={cases} />
+                                    <CaseTable cases={cases} onRowClick={onClickCase} />
                                 )}
                             </section>
                         </>

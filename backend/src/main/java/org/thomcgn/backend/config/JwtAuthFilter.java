@@ -10,7 +10,8 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
-import org.thomcgn.backend.auth.data.User;
+import org.thomcgn.backend.auth.data.Role;
+import org.thomcgn.backend.auth.dto.AuthPrincipal;
 import org.thomcgn.backend.auth.repositories.UserRepository;
 import org.thomcgn.backend.auth.service.JwtService;
 
@@ -21,6 +22,9 @@ import java.util.List;
 public class JwtAuthFilter extends OncePerRequestFilter {
 
     private final JwtService jwtService;
+
+    // keep injected (future: revocation / enabled checks). We intentionally do NOT hit DB per request.
+    @SuppressWarnings("unused")
     private final UserRepository userRepository;
 
     public JwtAuthFilter(JwtService jwtService,
@@ -64,30 +68,34 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             try {
                 var claims = jwtService.parseToken(token);
 
-                // robust: email aus claim oder subject
-                String email = claims.get("email", String.class);
-                if (email == null || email.isBlank()) {
-                    email = claims.getSubject();
+                // subject = userId (siehe JwtService.generateToken)
+                Long userId = null;
+                String sub = claims.getSubject();
+                if (sub != null && !sub.isBlank()) {
+                    try {
+                        userId = Long.parseLong(sub);
+                    } catch (NumberFormatException ignored) {
+                    }
                 }
 
-                if (email != null && !email.isBlank()) {
-                    User user = userRepository.findByEmail(email).orElse(null);
+                String email = claims.get("email", String.class);
+                String roleStr = claims.get("role", String.class);
+                String name = claims.get("name", String.class);
+                Long lastLogin = claims.get("lastLogin", Long.class);
 
-                    if (user != null) {
-                        // Authorities für Spring Security
-                        var authorities = List.of(
-                                new SimpleGrantedAuthority("ROLE_" + user.getRole().name())
-                        );
+                if (email != null && !email.isBlank() && roleStr != null && !roleStr.isBlank()) {
+                    Role role = Role.valueOf(roleStr);
 
-                        // ✅ Principal = dein User-Entity
-                        var authentication = new UsernamePasswordAuthenticationToken(
-                                user,
-                                null,
-                                authorities
-                        );
+                    var authorities = List.of(new SimpleGrantedAuthority("ROLE_" + role.name()));
+                    var principal = new AuthPrincipal(userId, email, role, name, lastLogin);
 
-                        SecurityContextHolder.getContext().setAuthentication(authentication);
-                    }
+                    var authentication = new UsernamePasswordAuthenticationToken(
+                            principal,
+                            null,
+                            authorities
+                    );
+
+                    SecurityContextHolder.getContext().setAuthentication(authentication);
                 }
 
             } catch (Exception ignored) {

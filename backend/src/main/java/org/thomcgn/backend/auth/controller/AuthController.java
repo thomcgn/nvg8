@@ -9,13 +9,16 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 import org.thomcgn.backend.auth.data.User;
+import org.thomcgn.backend.auth.dto.AuthPrincipal;
 import org.thomcgn.backend.auth.dto.LoginRequest;
 import org.thomcgn.backend.auth.dto.LoginResponse;
 import org.thomcgn.backend.auth.dto.UserInfoResponse;
 import org.thomcgn.backend.auth.repositories.UserRepository;
 import org.thomcgn.backend.auth.service.JwtService;
 
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 
 @RestController
 @RequestMapping("/auth")
@@ -25,7 +28,6 @@ public class AuthController {
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
 
-    // DEV-Flag aus application.properties oder ENV
     @Value("${app.devMode:true}")
     private boolean devMode;
 
@@ -54,7 +56,6 @@ public class AuthController {
 
         String token = jwtService.generateToken(user, previousLogin);
 
-        // Cookie richtig setzen je nach DEV/PROD
         String sameSite = devMode ? "Lax" : "None";
         String secure = devMode ? "" : "Secure; ";
         String cookieValue = String.format(
@@ -68,7 +69,7 @@ public class AuthController {
         response.setHeader("Set-Cookie", cookieValue);
 
         return ResponseEntity.ok(new LoginResponse(
-                null, // Token im Body nicht nötig
+                null,
                 user.getVorname() + " " + user.getNachname(),
                 user.getRole().name(),
                 previousLogin
@@ -76,17 +77,20 @@ public class AuthController {
     }
 
     @GetMapping("/me")
-    public ResponseEntity<UserInfoResponse> me(
-            @AuthenticationPrincipal User user
-    ) {
+    public ResponseEntity<UserInfoResponse> me(@AuthenticationPrincipal AuthPrincipal user) {
         if (user == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
 
+        LocalDateTime lastLogin =
+                user.lastLoginEpochMillis() == null
+                        ? null
+                        : LocalDateTime.ofInstant(Instant.ofEpochMilli(user.lastLoginEpochMillis()), ZoneId.systemDefault());
+
         return ResponseEntity.ok(new UserInfoResponse(
-                user.getVorname() + " " + user.getNachname(),
-                user.getRole().name(),
-                user.getLastLogin()
+                user.name(),
+                user.role().name(),
+                lastLogin
         ));
     }
 
@@ -96,7 +100,6 @@ public class AuthController {
         String sameSite = devMode ? "Lax" : "None";
         String secure = devMode ? "" : "Secure; ";
 
-        // Cookie löschen: Max-Age=0 + leerer Wert
         String cookieValue = String.format(
                 "token=; HttpOnly; %sPath=/; Max-Age=0; SameSite=%s",
                 secure,
@@ -106,5 +109,4 @@ public class AuthController {
         response.setHeader("Set-Cookie", cookieValue);
         return ResponseEntity.noContent().build();
     }
-
 }

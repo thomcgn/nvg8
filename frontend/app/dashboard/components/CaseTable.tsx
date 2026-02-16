@@ -1,55 +1,40 @@
-import { Case, CaseStatus } from "./types";
-import { Badge } from "@/components/ui/badge";
-import {
-    Table,
-    TableBody,
-    TableCell,
-    TableHead,
-    TableHeader,
-    TableRow,
-} from "@/components/ui/table";
-import { Card, CardContent } from "@/components/ui/card";
+"use client";
 
-function badgeVariant(status: CaseStatus): "destructive" | "secondary" | "default" | "outline" {
-    switch (status) {
-        case "AKUT":
-            return "destructive";
-        case "BEOBACHTUNG":
-            return "secondary";
-        case "RUHEND":
-            return "outline";
-        case "ABGESCHLOSSEN":
-            return "default";
-    }
-}
+import type { Case } from "@/lib/types";
 
-export default function CaseTable({ cases }: { cases: Case[] }) {
+type Props = {
+    cases: Case[];
+    onRowClick?: (c: Case) => void;
+};
+
+export default function CaseTable({ cases, onRowClick }: Props) {
     return (
-        <Card>
-            <CardContent className="p-0">
-                <Table>
-                    <TableHeader>
-                        <TableRow>
-                            <TableHead>Kind</TableHead>
-                            <TableHead>Alter</TableHead>
-                            <TableHead>Status</TableHead>
-                            <TableHead>Letzte Aktivität</TableHead>
-                        </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                        {cases.map((c) => (
-                            <TableRow key={c.id}>
-                                <TableCell className="font-medium">{c.childName}</TableCell>
-                                <TableCell>{c.age}</TableCell>
-                                <TableCell>
-                                    <Badge variant={badgeVariant(c.status)}>{c.status}</Badge>
-                                </TableCell>
-                                <TableCell className="text-muted-foreground">{c.lastActivity}</TableCell>
-                            </TableRow>
-                        ))}
-                    </TableBody>
-                </Table>
-            </CardContent>
-        </Card>
+        <div className="rounded-md border overflow-hidden">
+            <table className="w-full text-sm">
+                <thead className="bg-muted/40">
+                <tr>
+                    <th className="text-left p-3">Kind</th>
+                    <th className="text-left p-3">Alter</th>
+                    <th className="text-left p-3">Status</th>
+                    <th className="text-left p-3">Letzte Aktivität</th>
+                </tr>
+                </thead>
+
+                <tbody>
+                {cases.map((c) => (
+                    <tr
+                        key={c.id}
+                        className={onRowClick ? "cursor-pointer hover:bg-muted/30" : ""}
+                        onClick={onRowClick ? () => onRowClick(c) : undefined}
+                    >
+                        <td className="p-3">{c.childName}</td>
+                        <td className="p-3">{c.age}</td>
+                        <td className="p-3">{c.status}</td>
+                        <td className="p-3">{c.lastActivity}</td>
+                    </tr>
+                ))}
+                </tbody>
+            </table>
+        </div>
     );
 }

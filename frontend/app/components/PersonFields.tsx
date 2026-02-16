@@ -208,7 +208,10 @@ export default function PersonFields({
         onChange({ ...value, [key]: next });
     };
 
-    const labelText = (key: PersonFieldKey) => (prefix ? `${prefix} ${LABELS[key]}` : LABELS[key]);
+    const labelText = (key: PersonFieldKey) =>
+        prefix && prefix.trim() && prefix.trim().toLowerCase() !== "kind"
+            ? `${prefix} ${LABELS[key]}`
+            : LABELS[key];
 
     const renderField = (key: PersonFieldKey) => {
         const id = `${idPrefix}-${key}`;

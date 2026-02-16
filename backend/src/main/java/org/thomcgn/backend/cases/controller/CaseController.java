@@ -3,7 +3,7 @@ package org.thomcgn.backend.cases.controller;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
-import org.thomcgn.backend.auth.data.User;
+import org.thomcgn.backend.auth.dto.AuthPrincipal;
 import org.thomcgn.backend.cases.api.mapper.CaseMapper;
 import org.thomcgn.backend.cases.dto.BezugspersonCreateRequest;
 import org.thomcgn.backend.cases.dto.CreateKindRequest;
@@ -45,7 +45,6 @@ public class CaseController {
         this.fallRepository = fallRepository;
     }
 
-    // Dropdown: Alle Kinder (Summary)
     @GetMapping("/kinder")
     public List<KindSummaryResponse> getAllChildren() {
         return kindRepository.findAll().stream()
@@ -53,7 +52,6 @@ public class CaseController {
                 .toList();
     }
 
-    // Dropdown: Alle Bezugspersonen (Summary)
     @GetMapping("/erziehungspersonen")
     public List<BezugspersonSummaryResponse> getAllErziehungspersonen() {
         return erziehungspersonRepository.findAll().stream()
@@ -61,10 +59,9 @@ public class CaseController {
                 .toList();
     }
 
-    // Draft-Fall erstellen (Response DTO)
     @PostMapping("/draft")
     public ResponseEntity<KinderschutzFallResponse> createDraft(
-            @AuthenticationPrincipal User user,
+            @AuthenticationPrincipal AuthPrincipal user,
             @RequestBody DraftRequest request
     ) {
         Kind kind = kindRepository.findById(request.getKindId())
@@ -74,47 +71,30 @@ public class CaseController {
         return ResponseEntity.ok(CaseMapper.toFall(draft));
     }
 
-    // Bezugsperson erstellen (Response DTO)
     @PostMapping("/erziehungspersonen")
     public BezugspersonResponse createErziehungsperson(@RequestBody BezugspersonCreateRequest req) {
         return CaseMapper.toBezugsperson(caseService.createBezugsperson(req));
     }
 
-    // Kind erstellen (Response DTO)
     @PostMapping("/kinder")
     public KindResponse createKind(@RequestBody CreateKindRequest req) {
         return CaseMapper.toKind(caseService.createKind(req));
     }
 
-    // -----------------------------
-    // DASHBOARD
-    // -----------------------------
-
-    /**
-     * "Meine Fälle" (für Dashboard Tabelle)
-     * Definition: zuständigeFachkraft = eingeloggter User
-     */
     @GetMapping("/mine")
-    public List<KinderschutzFallResponse> myCases(@AuthenticationPrincipal User user) {
-        String email = user.getEmail();
+    public List<KinderschutzFallResponse> myCases(@AuthenticationPrincipal AuthPrincipal user) {
+        String email = user.email();
 
-        return fallRepository.findByZustaendigeFachkraft_EmailOrderByUpdatedAtDesc(email)
+        return fallRepository.findForDashboardByZustaendigeFachkraft_EmailOrderByUpdatedAtDesc(email)
                 .stream()
                 .map(CaseMapper::toFall)
                 .toList();
     }
 
-    /**
-     * Dashboard Stats (typsicher, passend zu FallStatus)
-     *
-     * - offene: alle außer ABGESCHLOSSEN und ARCHIVIERT
-     * - akut: AKUT
-     * - abgeschlossen30: ABGESCHLOSSEN in den letzten 30 Tagen (updatedAt)
-     */
     @GetMapping("/stats")
-    public DashboardStatsResponse stats(@AuthenticationPrincipal User user) {
+    public DashboardStatsResponse stats(@AuthenticationPrincipal AuthPrincipal user) {
 
-        String email = user.getEmail();
+        String email = user.email();
 
         List<KinderschutzFall> mine =
                 fallRepository.findByZustaendigeFachkraft_EmailOrderByUpdatedAtDesc(email);
