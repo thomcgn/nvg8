@@ -6,14 +6,18 @@ import { FaHome, FaFolderOpen, FaPlus, FaDatabase } from "react-icons/fa";
 
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+import type { Role } from "@/app/auth/rbac";
+import { canReadCases, canWriteCases, canSeeMasterData } from "@/app/auth/rbac";
 
 interface SidebarProps {
+    userRole: Role;                 // ✅ neu
     onStartWizard?: () => void;
     onClose?: () => void;
     variant?: "sidebar" | "drawer";
 }
 
 export default function Sidebar({
+                                    userRole,
                                     onStartWizard,
                                     onClose,
                                     variant = "sidebar",
@@ -83,20 +87,23 @@ export default function Sidebar({
 
             <nav className="space-y-1">
                 <NavItem label="Übersicht" href="/dashboard" icon={<FaHome />} />
-                <NavItem label="Fälle" href="/dashboard/cases" icon={<FaFolderOpen />} />
 
-                <Button
-                    type="button"
-                    onClick={handleNewCase}
-                    className="w-full justify-start gap-3"
-                >
-          <span className="text-base">
-            <FaPlus />
-          </span>
-                    <span className="truncate">Neuer Fall</span>
-                </Button>
+                {canReadCases(userRole) && (
+                    <NavItem label="Fälle" href="/dashboard/cases" icon={<FaFolderOpen />} />
+                )}
 
-                <NavItem label="Stammdaten" href="/dashboard/stammdaten" icon={<FaDatabase />} />
+                {canWriteCases(userRole) && (
+                    <Button type="button" onClick={handleNewCase} className="w-full justify-start gap-3">
+            <span className="text-base">
+              <FaPlus />
+            </span>
+                        <span className="truncate">Neuer Fall</span>
+                    </Button>
+                )}
+
+                {canSeeMasterData(userRole) && (
+                    <NavItem label="Stammdaten" href="/dashboard/stammdaten" icon={<FaDatabase />} />
+                )}
             </nav>
         </aside>
     );
