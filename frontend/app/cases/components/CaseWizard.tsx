@@ -696,13 +696,13 @@ export default function CaseWizard({ onCancel }: CaseWizardProps) {
         const load = async () => {
             try {
                 const [bpRes, kRes] = await Promise.all([
-                    fetch("/api/cases/erziehungspersonen", { credentials: "include", cache: "no-store" }),
+                    fetch("/api/cases/bezugspersonen", { credentials: "include", cache: "no-store" }),
                     fetch("/api/cases/kinder", { credentials: "include", cache: "no-store" }),
                 ]);
 
                 if (!bpRes.ok) {
                     const { text } = await readBodySafe(bpRes);
-                    throw new Error(`GET /erziehungspersonen failed: ${bpRes.status} ${text}`);
+                    throw new Error(`GET /bezugspersonen failed: ${bpRes.status} ${text}`);
                 }
                 if (!kRes.ok) {
                     const { text } = await readBodySafe(kRes);
@@ -796,7 +796,7 @@ export default function CaseWizard({ onCancel }: CaseWizardProps) {
                 details: newBpDetails, // falls Backend details akzeptiert; sonst mappen/flatten
             };
 
-            const res = await fetch("/api/cases/erziehungspersonen", {
+            const res = await fetch("/api/cases/bezugspersonen", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 credentials: "include",

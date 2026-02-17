@@ -6,6 +6,7 @@ public record TemplateSchemaDto(
         String code,
         String title,
         String version,
+        String ageRange,
         List<SectionDto> sections
 ) {
 

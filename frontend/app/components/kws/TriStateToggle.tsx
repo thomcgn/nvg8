@@ -2,8 +2,9 @@
 
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
+import {TriState} from "@/lib/types";
 
-export type TriState = "JA" | "NEIN" | "KEINE_ANGABE";
+
 
 export function TriStateToggle({
                                    value,

@@ -52,7 +52,18 @@ public final class CaseMapper {
 
     public static BezugspersonSummaryResponse toBezugspersonSummary(Bezugsperson p) {
         if (p == null) return null;
-        return new BezugspersonSummaryResponse(p.getId(), p.getVorname(), p.getNachname(), p.getOrganisation());
+        return new BezugspersonSummaryResponse(
+                p.getId(),
+                p.getVorname(),
+                p.getNachname(),
+                p.getOrganisation(),
+                p.getTelefon(),
+                p.getKontaktEmail(),
+                p.getStrasse(),
+                p.getHausnummer(),
+                p.getPlz(),
+                p.getOrt()
+        );
     }
 
     public static BezugspersonResponse toBezugsperson(Bezugsperson p) {

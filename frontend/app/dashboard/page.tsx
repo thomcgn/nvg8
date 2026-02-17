@@ -76,9 +76,13 @@ export default function DashboardPage() {
     useEffect(() => {
         if (searchParams.get("wizard") === "1") {
             setShowWizard(true);
-            router.replace("/dashboard");
+
+            // ✅ URL bereinigen ohne Next-Navigation/Remount
+            if (typeof window !== "undefined") {
+                window.history.replaceState(null, "", "/dashboard");
+            }
         }
-    }, [searchParams, router]);
+    }, [searchParams]);
 
     const fetchAll = async (): Promise<void> => {
         setLoading(true);
@@ -151,16 +155,8 @@ export default function DashboardPage() {
             ) : (
                 <>
                     <section className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 lg:gap-6">
-                        <StatCard
-                            title="Meine offenen Fälle"
-                            value={loading ? "…" : String(stats.meineOffenenFaelle)}
-                            icon={<FaFolderOpen />}
-                        />
-                        <StatCard
-                            title="Akut gefährdet"
-                            value={loading ? "…" : String(stats.akutGefaehrdet)}
-                            icon={<FaExclamationTriangle />}
-                        />
+                        <StatCard title="Meine offenen Fälle" value={loading ? "…" : String(stats.meineOffenenFaelle)} icon={<FaFolderOpen />} />
+                        <StatCard title="Akut gefährdet" value={loading ? "…" : String(stats.akutGefaehrdet)} icon={<FaExclamationTriangle />} />
                         <StatCard title="Abgeschlossen (30 Tage)" value={loading ? "…" : String(stats.abgeschlossen30Tage)} />
                         <StatCard title="Kinder gesamt" value={loading ? "…" : String(kinderGesamt)} icon={<FaUsers />} />
                     </section>
