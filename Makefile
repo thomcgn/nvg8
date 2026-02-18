@@ -5,22 +5,31 @@ COMPOSE_PROD := docker compose -f docker-compose.yml
 COMPOSE_DEV  := docker compose -f docker-compose.dev.yml
 
 # -------- SHADCN UI --------
-# Passe diese beiden Variablen an dein Projekt an, falls nötig:
+# Frontend-Ordner + Package Manager (npm/pnpm/yarn)
 FRONTEND_DIR ?= ./frontend
-PKG_MGR     ?= npm
+PKG_MGR      ?= npm
 
-# Komponenten (entspricht deinem ui/ Ordner aus dem Screenshot)
+# CI/Flags:
+# - SKIP_SHADCN=1    -> shadcn steps komplett überspringen (z.B. wenn UI schon im Repo fix ist)
+# - SHADCN_ENFORCE=1 -> shadcn immer ausführen (z.B. in CI um sicherzugehen)
+SKIP_SHADCN    ?= 0
+SHADCN_ENFORCE ?= 0
+
+# Komponenten (entspricht deinem ui/ Ordner)
 SHADCN_COMPONENTS := \
 	accordion avatar badge button card checkbox \
 	dialog dropdown-menu input label progress radio-group \
 	select separator sheet skeleton sonner table \
 	tabs textarea toggle-group toggle
 
+# Eine "Sentinel"-Datei, die sicher existieren muss, wenn ShadCN komplett ist
+SHADCN_SENTINEL := $(FRONTEND_DIR)/components/ui/dialog.tsx
+
 .PHONY: help ps up down restart build rebuild logs logs-backend logs-frontend \
         sh-backend sh-frontend db psql db-reset prune \
         dev-up dev-down dev-build dev-rebuild dev-logs \
         reset-prod reset-dev dev-back-fresh \
-        shadcn-all shadcn-add shadcn-deps shadcn-check
+        shadcn-all shadcn-add shadcn-deps shadcn-check shadcn-ci shadcn-needed
 
 help:
 	@echo ""
@@ -29,8 +38,8 @@ help:
 	@echo "  down          Stop prod stack"
 	@echo "  restart       Restart prod stack"
 	@echo "  ps            Show containers"
-	@echo "  build         Build images (prod)"
-	@echo "  rebuild       Rebuild images (no cache) (prod)"
+	@echo "  build         Build images (prod) [CI-safe: runs shadcn-ci if needed]"
+	@echo "  rebuild       Rebuild images (no cache) (prod) [CI-safe: runs shadcn-ci if needed]"
 	@echo "  logs          Follow logs (all) (prod)"
 	@echo "  logs-backend  Follow backend logs (prod)"
 	@echo "  logs-frontend Follow frontend logs (prod)"
@@ -40,16 +49,19 @@ help:
 	@echo "  psql          Run example query (list users)"
 	@echo "  db-reset      Drop volume and recreate DB (DANGER)"
 	@echo "  prune         Remove unused docker stuff (DANGER)"
-	@echo "  reset-prod    HARD reset prod: containers+volumes+images then build+up (DANGER)"
+	@echo "  reset-prod    HARD reset prod: containers+volumes+images then build+up (DANGER) [CI-safe]"
 	@echo ""
 	@echo "Dev (needs docker-compose.dev.yml):"
-	@echo "  dev-up, dev-down, dev-build, dev-rebuild, dev-logs"
+	@echo "  dev-up, dev-down, dev-build, dev-rebuild, dev-logs [CI-safe]"
 	@echo "  dev-back-fresh  Recreate ONLY dev backend container + wipe backend/target (DB bleibt)"
-	@echo "  reset-dev     HARD reset dev: containers+volumes+images then build+up (DANGER)"
+	@echo "  reset-dev     HARD reset dev: containers+volumes+images then build+up (DANGER) [CI-safe]"
 	@echo ""
 	@echo "ShadCN:"
-	@echo "  shadcn-all    Install/overwrite all ShadCN components matching ui/ folder"
-	@echo "               (uses FRONTEND_DIR=$(FRONTEND_DIR), PKG_MGR=$(PKG_MGR))"
+	@echo "  shadcn-all    Force install/overwrite all ShadCN components"
+	@echo "  shadcn-ci     CI-safe: runs only if needed (or SHADCN_ENFORCE=1)"
+	@echo "Flags:"
+	@echo "  SKIP_SHADCN=1    -> skip shadcn completely"
+	@echo "  SHADCN_ENFORCE=1 -> always run shadcn (even if files exist)"
 	@echo ""
 
 ps:
@@ -65,10 +77,11 @@ restart:
 	$(COMPOSE_PROD) down
 	$(COMPOSE_PROD) up -d
 
-build:
+# CI-safe: ensure shadcn is present before building images
+build: shadcn-ci
 	$(COMPOSE_PROD) build
 
-rebuild:
+rebuild: shadcn-ci
 	$(COMPOSE_PROD) build --no-cache
 
 logs:
@@ -104,9 +117,8 @@ prune:
 	docker system prune -af
 
 # -------- HARD RESET (PROD/DEV) --------
-# Removes stack containers, volumes, and stack images, then rebuilds and starts.
 
-reset-prod:
+reset-prod: shadcn-ci
 	@echo "!!! HARD RESET PROD: removes containers, volumes, images for prod stack. DB DATA WILL BE LOST. Ctrl+C to cancel."
 	sleep 3
 	@echo "-> Bringing down prod stack (including volumes, orphans)..."
@@ -118,7 +130,7 @@ reset-prod:
 	$(COMPOSE_PROD) up -d --build --force-recreate
 	@echo "✅ PROD reset done."
 
-reset-dev:
+reset-dev: shadcn-ci
 	@echo "!!! HARD RESET DEV: removes containers, volumes, images for dev stack. DB DATA WILL BE LOST. Ctrl+C to cancel."
 	sleep 3
 	@echo "-> Bringing down dev stack (including volumes, orphans)..."
@@ -138,16 +150,17 @@ dev-up:
 dev-down:
 	$(COMPOSE_DEV) down
 
-dev-build:
+# CI-safe
+dev-build: shadcn-ci
 	$(COMPOSE_DEV) build
 
-dev-rebuild:
+# CI-safe
+dev-rebuild: shadcn-ci
 	$(COMPOSE_DEV) build --no-cache
 
 dev-logs:
 	$(COMPOSE_DEV) logs -f --tail=200
 
-# Remove/recreate ONLY dev backend; keep DB volume; wipe build outputs so no stale code remains
 dev-back-fresh:
 	@echo "!!! DEV backend fresh (DB bleibt). Ctrl+C zum Abbrechen."
 	sleep 2
@@ -162,20 +175,52 @@ dev-back-fresh:
 
 # -------- SHADCN TARGETS --------
 
-# Prüft grob, ob shadcn.json im Frontend existiert (init muss vorher erfolgt sein)
+# Prüft, ob shadcn config existiert (shadcn.json ODER components.json)
 shadcn-check:
-	@test -f "$(FRONTEND_DIR)/shadcn.json" || ( \
-		echo "❌ $(FRONTEND_DIR)/shadcn.json fehlt. Bitte zuerst im Frontend einmal shadcn init ausführen:"; \
-		echo "   cd $(FRONTEND_DIR) && npx shadcn@latest init"; \
+	@test -f "$(FRONTEND_DIR)/shadcn.json" -o -f "$(FRONTEND_DIR)/components.json" || ( \
+		echo "❌ Weder shadcn.json noch components.json gefunden in $(FRONTEND_DIR)."; \
+		echo "   Bitte im Frontend einmal ausführen:"; \
+		echo "     cd $(FRONTEND_DIR) && npx shadcn@latest init"; \
 		exit 1 \
 	)
 
-# Stellt sicher, dass node_modules im Frontend vorhanden sind
 shadcn-deps:
 	@echo "-> Installiere Frontend Dependencies..."
 	@cd $(FRONTEND_DIR) && $(PKG_MGR) install
 
-# Installiert/aktualisiert alle Komponenten aus SHADCN_COMPONENTS
+# Hilfsziel: zeigt, ob ShadCN "gebraucht" wird
+shadcn-needed:
+	@if [ "$(SKIP_SHADCN)" = "1" ]; then \
+		echo "SKIP_SHADCN=1 -> shadcn wird übersprungen"; \
+		exit 1; \
+	fi
+	@# true -> needed, false -> not needed
+	@if [ "$(SHADCN_ENFORCE)" = "1" ]; then \
+		echo "SHADCN_ENFORCE=1 -> shadcn wird erzwungen"; \
+		exit 0; \
+	fi
+	@if [ ! -f "$(SHADCN_SENTINEL)" ]; then \
+		echo "ShadCN fehlt (Sentinel nicht gefunden): $(SHADCN_SENTINEL)"; \
+		exit 0; \
+	fi
+	@echo "ShadCN ok (Sentinel vorhanden): $(SHADCN_SENTINEL)"; \
+	exit 1
+
+# CI-safe: nur ausführen wenn nötig (oder erzwungen)
+shadcn-ci:
+	@# Wenn übersprungen: exit 0
+	@if [ "$(SKIP_SHADCN)" = "1" ]; then \
+		echo "-> SKIP_SHADCN=1: Überspringe ShadCN."; \
+		exit 0; \
+	fi
+	@# Wenn erzwungen oder Sentinel fehlt: ausführen
+	@$(MAKE) -s shadcn-needed && $(MAKE) shadcn-add || true
+
+# Force install/overwrite
+shadcn-all:
+	@$(MAKE) shadcn-add
+
+# Installiert/aktualisiert alle Komponenten
 shadcn-add: shadcn-check shadcn-deps
 	@echo "-> Installiere/aktualisiere ShadCN Components: $(SHADCN_COMPONENTS)"
 	@cd $(FRONTEND_DIR) && \
@@ -184,6 +229,3 @@ shadcn-add: shadcn-check shadcn-deps
 		npx shadcn@latest add $$c --yes --overwrite; \
 	done
 	@echo "✅ ShadCN Components installiert/aktualisiert."
-
-# Convenience Target
-shadcn-all: shadcn-add
