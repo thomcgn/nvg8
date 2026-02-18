@@ -17,18 +17,27 @@ export default function DashboardGate({ children }: { children: React.ReactNode 
 
     useEffect(() => {
         (async () => {
-            // ⚠️ Passe den Endpoint an, falls er bei dir anders heißt
-            const res = await fetch("/api/me", { cache: "no-store" });
-            if (!res.ok) {
-                router.push("/login");
+            const res = await fetch("/api/auth/me", {
+                cache: "no-store",
+                credentials: "include",
+            });
+
+            if (res.status === 401) {
+                router.replace("/"); // dort ist dein Login
                 return;
             }
+
+            if (!res.ok) {
+                router.replace("/"); // fallback
+                return;
+            }
+
             const data = (await res.json()) as User;
             setUser(data);
         })();
     }, [router]);
 
-    if (!user) return null; // oder <Loading/>
+    if (!user) return null;
 
     const role = toRole(user.role);
 

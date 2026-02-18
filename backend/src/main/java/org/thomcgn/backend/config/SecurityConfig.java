@@ -51,7 +51,7 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers("/error").permitAll()
-                        .requestMatchers("/auth/login", "/auth/logout").permitAll()
+                        .requestMatchers("/auth/**").permitAll()
 
                         // Admin-only
                         .requestMatchers("/admin/**").hasAnyRole("ADMIN","TEAMLEITUNG") // oder nur ADMIN

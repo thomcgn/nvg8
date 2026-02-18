@@ -3,12 +3,12 @@
 import React, { useState } from "react";
 import Sidebar from "./Sidebar";
 import Navbar from "./Navbar";
-import { Sheet, SheetContent } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import type { Role } from "@/app/auth/rbac";
 
 type Props = {
     userName: string;
-    userRole: Role;              // ✅ war string
+    userRole: Role;
     lastLogin?: string | undefined;
     children: React.ReactNode;
     onStartWizard?: () => void;
@@ -25,14 +25,17 @@ export default function DashboardShell({
 
     return (
         <div className="min-h-screen w-full bg-muted/40">
-            {/* Desktop sidebar */}
             <div className="hidden lg:fixed lg:inset-y-0 lg:z-50 lg:flex lg:w-64 lg:flex-col">
                 <Sidebar userRole={userRole} onStartWizard={onStartWizard} />
             </div>
 
-            {/* Mobile drawer */}
             <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
                 <SheetContent side="left" className="p-0 w-[320px]">
+                    {/* ✅ a11y: Title für Screenreader */}
+                    <SheetHeader className="sr-only">
+                        <SheetTitle>Menü</SheetTitle>
+                    </SheetHeader>
+
                     <Sidebar
                         userRole={userRole}
                         variant="drawer"
@@ -41,7 +44,6 @@ export default function DashboardShell({
                     />
                 </SheetContent>
 
-                {/* Main */}
                 <div className="lg:pl-64">
                     <Navbar
                         userName={userName}
