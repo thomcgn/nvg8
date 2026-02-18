@@ -6,11 +6,13 @@ const backend = process.env.BACKEND_URL || "http://localhost:8080";
 
 export async function PATCH(
     req: NextRequest,
-    { params }: { params: { id: string } }
+    context: { params: Promise<{ id: string }> }
 ) {
+    const { id } = await context.params;
+
     const body = await req.text();
 
-    const res = await fetch(`${backend}/admin/users/${params.id}/role`, {
+    const res = await fetch(`${backend}/admin/users/${id}/role`, {
         method: "PATCH",
         headers: {
             "Content-Type": "application/json",
