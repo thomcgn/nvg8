@@ -4,10 +4,23 @@ APP_NAME := nvg8
 COMPOSE_PROD := docker compose -f docker-compose.yml
 COMPOSE_DEV  := docker compose -f docker-compose.dev.yml
 
+# -------- SHADCN UI --------
+# Passe diese beiden Variablen an dein Projekt an, falls nötig:
+FRONTEND_DIR ?= ./frontend
+PKG_MGR     ?= npm
+
+# Komponenten (entspricht deinem ui/ Ordner aus dem Screenshot)
+SHADCN_COMPONENTS := \
+	accordion avatar badge button card checkbox \
+	dialog dropdown-menu input label progress radio-group \
+	select separator sheet skeleton sonner table \
+	tabs textarea toggle-group toggle
+
 .PHONY: help ps up down restart build rebuild logs logs-backend logs-frontend \
         sh-backend sh-frontend db psql db-reset prune \
         dev-up dev-down dev-build dev-rebuild dev-logs \
-        reset-prod reset-dev
+        reset-prod reset-dev dev-back-fresh \
+        shadcn-all shadcn-add shadcn-deps shadcn-check
 
 help:
 	@echo ""
@@ -31,7 +44,12 @@ help:
 	@echo ""
 	@echo "Dev (needs docker-compose.dev.yml):"
 	@echo "  dev-up, dev-down, dev-build, dev-rebuild, dev-logs"
+	@echo "  dev-back-fresh  Recreate ONLY dev backend container + wipe backend/target (DB bleibt)"
 	@echo "  reset-dev     HARD reset dev: containers+volumes+images then build+up (DANGER)"
+	@echo ""
+	@echo "ShadCN:"
+	@echo "  shadcn-all    Install/overwrite all ShadCN components matching ui/ folder"
+	@echo "               (uses FRONTEND_DIR=$(FRONTEND_DIR), PKG_MGR=$(PKG_MGR))"
 	@echo ""
 
 ps:
@@ -135,11 +153,37 @@ dev-back-fresh:
 	sleep 2
 	@echo "-> Entferne backend container..."
 	$(COMPOSE_DEV) rm -sf backend
-
 	@echo "-> Lösche lokale Build-Artefakte (backend/target)..."
 	rm -rf ./backend/target
-
 	@echo "-> (Optional) Maven local repo cache NICHT gelöscht (m2_cache bleibt)."
 	@echo "-> Starte backend neu..."
 	$(COMPOSE_DEV) up -d --no-deps backend
 	@echo "✅ DEV backend frisch gestartet (DB unverändert)."
+
+# -------- SHADCN TARGETS --------
+
+# Prüft grob, ob shadcn.json im Frontend existiert (init muss vorher erfolgt sein)
+shadcn-check:
+	@test -f "$(FRONTEND_DIR)/shadcn.json" || ( \
+		echo "❌ $(FRONTEND_DIR)/shadcn.json fehlt. Bitte zuerst im Frontend einmal shadcn init ausführen:"; \
+		echo "   cd $(FRONTEND_DIR) && npx shadcn@latest init"; \
+		exit 1 \
+	)
+
+# Stellt sicher, dass node_modules im Frontend vorhanden sind
+shadcn-deps:
+	@echo "-> Installiere Frontend Dependencies..."
+	@cd $(FRONTEND_DIR) && $(PKG_MGR) install
+
+# Installiert/aktualisiert alle Komponenten aus SHADCN_COMPONENTS
+shadcn-add: shadcn-check shadcn-deps
+	@echo "-> Installiere/aktualisiere ShadCN Components: $(SHADCN_COMPONENTS)"
+	@cd $(FRONTEND_DIR) && \
+	for c in $(SHADCN_COMPONENTS); do \
+		echo "   • $$c"; \
+		npx shadcn@latest add $$c --yes --overwrite; \
+	done
+	@echo "✅ ShadCN Components installiert/aktualisiert."
+
+# Convenience Target
+shadcn-all: shadcn-add
