@@ -23,7 +23,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 @RestController
-@RequestMapping({"/cases", "/api/cases"})
+@RequestMapping("/cases")
 public class CaseController {
 
     private final FallService fallService;

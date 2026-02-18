@@ -19,7 +19,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/admin/users")
-@PreAuthorize("hasAnyRole('ADMIN','TEAMLEITUNG')")
+@PreAuthorize("hasAnyAuthority('ROLE_ADMIN','ROLE_TEAMLEITUNG')")
 public class UserAdminController {
 
     private final UserRepository userRepository;

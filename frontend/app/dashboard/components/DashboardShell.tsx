@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import React, { useState } from "react";
 import Sidebar from "./Sidebar";
 import Navbar from "./Navbar";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
@@ -9,7 +9,7 @@ import type { Role } from "@/app/auth/rbac";
 type Props = {
     userName: string;
     userRole: Role;              // ✅ war string
-    lastLogin?: string;
+    lastLogin?: string | undefined;
     children: React.ReactNode;
     onStartWizard?: () => void;
 };
