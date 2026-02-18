@@ -2,12 +2,12 @@
 
 import React from "react";
 import { useRouter, usePathname } from "next/navigation";
-import { FaHome, FaFolderOpen, FaPlus, FaDatabase } from "react-icons/fa";
+import { FaHome, FaFolderOpen, FaPlus, FaUsers } from "react-icons/fa";
 
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import type { Role } from "@/app/auth/rbac";
-import { canReadCases, canWriteCases, canSeeMasterData } from "@/app/auth/rbac";
+import { canReadCases, canWriteCases,canManageEmployees } from "@/app/auth/rbac";
 
 interface SidebarProps {
     userRole: Role;                 // ✅ neu
@@ -101,9 +101,10 @@ export default function Sidebar({
                     </Button>
                 )}
 
-                {canSeeMasterData(userRole) && (
-                    <NavItem label="Stammdaten" href="/dashboard/stammdaten" icon={<FaDatabase />} />
+                {canManageEmployees(userRole) && (
+                    <NavItem label="Mitarbeiter" href="/dashboard/mitarbeiter" icon={<FaUsers />} />
                 )}
+
             </nav>
         </aside>
     );

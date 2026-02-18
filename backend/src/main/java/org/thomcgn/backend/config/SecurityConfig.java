@@ -54,7 +54,7 @@ public class SecurityConfig {
                         .requestMatchers("/auth/login", "/auth/logout").permitAll()
 
                         // Admin-only
-                        .requestMatchers("/admin/**").hasRole("ADMIN")
+                        .requestMatchers("/admin/**").hasAnyRole("ADMIN","TEAMLEITUNG") // oder nur ADMIN
 
                         // Audit/Datenschutz
                         .requestMatchers("/audit/**", "/export/**", "/logs/**").hasAnyRole(AUDIT_READ)

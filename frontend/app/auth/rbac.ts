@@ -15,6 +15,9 @@ export const canWriteCases = (role: Role) =>
 export const canSeeMasterData = (role: Role) =>
     ["ADMIN", "TEAMLEITUNG", "DATENSCHUTZBEAUFTRAGTER"].includes(role);
 
+export const canManageEmployees = (role: Role) =>
+    ["ADMIN", "TEAMLEITUNG"].includes(role); // wenn nur ADMIN: ["ADMIN"]
+
 export const ALL_ROLES: Role[] = [
     "ADMIN",
     "FACHKRAFT",
