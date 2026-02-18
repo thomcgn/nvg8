@@ -20,21 +20,22 @@ services:
     depends_on:
       - postgres
     environment:
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/nvg8db
-      SPRING_DATASOURCE_USERNAME: dev
-      SPRING_DATASOURCE_PASSWORD: devpass
-      SPRING_JPA_HIBERNATE_DDL_AUTO: update
+      SPRING_DATASOURCE_URL: "jdbc:postgresql://postgres:5432/nvg8db"
+      SPRING_DATASOURCE_USERNAME: "dev"
+      SPRING_DATASOURCE_PASSWORD: "devpass"
+      SPRING_JPA_HIBERNATE_DDL_AUTO: "update"
 
-      # DEV: Cookie ohne Secure + SameSite=Lax
+      SPRING_FLYWAY_ENABLED: "true"
+      SPRING_FLYWAY_LOCATIONS: "classpath:db/migration"
+      LOGGING_LEVEL_ORG_FLYWAYDB: "DEBUG"
+      LOGGING_LEVEL_ORG_SPRINGFRAMEWORK_BOOT_AUTOCONFIGURE_FLYWAY: "DEBUG"
+
       APP_DEV_MODE: "true"
-
-      # wenn du lokal direkt backend ansprechen würdest: CORS
       CORS_ALLOWED_ORIGINS: "http://localhost:3000"
 
-      # Admin nur lokal automatisch anlegen
-      APP_BOOTSTRAPADMIN: "true"
-      APP_BOOTSTRAPADMINEMAIL: "admin@nvg8.de"
-      APP_BOOTSTRAPADMINPASSWORD: "admin"
+      APP_BOOTSTRAP_ADMIN: "true"
+      APP_BOOTSTRAP_ADMIN_EMAIL: "admin@nvg8.de"
+      APP_BOOTSTRAP_ADMIN_PASSWORD: "admin"
 
       # Optional: Security debug
       # LOGGING_LEVEL_ORG_SPRINGFRAMEWORK_SECURITY: "DEBUG"

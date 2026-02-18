@@ -10,7 +10,7 @@ import org.thomcgn.backend.cases.model.KindBezugspersonRelation;
 import org.thomcgn.backend.cases.model.enums.Beziehungstyp;
 import org.thomcgn.backend.cases.model.enums.RolleImAlltag;
 import org.thomcgn.backend.cases.model.enums.SorgeStatus;
-import org.thomcgn.backend.cases.repo.ErziehungspersonRepository;
+import org.thomcgn.backend.cases.repo.BezugspersonRepository;
 import org.thomcgn.backend.cases.repo.KindRepository;
 import org.thomcgn.backend.model.Person;
 import org.thomcgn.backend.model.enums.*;
@@ -22,11 +22,11 @@ import java.util.ArrayList;
 public class CaseService {
 
     private final KindRepository kindRepository;
-    private final ErziehungspersonRepository erziehungspersonRepository;
+    private final BezugspersonRepository bezugspersonRepository;
 
-    public CaseService(KindRepository kindRepository, ErziehungspersonRepository erziehungspersonRepository) {
+    public CaseService(KindRepository kindRepository, BezugspersonRepository bezugspersonRepository) {
         this.kindRepository = kindRepository;
-        this.erziehungspersonRepository = erziehungspersonRepository;
+        this.bezugspersonRepository = bezugspersonRepository;
     }
 
     @Transactional
@@ -52,7 +52,7 @@ public class CaseService {
                 req.getGebaerdenspracheCode(), req.getKommunikationsHinweise()
         );
 
-        return erziehungspersonRepository.save(p);
+        return bezugspersonRepository.save(p);
     }
 
     @Transactional
@@ -110,7 +110,7 @@ public class CaseService {
                 throw new IllegalArgumentException("bezugspersonen[].id ist Pflicht.");
             }
 
-            Bezugsperson bp = erziehungspersonRepository.findById(link.getId())
+            Bezugsperson bp = bezugspersonRepository.findById(link.getId())
                     .orElseThrow(() -> new IllegalArgumentException("Bezugsperson nicht gefunden: " + link.getId()));
 
             KindBezugspersonRelation rel = new KindBezugspersonRelation();

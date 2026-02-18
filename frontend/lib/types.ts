@@ -1,6 +1,49 @@
 
 export type AnswerType = "TRI_STATE" | "TEXT" | "DATE" | "USER_REF";
-export type TriState = "JA" | "NEIN" | "UNBEKANNT";
+export type TriState = "JA" | "NEIN" | "KEINE_ANGABE";
+
+export type Bezugsperson = {
+    id: number;
+    name: string;
+    rolle?: string | null;
+    telefon?: string | null;
+    email?: string | null;
+};
+
+export type TemplateSchema = {
+    code: string;
+    title: string;
+    version: string;
+    ageRange?: string | null;
+    sections: Array<{
+        id: number;
+        sectionKey: string;
+        title: string;
+        sort: number;
+        items: Array<{
+            id: number;
+            itemKey: string;
+            label: string;
+            answerType: "TRI_STATE" | "TEXT" | "DATE";
+            sort: number;
+        }>;
+    }>;
+};
+
+export type CaseDetails = {
+    id: number;
+    childId: number;
+    childName: string;
+};
+
+export type TemplateListEntry = {
+    code: string;
+    title: string;
+    version: string;
+    audience: "ALL" | "YOUTH_OFFICE_ONLY";
+    active: boolean;
+    ageRange?: string | null;
+};
 
 export type KSItemDTO = {
     id: number;
@@ -74,6 +117,12 @@ export type BezugspersonSummary = {
     vorname: string;
     nachname: string;
     organisation?: string | null;
+    telefon?: string | null;
+    kontaktEmail?: string | null;
+    strasse?: string | null;
+    hausnummer?: string | null;
+    plz?: string | null;
+    ort?: string | null
 };
 
 export type BezugspersonResponse = {
@@ -129,4 +178,5 @@ export interface Case {
     age: number;
     status: CaseStatus;
     lastActivity: string;
+    kindId?: number;
 }

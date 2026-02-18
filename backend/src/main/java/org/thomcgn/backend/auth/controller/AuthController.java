@@ -15,10 +15,12 @@ import org.thomcgn.backend.auth.dto.LoginResponse;
 import org.thomcgn.backend.auth.dto.UserInfoResponse;
 import org.thomcgn.backend.auth.repositories.UserRepository;
 import org.thomcgn.backend.auth.service.JwtService;
+import org.thomcgn.backend.dto.ProfileUpdateRequest;
 
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/auth")
@@ -108,5 +110,54 @@ public class AuthController {
 
         response.setHeader("Set-Cookie", cookieValue);
         return ResponseEntity.noContent().build();
+    }
+
+    @GetMapping("/profile")
+    public ResponseEntity<?> getProfile(@AuthenticationPrincipal AuthPrincipal user) {
+        if (user == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(Map.of("error", "Not authenticated"));
+        }
+
+        return userRepository.findByEmail(user.email())
+                .<ResponseEntity<?>>map(u -> ResponseEntity.ok(
+                        new org.thomcgn.backend.dto.ProfileResponse(
+                                u.getVorname(),
+                                u.getNachname(),
+                                u.getEmail(),
+                                u.getTelefon()
+                        )
+                ))
+                .orElseGet(() -> ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(Map.of("error", "User not found")));
+    }
+    @PatchMapping("/profile")
+    public ResponseEntity<?> updateProfile(
+            @AuthenticationPrincipal AuthPrincipal principal,
+            @RequestBody ProfileUpdateRequest request
+    ) {
+        if (principal == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(Map.of("error", "Not authenticated"));
+        }
+
+        return userRepository.findByEmail(principal.email())
+                .<ResponseEntity<?>>map(user -> {
+
+                    user.setVorname(request.vorname());
+                    user.setNachname(request.nachname());
+                    user.setTelefon(request.telefon());
+
+                    // ⚠️ Empfehlung: Email NICHT hier ändern, wenn Email Login-Identifier ist
+                    // user.setEmail(request.email());
+
+                    userRepository.save(user);
+
+                    return ResponseEntity.ok(
+                            Map.of("status", "ok")
+                    );
+                })
+                .orElseGet(() -> ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(Map.of("error", "User not found")));
     }
 }

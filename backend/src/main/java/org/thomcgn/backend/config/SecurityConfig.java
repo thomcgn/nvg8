@@ -20,6 +20,21 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 public class SecurityConfig {
 
     private final JwtAuthFilter jwtFilter;
+    private static final String[] READ_ALL = {
+            "ADMIN", "TEAMLEITUNG", "FACHKRAFT", "IEFK", "READ_ONLY", "DATENSCHUTZBEAUFTRAGTER"
+    };
+
+    private static final String[] CASE_WRITE = {
+            "ADMIN", "TEAMLEITUNG", "FACHKRAFT"
+    };
+
+    private static final String[] REPORT_READ = {
+            "ADMIN", "TEAMLEITUNG", "IEFK", "DATENSCHUTZBEAUFTRAGTER"
+    };
+
+    private static final String[] AUDIT_READ = {
+            "ADMIN", "DATENSCHUTZBEAUFTRAGTER"
+    };
 
     public SecurityConfig(JwtAuthFilter jwtFilter) {
         this.jwtFilter = jwtFilter;
@@ -36,8 +51,27 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers("/error").permitAll()
-                        .requestMatchers("/auth/**").permitAll()
-                        .requestMatchers("/actuator/**").permitAll()
+                        .requestMatchers("/auth/login", "/auth/logout").permitAll()
+
+                        // Admin-only
+                        .requestMatchers("/admin/**").hasAnyRole("ADMIN","TEAMLEITUNG") // oder nur ADMIN
+
+                        // Audit/Datenschutz
+                        .requestMatchers("/audit/**", "/export/**", "/logs/**").hasAnyRole(AUDIT_READ)
+
+                        // Reports / Statistik nur bestimmte Rollen
+                        .requestMatchers(HttpMethod.GET, "/reports/**", "/statistik/**").hasAnyRole(REPORT_READ)
+
+                        // Standard-Read auf fachliche Ressourcen
+                        .requestMatchers(HttpMethod.GET, "/kinder/**", "/faelle/**", "/dokumente/**").hasAnyRole(READ_ALL)
+
+                        // Write/Change fachliche Ressourcen
+                        .requestMatchers(HttpMethod.POST, "/kinder/**", "/faelle/**", "/dokumente/**").hasAnyRole(CASE_WRITE)
+                        .requestMatchers(HttpMethod.PATCH, "/kinder/**", "/faelle/**", "/dokumente/**").hasAnyRole(CASE_WRITE)
+
+                        // Löschen restriktiv
+                        .requestMatchers(HttpMethod.DELETE, "/kinder/**", "/faelle/**", "/dokumente/**").hasRole("ADMIN")
+
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);

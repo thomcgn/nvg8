@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 import { Button } from "@/components/ui/button";
+import { useRouter } from "next/navigation";
 
 interface NavbarProps {
     userName: string;
@@ -24,6 +25,7 @@ export default function Navbar({
             year: "numeric",
         });
     }, []);
+    const router = useRouter();
 
     const logout = async () => {
         try {
@@ -59,10 +61,17 @@ export default function Navbar({
                         </p>
                     </div>
                 </div>
-
+                <div className="flex items-center gap-2">
+                <Button
+                    variant="outline"
+                    onClick={() => router.push("/dashboard/profil")}
+                >
+                    Profil
+                </Button>
                 <Button variant="destructive" onClick={logout}>
                     Logout
                 </Button>
+                </div>
             </div>
         </header>
     );

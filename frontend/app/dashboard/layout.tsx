@@ -1,16 +1,6 @@
-"use client";
+import * as React from "react";
+import DashboardGate from "./DashboardGate";
 
-import { ReactNode } from "react";
-
-interface DashboardLayoutProps {
-    children: ReactNode;
-}
-
-export default function DashboardLayout({ children }: DashboardLayoutProps) {
-    return (
-        <div className="flex min-h-screen bg-gray-100">
-            {/* Sidebar wird von DashboardPage mit Callback gesteuert */}
-            {children}
-        </div>
-    );
+export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+    return <DashboardGate>{children}</DashboardGate>;
 }

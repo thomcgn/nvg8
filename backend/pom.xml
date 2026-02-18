@@ -80,11 +80,12 @@
             <scope>runtime</scope>
         </dependency>
 
-        <!-- Flyway -->
         <dependency>
-            <groupId>org.flywaydb</groupId>
-            <artifactId>flyway-core</artifactId>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-flyway</artifactId>
         </dependency>
+
+        <!-- Wichtig für PostgreSQL (ab Flyway 9/10 empfohlen) -->
         <dependency>
             <groupId>org.flywaydb</groupId>
             <artifactId>flyway-database-postgresql</artifactId>
@@ -132,7 +133,6 @@
                     </annotationProcessorPaths>
                 </configuration>
             </plugin>
-
         </plugins>
     </build>
 
