@@ -1,5 +1,7 @@
 package org.thomcgn.backend.config;
 
+import jakarta.servlet.http.HttpServletResponse;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -15,25 +17,35 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
+@Slf4j
 @Configuration
 @EnableMethodSecurity
 public class SecurityConfig {
 
     private final JwtAuthFilter jwtFilter;
+
+    // Authorities (wie sie in JwtAuthFilter gesetzt werden: ROLE_XXX)
+    private static final String ROLE_ADMIN = "ROLE_ADMIN";
+    private static final String ROLE_TEAMLEITUNG = "ROLE_TEAMLEITUNG";
+    private static final String ROLE_FACHKRAFT = "ROLE_FACHKRAFT";
+    private static final String ROLE_IEFK = "ROLE_IEFK";
+    private static final String ROLE_READ_ONLY = "ROLE_READ_ONLY";
+    private static final String ROLE_DATENSCHUTZ = "ROLE_DATENSCHUTZBEAUFTRAGTER";
+
     private static final String[] READ_ALL = {
-            "ADMIN", "TEAMLEITUNG", "FACHKRAFT", "IEFK", "READ_ONLY", "DATENSCHUTZBEAUFTRAGTER"
+            ROLE_ADMIN, ROLE_TEAMLEITUNG, ROLE_FACHKRAFT, ROLE_IEFK, ROLE_READ_ONLY, ROLE_DATENSCHUTZ
     };
 
     private static final String[] CASE_WRITE = {
-            "ADMIN", "TEAMLEITUNG", "FACHKRAFT"
+            ROLE_ADMIN, ROLE_TEAMLEITUNG, ROLE_FACHKRAFT
     };
 
     private static final String[] REPORT_READ = {
-            "ADMIN", "TEAMLEITUNG", "IEFK", "DATENSCHUTZBEAUFTRAGTER"
+            ROLE_ADMIN, ROLE_TEAMLEITUNG, ROLE_IEFK, ROLE_DATENSCHUTZ
     };
 
     private static final String[] AUDIT_READ = {
-            "ADMIN", "DATENSCHUTZBEAUFTRAGTER"
+            ROLE_ADMIN, ROLE_DATENSCHUTZ
     };
 
     public SecurityConfig(JwtAuthFilter jwtFilter) {
@@ -46,31 +58,56 @@ public class SecurityConfig {
         http
                 .csrf(AbstractHttpConfigurer::disable)
                 .cors(Customizer.withDefaults())
-                .sessionManagement(sm ->
-                        sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+
+                // ✅ Logging bei 401/403 (damit du sofort siehst, warum PATCH 403 ist)
+                .exceptionHandling(eh -> eh
+                        .authenticationEntryPoint((req, res, ex) -> {
+                            log.warn("401 Unauthorized: {} {}", req.getMethod(), req.getRequestURI());
+                            res.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Unauthorized");
+                        })
+                        .accessDeniedHandler((req, res, ex) -> {
+                            var auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+                            log.warn("403 Forbidden: {} {}", req.getMethod(), req.getRequestURI());
+                            if (auth == null) {
+                                log.warn("403 details: auth=null");
+                            } else {
+                                log.warn("403 details: principal={}, authorities={}", auth.getPrincipal(), auth.getAuthorities());
+                            }
+                            res.sendError(HttpServletResponse.SC_FORBIDDEN, "Forbidden");
+                        })
+                )
+
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers("/error").permitAll()
+
+                        // Auth offen
                         .requestMatchers("/auth/**").permitAll()
 
-                        // Admin-only
-                        .requestMatchers("/admin/**").hasAnyRole("ADMIN","TEAMLEITUNG") // oder nur ADMIN
+                        // ✅ Admin-User-Management (GENAU deine Endpoints)
+                        .requestMatchers(HttpMethod.GET,   "/admin/users/**").hasAnyAuthority(READ_ALL)
+                        .requestMatchers(HttpMethod.POST,  "/admin/users/**").hasAnyAuthority(ROLE_ADMIN, ROLE_TEAMLEITUNG)
+                        .requestMatchers(HttpMethod.PATCH, "/admin/users/**").hasAnyAuthority(ROLE_ADMIN, ROLE_TEAMLEITUNG)
+
+                        // Falls du noch anderes unter /admin hast:
+                        .requestMatchers("/admin/**").hasAnyAuthority(ROLE_ADMIN, ROLE_TEAMLEITUNG)
 
                         // Audit/Datenschutz
-                        .requestMatchers("/audit/**", "/export/**", "/logs/**").hasAnyRole(AUDIT_READ)
+                        .requestMatchers("/audit/**", "/export/**", "/logs/**").hasAnyAuthority(AUDIT_READ)
 
-                        // Reports / Statistik nur bestimmte Rollen
-                        .requestMatchers(HttpMethod.GET, "/reports/**", "/statistik/**").hasAnyRole(REPORT_READ)
+                        // Reports/Statistik
+                        .requestMatchers(HttpMethod.GET, "/reports/**", "/statistik/**").hasAnyAuthority(REPORT_READ)
 
-                        // Standard-Read auf fachliche Ressourcen
-                        .requestMatchers(HttpMethod.GET, "/kinder/**", "/faelle/**", "/dokumente/**").hasAnyRole(READ_ALL)
+                        // Standard-Read
+                        .requestMatchers(HttpMethod.GET, "/kinder/**", "/faelle/**", "/dokumente/**").hasAnyAuthority(READ_ALL)
 
-                        // Write/Change fachliche Ressourcen
-                        .requestMatchers(HttpMethod.POST, "/kinder/**", "/faelle/**", "/dokumente/**").hasAnyRole(CASE_WRITE)
-                        .requestMatchers(HttpMethod.PATCH, "/kinder/**", "/faelle/**", "/dokumente/**").hasAnyRole(CASE_WRITE)
+                        // Write/Change
+                        .requestMatchers(HttpMethod.POST,  "/kinder/**", "/faelle/**", "/dokumente/**").hasAnyAuthority(CASE_WRITE)
+                        .requestMatchers(HttpMethod.PATCH, "/kinder/**", "/faelle/**", "/dokumente/**").hasAnyAuthority(CASE_WRITE)
 
-                        // Löschen restriktiv
-                        .requestMatchers(HttpMethod.DELETE, "/kinder/**", "/faelle/**", "/dokumente/**").hasRole("ADMIN")
+                        // Delete restriktiv
+                        .requestMatchers(HttpMethod.DELETE, "/kinder/**", "/faelle/**", "/dokumente/**").hasAnyAuthority(ROLE_ADMIN)
 
                         .anyRequest().authenticated()
                 )
@@ -80,9 +117,7 @@ public class SecurityConfig {
     }
 
     @Bean
-    public AuthenticationManager authenticationManager(
-            AuthenticationConfiguration configuration
-    ) throws Exception {
+    public AuthenticationManager authenticationManager(AuthenticationConfiguration configuration) throws Exception {
         return configuration.getAuthenticationManager();
     }
 

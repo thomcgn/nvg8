@@ -1,8 +1,9 @@
 package org.thomcgn.backend.auth.controller;
 
-import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -17,6 +18,7 @@ import org.thomcgn.backend.auth.repositories.UserRepository;
 import org.thomcgn.backend.auth.service.JwtService;
 import org.thomcgn.backend.dto.ProfileUpdateRequest;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
@@ -43,13 +45,15 @@ public class AuthController {
         this.jwtService = jwtService;
     }
 
+    // ✅ LOGIN
     @PostMapping("/login")
-    public ResponseEntity<LoginResponse> login(@RequestBody LoginRequest request, HttpServletResponse response) {
+    public ResponseEntity<LoginResponse> login(@RequestBody LoginRequest request) {
+
         User user = userRepository.findByEmail(request.email())
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Ungültige Zugangsdaten"));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED));
 
         if (!passwordEncoder.matches(request.password(), user.getPasswordHash())) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Ungültige Zugangsdaten");
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED);
         }
 
         LocalDateTime previousLogin = user.getLastLogin();
@@ -58,26 +62,25 @@ public class AuthController {
 
         String token = jwtService.generateToken(user, previousLogin);
 
-        String sameSite = devMode ? "Lax" : "None";
-        String secure = devMode ? "" : "Secure; ";
-        String cookieValue = String.format(
-                "token=%s; HttpOnly; %sPath=/; Max-Age=%d; SameSite=%s",
-                token,
-                secure,
-                60 * 60,
-                sameSite
-        );
+        ResponseCookie cookie = ResponseCookie.from("token", token)
+                .httpOnly(true)
+                .secure(!devMode)          // false lokal, true in prod
+                .sameSite(devMode ? "Lax" : "None")
+                .path("/")
+                .maxAge(Duration.ofHours(1))
+                .build();
 
-        response.setHeader("Set-Cookie", cookieValue);
-
-        return ResponseEntity.ok(new LoginResponse(
-                null,
-                user.getVorname() + " " + user.getNachname(),
-                user.getRole().name(),
-                previousLogin
-        ));
+        return ResponseEntity.ok()
+                .header(HttpHeaders.SET_COOKIE, cookie.toString())
+                .body(new LoginResponse(
+                        null,
+                        user.getVorname() + " " + user.getNachname(),
+                        user.getRole().name(),
+                        previousLogin
+                ));
     }
 
+    // ✅ ME
     @GetMapping("/me")
     public ResponseEntity<UserInfoResponse> me(@AuthenticationPrincipal AuthPrincipal user) {
         if (user == null) {
@@ -87,31 +90,38 @@ public class AuthController {
         LocalDateTime lastLogin =
                 user.lastLoginEpochMillis() == null
                         ? null
-                        : LocalDateTime.ofInstant(Instant.ofEpochMilli(user.lastLoginEpochMillis()), ZoneId.systemDefault());
+                        : LocalDateTime.ofInstant(
+                        Instant.ofEpochMilli(user.lastLoginEpochMillis()),
+                        ZoneId.systemDefault()
+                );
 
-        return ResponseEntity.ok(new UserInfoResponse(
-                user.name(),
-                user.role().name(),
-                lastLogin
-        ));
-    }
-
-    @PostMapping("/logout")
-    public ResponseEntity<Void> logout(HttpServletResponse response) {
-
-        String sameSite = devMode ? "Lax" : "None";
-        String secure = devMode ? "" : "Secure; ";
-
-        String cookieValue = String.format(
-                "token=; HttpOnly; %sPath=/; Max-Age=0; SameSite=%s",
-                secure,
-                sameSite
+        return ResponseEntity.ok(
+                new UserInfoResponse(
+                        user.name(),
+                        user.role().name(),
+                        lastLogin
+                )
         );
-
-        response.setHeader("Set-Cookie", cookieValue);
-        return ResponseEntity.noContent().build();
     }
 
+    // ✅ LOGOUT
+    @PostMapping("/logout")
+    public ResponseEntity<Void> logout() {
+
+        ResponseCookie cookie = ResponseCookie.from("token", "")
+                .httpOnly(true)
+                .secure(!devMode)
+                .sameSite(devMode ? "Lax" : "None")
+                .path("/")
+                .maxAge(0)
+                .build();
+
+        return ResponseEntity.noContent()
+                .header(HttpHeaders.SET_COOKIE, cookie.toString())
+                .build();
+    }
+
+    // ✅ PROFILE GET
     @GetMapping("/profile")
     public ResponseEntity<?> getProfile(@AuthenticationPrincipal AuthPrincipal user) {
         if (user == null) {
@@ -131,6 +141,8 @@ public class AuthController {
                 .orElseGet(() -> ResponseEntity.status(HttpStatus.NOT_FOUND)
                         .body(Map.of("error", "User not found")));
     }
+
+    // ✅ PROFILE PATCH
     @PatchMapping("/profile")
     public ResponseEntity<?> updateProfile(
             @AuthenticationPrincipal AuthPrincipal principal,
@@ -147,15 +159,9 @@ public class AuthController {
                     user.setVorname(request.vorname());
                     user.setNachname(request.nachname());
                     user.setTelefon(request.telefon());
-
-                    // ⚠️ Empfehlung: Email NICHT hier ändern, wenn Email Login-Identifier ist
-                    // user.setEmail(request.email());
-
                     userRepository.save(user);
 
-                    return ResponseEntity.ok(
-                            Map.of("status", "ok")
-                    );
+                    return ResponseEntity.ok(Map.of("status", "ok"));
                 })
                 .orElseGet(() -> ResponseEntity.status(HttpStatus.NOT_FOUND)
                         .body(Map.of("error", "User not found")));

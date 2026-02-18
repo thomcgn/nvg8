@@ -2,7 +2,6 @@ package org.thomcgn.backend.auth.controller;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
@@ -19,7 +18,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/admin/users")
-@PreAuthorize("hasAnyAuthority('ROLE_ADMIN','ROLE_TEAMLEITUNG')")
+//Pre Authorize auf einzelne Endpunkte
 public class UserAdminController {
 
     private final UserRepository userRepository;
