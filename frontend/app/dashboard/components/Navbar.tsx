@@ -9,6 +9,9 @@ interface NavbarProps {
     userRole: string;
     lastLogin?: string;
     onOpenMenu?: () => void;
+
+    // neu:
+    unreadCount?: number;
 }
 
 export default function Navbar({
@@ -16,6 +19,7 @@ export default function Navbar({
                                    userRole,
                                    lastLogin = "–",
                                    onOpenMenu,
+                                   unreadCount = 0,
                                }: NavbarProps) {
     const todayFormatted = useMemo(() => {
         return new Date().toLocaleDateString("de-DE", {
@@ -25,6 +29,7 @@ export default function Navbar({
             year: "numeric",
         });
     }, []);
+
     const router = useRouter();
 
     const logout = async () => {
@@ -61,16 +66,32 @@ export default function Navbar({
                         </p>
                     </div>
                 </div>
+
                 <div className="flex items-center gap-2">
-                <Button
-                    variant="outline"
-                    onClick={() => router.push("/dashboard/profil")}
-                >
-                    Profil
-                </Button>
-                <Button variant="destructive" onClick={logout}>
-                    Logout
-                </Button>
+                    <Button variant="outline" onClick={() => router.push("/dashboard/profil")}>
+                        Profil
+                    </Button>
+
+                    {/* neu: Nachrichten */}
+                    <Button
+                        variant="outline"
+                        onClick={() => router.push("/dashboard/nachrichten")}
+                        className="relative"
+                    >
+                        Nachrichten
+                        {unreadCount > 0 && (
+                            <span
+                                className="absolute -top-2 -right-2 min-w-[1.25rem] h-5 px-1 rounded-full bg-destructive text-destructive-foreground text-xs flex items-center justify-center"
+                                aria-label={`${unreadCount} neue Nachrichten`}
+                            >
+                {unreadCount > 99 ? "99+" : unreadCount}
+              </span>
+                        )}
+                    </Button>
+
+                    <Button variant="destructive" onClick={logout}>
+                        Logout
+                    </Button>
                 </div>
             </div>
         </header>

@@ -1,6 +1,6 @@
 package org.thomcgn.backend.auth.controller;
 
-import org.springframework.beans.factory.annotation.Value;
+import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseCookie;
@@ -16,9 +16,9 @@ import org.thomcgn.backend.auth.dto.LoginResponse;
 import org.thomcgn.backend.auth.dto.UserInfoResponse;
 import org.thomcgn.backend.auth.repositories.UserRepository;
 import org.thomcgn.backend.auth.service.JwtService;
+import org.thomcgn.backend.config.AppProperties;
 import org.thomcgn.backend.dto.ProfileUpdateRequest;
 
-import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
@@ -31,29 +31,30 @@ public class AuthController {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
-
-    @Value("${app.devMode:true}")
-    private boolean devMode;
+    private final AppProperties appProperties;
 
     public AuthController(
             UserRepository userRepository,
             PasswordEncoder passwordEncoder,
-            JwtService jwtService
+            JwtService jwtService,
+            AppProperties appProperties
     ) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
+        this.appProperties = appProperties;
     }
 
-    // ✅ LOGIN
     @PostMapping("/login")
-    public ResponseEntity<LoginResponse> login(@RequestBody LoginRequest request) {
-
+    public ResponseEntity<LoginResponse> login(
+            @RequestBody LoginRequest request,
+            HttpServletResponse servletResponse
+    ) {
         User user = userRepository.findByEmail(request.email())
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Ungültige Zugangsdaten"));
 
         if (!passwordEncoder.matches(request.password(), user.getPasswordHash())) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED);
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Ungültige Zugangsdaten");
         }
 
         LocalDateTime previousLogin = user.getLastLogin();
@@ -62,25 +63,34 @@ public class AuthController {
 
         String token = jwtService.generateToken(user, previousLogin);
 
-        ResponseCookie cookie = ResponseCookie.from("token", token)
+        // ✅ PROD/DEV sauber über app.cookie gesteuert
+        var cookieCfg = appProperties.cookie();
+        ResponseCookie.ResponseCookieBuilder builder = ResponseCookie.from(cookieCfg.name(), token)
                 .httpOnly(true)
-                .secure(!devMode)          // false lokal, true in prod
-                .sameSite(devMode ? "Lax" : "None")
                 .path("/")
-                .maxAge(Duration.ofHours(1))
-                .build();
+                .maxAge(cookieCfg.maxAgeSeconds())
+                .sameSite(cookieCfg.sameSite());
 
-        return ResponseEntity.ok()
-                .header(HttpHeaders.SET_COOKIE, cookie.toString())
-                .body(new LoginResponse(
-                        null,
-                        user.getVorname() + " " + user.getNachname(),
-                        user.getRole().name(),
-                        previousLogin
-                ));
+        if (cookieCfg.secure()) builder.secure(true);
+
+        // Domain nur setzen wenn konfiguriert (DEV: leer)
+        if (cookieCfg.domain() != null && !cookieCfg.domain().isBlank()) {
+            builder.domain(cookieCfg.domain());
+        }
+
+        ResponseCookie cookie = builder.build();
+
+        // addHeader statt setHeader (überschreibt nichts)
+        servletResponse.addHeader(HttpHeaders.SET_COOKIE, cookie.toString());
+
+        return ResponseEntity.ok(new LoginResponse(
+                null,
+                user.getVorname() + " " + user.getNachname(),
+                user.getRole().name(),
+                previousLogin
+        ));
     }
 
-    // ✅ ME
     @GetMapping("/me")
     public ResponseEntity<UserInfoResponse> me(@AuthenticationPrincipal AuthPrincipal user) {
         if (user == null) {
@@ -90,38 +100,35 @@ public class AuthController {
         LocalDateTime lastLogin =
                 user.lastLoginEpochMillis() == null
                         ? null
-                        : LocalDateTime.ofInstant(
-                        Instant.ofEpochMilli(user.lastLoginEpochMillis()),
-                        ZoneId.systemDefault()
-                );
+                        : LocalDateTime.ofInstant(Instant.ofEpochMilli(user.lastLoginEpochMillis()), ZoneId.systemDefault());
 
-        return ResponseEntity.ok(
-                new UserInfoResponse(
-                        user.name(),
-                        user.role().name(),
-                        lastLogin
-                )
-        );
+        return ResponseEntity.ok(new UserInfoResponse(
+                user.name(),
+                user.role().name(),
+                lastLogin
+        ));
     }
 
-    // ✅ LOGOUT
     @PostMapping("/logout")
-    public ResponseEntity<Void> logout() {
+    public ResponseEntity<Void> logout(HttpServletResponse servletResponse) {
+        var cookieCfg = appProperties.cookie();
 
-        ResponseCookie cookie = ResponseCookie.from("token", "")
+        ResponseCookie.ResponseCookieBuilder builder = ResponseCookie.from(cookieCfg.name(), "")
                 .httpOnly(true)
-                .secure(!devMode)
-                .sameSite(devMode ? "Lax" : "None")
                 .path("/")
                 .maxAge(0)
-                .build();
+                .sameSite(cookieCfg.sameSite());
 
-        return ResponseEntity.noContent()
-                .header(HttpHeaders.SET_COOKIE, cookie.toString())
-                .build();
+        if (cookieCfg.secure()) builder.secure(true);
+
+        if (cookieCfg.domain() != null && !cookieCfg.domain().isBlank()) {
+            builder.domain(cookieCfg.domain());
+        }
+
+        servletResponse.addHeader(HttpHeaders.SET_COOKIE, builder.build().toString());
+        return ResponseEntity.noContent().build();
     }
 
-    // ✅ PROFILE GET
     @GetMapping("/profile")
     public ResponseEntity<?> getProfile(@AuthenticationPrincipal AuthPrincipal user) {
         if (user == null) {
@@ -142,7 +149,6 @@ public class AuthController {
                         .body(Map.of("error", "User not found")));
     }
 
-    // ✅ PROFILE PATCH
     @PatchMapping("/profile")
     public ResponseEntity<?> updateProfile(
             @AuthenticationPrincipal AuthPrincipal principal,
@@ -159,6 +165,7 @@ public class AuthController {
                     user.setVorname(request.vorname());
                     user.setNachname(request.nachname());
                     user.setTelefon(request.telefon());
+
                     userRepository.save(user);
 
                     return ResponseEntity.ok(Map.of("status", "ok"));

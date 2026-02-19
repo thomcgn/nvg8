@@ -24,7 +24,6 @@ public class SecurityConfig {
 
     private final JwtAuthFilter jwtFilter;
 
-    // Authorities (wie sie in JwtAuthFilter gesetzt werden: ROLE_XXX)
     private static final String ROLE_ADMIN = "ROLE_ADMIN";
     private static final String ROLE_TEAMLEITUNG = "ROLE_TEAMLEITUNG";
     private static final String ROLE_FACHKRAFT = "ROLE_FACHKRAFT";
@@ -54,13 +53,10 @@ public class SecurityConfig {
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
-
         http
                 .csrf(AbstractHttpConfigurer::disable)
                 .cors(Customizer.withDefaults())
                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-
-                // ✅ Logging bei 401/403 (damit du sofort siehst, warum PATCH 403 ist)
                 .exceptionHandling(eh -> eh
                         .authenticationEntryPoint((req, res, ex) -> {
                             log.warn("401 Unauthorized: {} {}", req.getMethod(), req.getRequestURI());
@@ -69,15 +65,11 @@ public class SecurityConfig {
                         .accessDeniedHandler((req, res, ex) -> {
                             var auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
                             log.warn("403 Forbidden: {} {}", req.getMethod(), req.getRequestURI());
-                            if (auth == null) {
-                                log.warn("403 details: auth=null");
-                            } else {
-                                log.warn("403 details: principal={}, authorities={}", auth.getPrincipal(), auth.getAuthorities());
-                            }
+                            if (auth == null) log.warn("403 details: auth=null");
+                            else log.warn("403 details: principal={}, authorities={}", auth.getPrincipal(), auth.getAuthorities());
                             res.sendError(HttpServletResponse.SC_FORBIDDEN, "Forbidden");
                         })
                 )
-
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers("/error").permitAll()
@@ -85,12 +77,10 @@ public class SecurityConfig {
                         // Auth offen
                         .requestMatchers("/auth/**").permitAll()
 
-                        // ✅ Admin-User-Management (GENAU deine Endpoints)
+                        // Admin User Management
                         .requestMatchers(HttpMethod.GET,   "/admin/users/**").hasAnyAuthority(READ_ALL)
                         .requestMatchers(HttpMethod.POST,  "/admin/users/**").hasAnyAuthority(ROLE_ADMIN, ROLE_TEAMLEITUNG)
                         .requestMatchers(HttpMethod.PATCH, "/admin/users/**").hasAnyAuthority(ROLE_ADMIN, ROLE_TEAMLEITUNG)
-
-                        // Falls du noch anderes unter /admin hast:
                         .requestMatchers("/admin/**").hasAnyAuthority(ROLE_ADMIN, ROLE_TEAMLEITUNG)
 
                         // Audit/Datenschutz
@@ -100,14 +90,14 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/reports/**", "/statistik/**").hasAnyAuthority(REPORT_READ)
 
                         // Standard-Read
-                        .requestMatchers(HttpMethod.GET, "/kinder/**", "/faelle/**", "/dokumente/**").hasAnyAuthority(READ_ALL)
+                        .requestMatchers(HttpMethod.GET, "/kinder/**", "/faelle/**", "/dokumente/**", "/cases/**").hasAnyAuthority(READ_ALL)
 
                         // Write/Change
-                        .requestMatchers(HttpMethod.POST,  "/kinder/**", "/faelle/**", "/dokumente/**").hasAnyAuthority(CASE_WRITE)
-                        .requestMatchers(HttpMethod.PATCH, "/kinder/**", "/faelle/**", "/dokumente/**").hasAnyAuthority(CASE_WRITE)
+                        .requestMatchers(HttpMethod.POST,  "/kinder/**", "/faelle/**", "/dokumente/**", "/cases/**").hasAnyAuthority(CASE_WRITE)
+                        .requestMatchers(HttpMethod.PATCH, "/kinder/**", "/faelle/**", "/dokumente/**", "/cases/**").hasAnyAuthority(CASE_WRITE)
 
                         // Delete restriktiv
-                        .requestMatchers(HttpMethod.DELETE, "/kinder/**", "/faelle/**", "/dokumente/**").hasAnyAuthority(ROLE_ADMIN)
+                        .requestMatchers(HttpMethod.DELETE, "/kinder/**", "/faelle/**", "/dokumente/**", "/cases/**").hasAnyAuthority(ROLE_ADMIN)
 
                         .anyRequest().authenticated()
                 )

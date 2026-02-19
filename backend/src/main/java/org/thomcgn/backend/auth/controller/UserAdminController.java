@@ -6,6 +6,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
+import org.thomcgn.backend.auth.RbacPolicy;
 import org.thomcgn.backend.auth.data.Role;
 import org.thomcgn.backend.auth.data.User;
 import org.thomcgn.backend.auth.dto.AuthPrincipal;
@@ -41,6 +42,12 @@ public class UserAdminController {
             @RequestBody CreateUserRequest req,
             @AuthenticationPrincipal AuthPrincipal actor
     ) {
+        Role actorRole = actor.role();
+        Role newUserRole = req.role();
+        if(RbacPolicy.rank(newUserRole) > RbacPolicy.rank(actorRole))
+        {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "role exceeds your permission level");
+        }
         if (actor == null) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Not authenticated");
         }
@@ -55,11 +62,8 @@ public class UserAdminController {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "role required");
         }
 
-        Role actorRole = actor.role();
-        Role targetRole = req.role();
-
         // ✅ TEAMLEITUNG darf niemals ADMIN erstellen
-        if (actorRole == Role.TEAMLEITUNG && targetRole == Role.ADMIN) {
+        if (actorRole == Role.TEAMLEITUNG && newUserRole == Role.ADMIN) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "TEAMLEITUNG may not create ADMIN");
         }
 
@@ -79,7 +83,7 @@ public class UserAdminController {
         u.setEmail(email);
         u.setVorname(req.vorname());
         u.setNachname(req.nachname());
-        u.setRole(targetRole);
+        u.setRole(newUserRole);
         u.setPasswordHash(passwordEncoder.encode(req.password()));
 
         userRepository.save(u);
@@ -101,17 +105,32 @@ public class UserAdminController {
         }
 
         Role actorRole = actor.role();
-        Role targetRole = req.role();
-
-        // ✅ TEAMLEITUNG darf niemals ADMIN vergeben
-        if (actorRole == Role.TEAMLEITUNG && targetRole == Role.ADMIN) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "TEAMLEITUNG may not assign ADMIN");
-        }
+        Role nextRole = req.role();
 
         User u = userRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "user not found"));
 
-        u.setRole(targetRole);
+        Role currentTargetRole = u.getRole();
+
+// Admins zählen (für "letzter Admin")
+        long adminCount = userRepository.countByRole(Role.ADMIN);
+        long adminsLeftAfter = (currentTargetRole == Role.ADMIN && nextRole != Role.ADMIN)
+                ? adminCount - 1
+                : adminCount;
+
+        var decision = RbacPolicy.canChangeRole(
+                actorRole,
+                currentTargetRole,
+                nextRole,
+                actor.id().equals(u.getId()),
+                adminsLeftAfter
+        );
+
+        if (!decision.allowed()) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, decision.reason());
+        }
+
+        u.setRole(nextRole);
         userRepository.save(u);
 
         return toResponse(u);

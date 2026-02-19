@@ -1,8 +1,9 @@
 SHELL := /bin/bash
 
 APP_NAME := nvg8
-COMPOSE_PROD := docker compose -f docker-compose.yml
-COMPOSE_DEV  := docker compose -f docker-compose.dev.yml
+COMPOSE_PROD := docker compose -p nvg8-prod -f docker-compose.yml -f docker-compose.prod.yml
+COMPOSE_DEV  := docker compose -p nvg8-dev  -f docker-compose.yml -f docker-compose.dev.yml
+
 
 # -------- SHADCN UI --------
 # Frontend-Ordner + Package Manager (npm/pnpm/yarn)
@@ -229,3 +230,4 @@ shadcn-add: shadcn-check shadcn-deps
 		npx shadcn@latest add $$c --yes --overwrite; \
 	done
 	@echo "✅ ShadCN Components installiert/aktualisiert."
+

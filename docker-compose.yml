@@ -1,7 +1,6 @@
 services:
   postgres:
     image: postgres:16
-    container_name: nvg8-postgres
     restart: unless-stopped
     environment:
       POSTGRES_DB: nvg8db
@@ -9,38 +8,50 @@ services:
       POSTGRES_PASSWORD: devpass
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dev -d nvg8db"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
 
   backend:
     build: ./backend
-    container_name: nvg8-backend
     restart: unless-stopped
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/nvg8db
       SPRING_DATASOURCE_USERNAME: dev
       SPRING_DATASOURCE_PASSWORD: devpass
-      SPRING_JPA_HIBERNATE_DDL_AUTO: update
 
-      APP_DEV_MODE: "false"
+      # Profil wird in dev/prod override gesetzt
+      SPRING_PROFILES_ACTIVE: default
 
-      CORS_ALLOWED_ORIGINS: "https://nvg8.witchplease.de"
+      # CORS (override in dev/prod)
+      CORS_ALLOWED_ORIGINS: "http://localhost:3000"
+      CORS_ALLOWED_METHODS: "GET,POST,PUT,PATCH,DELETE,OPTIONS"
+      CORS_ALLOW_CREDENTIALS: "true"
 
-      # ✅ Bootstrap Admin (einmalig)
-      APP_BOOTSTRAP_ADMIN: "true"
+      # App defaults (override in dev/prod)
+      APP_DEV_MODE: "true"
+      APP_BOOTSTRAP_ADMIN: "false"
       APP_BOOTSTRAP_ADMIN_EMAIL: "admin@nvg8.de"
-      APP_BOOTSTRAP_ADMIN_PASSWORD: "adminNVG8"
-    ports:
-      - "127.0.0.1:8080:8080"
+      APP_BOOTSTRAP_ADMIN_PASSWORD: ""
+
+      # Cookie defaults (override in dev/prod)
+      APP_COOKIE_DOMAIN: ""
+      APP_COOKIE_SECURE: "false"
+      APP_COOKIE_SAMESITE: "Lax"
 
   frontend:
     build: ./frontend
-    container_name: nvg8-frontend
     restart: unless-stopped
     depends_on:
       - backend
-    ports:
-      - "127.0.0.1:3000:3000"
+    environment:
+      # WICHTIG: innerhalb des Frontend-Containers ist "localhost" NICHT dein Backend.
+      BACKEND_URL: "http://backend:8080"
 
 volumes:
   postgres_data:

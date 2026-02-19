@@ -3,6 +3,8 @@ package org.thomcgn.backend.cases.controller;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
+import org.thomcgn.backend.auth.data.Role;
 import org.thomcgn.backend.auth.dto.AuthPrincipal;
 import org.thomcgn.backend.cases.api.mapper.CaseMapper;
 import org.thomcgn.backend.cases.dto.BezugspersonCreateRequest;
@@ -22,6 +24,9 @@ import org.thomcgn.backend.cases.services.FallService;
 import java.time.LocalDateTime;
 import java.util.List;
 
+import static org.springframework.http.HttpStatus.FORBIDDEN;
+import static org.springframework.http.HttpStatus.UNAUTHORIZED;
+
 @RestController
 @RequestMapping("/cases")
 public class CaseController {
@@ -38,7 +43,8 @@ public class CaseController {
             CaseService caseService,
             KindRepository kindRepository,
             BezugspersonRepository bezugspersonRepository,
-            KinderschutzFallRepository fallRepository, KindBezugspersonRelationRepository kindBezugRepo
+            KinderschutzFallRepository fallRepository,
+            KindBezugspersonRelationRepository kindBezugRepo
     ) {
         this.fallService = fallService;
         this.caseService = caseService;
@@ -89,6 +95,21 @@ public class CaseController {
         String email = user.email();
 
         return fallRepository.findForDashboardByZustaendigeFachkraft_EmailOrderByUpdatedAtDesc(email)
+                .stream()
+                .map(CaseMapper::toFall)
+                .toList();
+    }
+
+    /**
+     * ✅ Alle Fälle im System (ADMIN-only)
+     */
+    @GetMapping("/all")
+    public List<KinderschutzFallResponse> allCases(@AuthenticationPrincipal AuthPrincipal user) {
+        if (user == null) {
+            throw new ResponseStatusException(UNAUTHORIZED, "Unauthorized");
+        }
+
+        return fallRepository.findAllByOrderByUpdatedAtDesc()
                 .stream()
                 .map(CaseMapper::toFall)
                 .toList();

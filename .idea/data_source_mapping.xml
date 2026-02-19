@@ -1,7 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="DataSourcePerFileMappings">
-    <file url="file://$PROJECT_DIR$/backend/src/main/resources/db/migration/V2__seed_kws_ah_3_01b.sql" value="816e6d98-0545-4efa-afe2-490224f65b03" />
     <file url="file://$APPLICATION_CONFIG_DIR$/consoles/db/816e6d98-0545-4efa-afe2-490224f65b03/console.sql" value="816e6d98-0545-4efa-afe2-490224f65b03" />
     <file url="file://$APPLICATION_CONFIG_DIR$/consoles/db/816e6d98-0545-4efa-afe2-490224f65b03/console_1.sql" value="816e6d98-0545-4efa-afe2-490224f65b03" />
     <file url="file://$APPLICATION_CONFIG_DIR$/consoles/db/816e6d98-0545-4efa-afe2-490224f65b03/console_2.sql" value="816e6d98-0545-4efa-afe2-490224f65b03" />
