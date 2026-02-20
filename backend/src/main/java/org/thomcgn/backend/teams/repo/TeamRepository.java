@@ -1,7 +1,7 @@
 package org.thomcgn.backend.teams.repo;
 
 import org.springframework.data.jpa.repository.JpaRepository;
-import org.thomcgn.backend.team.model.Team;
+import org.thomcgn.backend.teams.model.Team;
 
 import java.util.List;
 import java.util.Optional;

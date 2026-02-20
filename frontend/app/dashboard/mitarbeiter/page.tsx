@@ -156,6 +156,14 @@ async function readErrorMessage(res: Response): Promise<string | null> {
     }
 }
 
+function setOpenCreateTeam(b: boolean) {
+    
+}
+
+function setOpenCreateEinrichtung(b: boolean) {
+    
+}
+
 export default function MitarbeiterPage() {
     const [me, setMe] = useState<Me | null>(null);
     const [rows, setRows] = useState<UserAdminRow[]>([]);
@@ -167,6 +175,9 @@ export default function MitarbeiterPage() {
     // Create user dialog (nur privilegiert)
     const [openCreate, setOpenCreate] = useState(false);
     const [creating, setCreating] = useState(false);
+
+    const [openCreateTeam, setOpenCreateTeam] = useState(false);
+    const [openCreateEinrichtung, setOpenCreateEinrichtung] = useState(false);
 
     // Team assign dialog
     const [openTeams, setOpenTeams] = useState(false);
@@ -187,6 +198,7 @@ export default function MitarbeiterPage() {
     });
 
     const isPrivileged = me?.role === "ADMIN" || me?.role === "TEAMLEITUNG";
+    const isAdmin = me?.role === "ADMIN";
 
     const loadMe = async () => {
         const res = await fetch("/api/auth/me", { credentials: "include", cache: "no-store" });
@@ -398,7 +410,20 @@ export default function MitarbeiterPage() {
                 </div>
 
                 {isPrivileged ? (
-                    <Button onClick={() => setOpenCreate(true)}>Neuer Mitarbeiter</Button>
+                    <div className="flex flex-wrap gap-2">
+                        <Button onClick={() => setOpenCreate(true)}>Neuer Mitarbeiter</Button>
+
+                        {isAdmin ? (
+                            <>
+                                <Button variant="outline" onClick={() => toast.info("Team Dialog folgt noch!")}>
+                                    Neues Team
+                                </Button>
+                                <Button variant="outline" onClick={() => toast.info("Einrichtung Dialog folgt noch!")}>
+                                    Neue Einrichtung
+                                </Button>
+                            </>
+                        ) : null}
+                    </div>
                 ) : null}
             </div>
 

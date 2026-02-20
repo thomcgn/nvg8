@@ -8,7 +8,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 import org.thomcgn.backend.auth.dto.AuthPrincipal;
 import org.thomcgn.backend.auth.repo.UserRepository;
-import org.thomcgn.backend.team.model.Team;
+import org.thomcgn.backend.teams.model.Team;
 import org.thomcgn.backend.teams.dto.TeamDto;
 import org.thomcgn.backend.teams.repo.TeamRepository;
 

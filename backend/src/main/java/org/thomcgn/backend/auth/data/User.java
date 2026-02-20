@@ -5,6 +5,7 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 import org.thomcgn.backend.facility.model.Facility;
 import org.thomcgn.backend.model.Person;
+import org.thomcgn.backend.teams.model.Team;
 
 import java.time.LocalDateTime;
 import java.util.HashSet;
@@ -43,7 +44,7 @@ public class User extends Person {
             inverseJoinColumns = @JoinColumn(name = "team_id"),
             uniqueConstraints = @UniqueConstraint(name = "uk_user_team", columnNames = {"user_id", "team_id"})
     )
-    private Set<org.thomcgn.backend.team.model.Team> teams = new HashSet<>();
+    private Set<Team> teams = new HashSet<>();
 
 
 

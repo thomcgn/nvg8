@@ -1,4 +1,4 @@
-package org.thomcgn.backend.team.model;
+package org.thomcgn.backend.teams.model;
 
 import jakarta.persistence.*;
 import lombok.Data;
