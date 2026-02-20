@@ -2,5 +2,6 @@ package org.thomcgn.backend.auth.dto;
 
 public record LoginRequest(
         String email,
-        String password
+        String password,
+        Long facilityId
 ) {}

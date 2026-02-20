@@ -99,6 +99,8 @@ public class SecurityConfig {
                         // Delete restriktiv
                         .requestMatchers(HttpMethod.DELETE, "/kinder/**", "/faelle/**", "/dokumente/**", "/cases/**").hasAnyAuthority(ROLE_ADMIN)
 
+                        .requestMatchers(HttpMethod.GET, "/facilities/public").permitAll()
+
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);

@@ -1,16 +1,33 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
+import { fetchFacilities } from "@/lib/facilitiesClient";
+import type { Facility } from "@/lib/types";
 
 export default function Home() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+
+  // neu:
+  const [facilities, setFacilities] = useState<Facility[]>([]);
+  const [facilityId, setFacilityId] = useState<number | "">("");
+
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   const router = useRouter();
+
+  useEffect(() => {
+    fetchFacilities()
+        .then((list) => {
+          setFacilities(list);
+          // wenn genau 1 Einrichtung existiert: auto-select
+          if (list.length === 1) setFacilityId(list[0].id);
+        })
+        .catch(() => {});
+  }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -18,11 +35,15 @@ export default function Home() {
     setLoading(true);
 
     try {
+      if (facilityId === "") {
+        throw new Error("Bitte Einrichtung auswählen.");
+      }
+
       const res = await fetch(`/api/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
-        credentials: "include", // wichtig für Cookie
+        body: JSON.stringify({ email, password, facilityId }), // <-- neu
+        credentials: "include",
       });
 
       if (!res.ok) {
@@ -30,8 +51,7 @@ export default function Home() {
         throw new Error(errData?.message || "Login fehlgeschlagen");
       }
 
-      const data = await res.json();
-
+      await res.json().catch(() => null);
       router.push("/dashboard");
     } catch (err: any) {
       setError(err.message);
@@ -42,7 +62,6 @@ export default function Home() {
 
   return (
       <main className="min-h-screen bg-gray-100 flex flex-col items-center justify-center px-4">
-        {/* Header */}
         <header className="mb-6 text-center">
           <h1 className="text-3xl md:text-4xl font-semibold text-gray-900">
             Navig8tor – Fallkompass
@@ -53,7 +72,6 @@ export default function Home() {
         </header>
 
         <div className="w-full max-w-6xl grid grid-cols-1 md:grid-cols-2 rounded-2xl overflow-hidden shadow-2xl bg-white">
-          {/* Hero */}
           <section className="relative min-h-105">
             <Image
                 src="/hero2.jpg"
@@ -75,7 +93,6 @@ export default function Home() {
             </div>
           </section>
 
-          {/* Login */}
           <section className="flex items-center justify-center p-8">
             <div className="w-full max-w-sm">
               <h3 className="text-2xl font-semibold text-gray-900 mb-2">
@@ -116,6 +133,30 @@ export default function Home() {
                       placeholder="Passwort"
                       className="w-full rounded-lg border border-gray-300 px-4 py-2 placeholder-gray-700 text-black focus:ring-2 focus:ring-indigo-500 focus:outline-none"
                   />
+                </div>
+
+                {/* neu: Einrichtung Dropdown */}
+                <div>
+                  <label htmlFor="facility" className="block text-sm font-medium text-gray-700 mb-1">
+                    Einrichtung
+                  </label>
+                  <select
+                      id="facility"
+                      required
+                      value={facilityId}
+                      onChange={(e) => setFacilityId(e.target.value ? Number(e.target.value) : "")}
+                      className="w-full rounded-lg border border-gray-300 px-4 py-2 text-black focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-white"
+                      disabled={facilities.length === 0}
+                  >
+                    <option value="">
+                      {facilities.length === 0 ? "Lade Einrichtungen..." : "Bitte auswählen"}
+                    </option>
+                    {facilities.map((f) => (
+                        <option key={f.id} value={f.id}>
+                          {f.name}
+                        </option>
+                    ))}
+                  </select>
                 </div>
 
                 <button

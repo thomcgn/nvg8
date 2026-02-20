@@ -200,7 +200,7 @@ export default function MitarbeiterPage() {
     };
 
     const loadTeams = async () => {
-        const res = await fetch("/api/admin/teams", { credentials: "include", cache: "no-store" });
+        const res = await fetch("/api/teams", { credentials: "include", cache: "no-store" });
         if (res.ok) setTeams(await res.json());
         else toast.error("Teams konnten nicht geladen werden");
     };

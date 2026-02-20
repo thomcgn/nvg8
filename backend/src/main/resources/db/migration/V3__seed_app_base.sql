@@ -1,29 +1,37 @@
 -- V3__seed_app_base.sql
--- Admin + Beispiel-Kind + Bezugsperson + ein Fall + ein paar Ereignisse/Maßnahmen etc.
+-- Default Facility + Admin + Beispiel-Entities + optional Team + Zuordnung
 
--- Admin user (bcrypt in SQL)
+-- 1) Default Facility
+INSERT INTO public.facilities (name)
+VALUES ('Default')
+ON CONFLICT (name) DO NOTHING;
+
+-- 2) Admin user (bcrypt in SQL)
 INSERT INTO public.users (
     enabled, email, password_hash, role,
     vorname, nachname, ort,
     coda_status, dolmetsch_bedarf, hoer_status,
-    staatsangehoerigkeit_gruppe, staatsangehoerigkeit_sonderfall
+    staatsangehoerigkeit_gruppe, staatsangehoerigkeit_sonderfall,
+    facility_id
 )
-VALUES (
-           true,
-           'admin@nvg8.de',
-           crypt('adminNVG8', gen_salt('bf', 10)),
-           'ADMIN',
-           'Admin', 'NVG8', 'Berlin',
-           'UNBEKANNT', 'UNGEKLAERT', 'UNBEKANNT',
-           'UNBEKANNT', 'UNBEKANNT'
-       )
+SELECT
+    true,
+    'admin@nvg8.de',
+    crypt('adminNVG8', gen_salt('bf', 10)),
+    'ADMIN',
+    'Admin', 'NVG8', 'Berlin',
+    'UNBEKANNT', 'UNGEKLAERT', 'UNBEKANNT',
+    'UNBEKANNT', 'UNBEKANNT',
+    f.id
+FROM public.facilities f
+WHERE f.name = 'Default'
 ON CONFLICT (email) DO UPDATE
-    SET
-        enabled = EXCLUDED.enabled,
+    SET enabled = EXCLUDED.enabled,
         role = EXCLUDED.role,
-        password_hash = EXCLUDED.password_hash;
+        password_hash = EXCLUDED.password_hash,
+        facility_id = EXCLUDED.facility_id;
 
--- Beispiel-Kind
+-- 3) Beispiel-Kind
 INSERT INTO public.kinder (
     vorname, nachname, geburtsdatum, braucht_dolmetsch,
     ort, plz, strasse, hausnummer,
@@ -35,7 +43,7 @@ VALUES
      'UNBEKANNT','KEIN','HOEREND','DE','KEINER')
 ON CONFLICT DO NOTHING;
 
--- Bezugsperson
+-- 4) Bezugsperson
 INSERT INTO public.bezugspersonen (
     vorname, nachname, telefon, kontakt_email,
     ort, plz, strasse, hausnummer,
@@ -48,7 +56,7 @@ VALUES
      'UNBEKANNT','KEIN','HOEREND','DE','KEINER')
 ON CONFLICT DO NOTHING;
 
--- Relation Kind <-> Bezugsperson
+-- 5) Relation Kind <-> Bezugsperson
 INSERT INTO public.kind_bezugsperson_relation (
     kind_id, bezugsperson_id, beziehungstyp, rolle_im_alltag, sorge_status, lebt_im_haushalt, gueltig_von,
     datenquelle
@@ -67,7 +75,7 @@ FROM public.kinder k
 WHERE k.vorname = 'Mila' AND k.nachname = 'Beispiel'
 ON CONFLICT DO NOTHING;
 
--- Ein Fall (Kinderschutz)
+-- 6) Ein Fall (Kinderschutz)
 INSERT INTO public.kinderschutz_faelle (
     kind_id, aktenzeichen, status, kurzbeschreibung,
     gericht_eingeschaltet, iefk_pflichtig, inobhutnahme_erfolgt,
@@ -87,7 +95,7 @@ FROM public.kinder k
 WHERE k.vorname='Mila' AND k.nachname='Beispiel'
 ON CONFLICT (aktenzeichen) DO NOTHING;
 
--- Gefährdungsbereiche (Beispiel)
+-- 7) Gefährdungsbereiche
 INSERT INTO public.fall_gefaehrdungsbereiche (fall_id, bereich)
 SELECT f.id, x.bereich
 FROM public.kinderschutz_faelle f
@@ -95,28 +103,28 @@ FROM public.kinderschutz_faelle f
 WHERE f.aktenzeichen='NVG8-2026-0001'
 ON CONFLICT DO NOTHING;
 
--- Kontakt/Ereignis (ohne OID-Notiz, nur Metadaten)
+-- 8) Kontakt/Ereignis
 INSERT INTO public.kontakt_ereignisse (fall_id, zeitpunkt, art, beteiligte_kurz)
 SELECT f.id, now() - INTERVAL '2 days', 'TELEFONAT', 'Schule (Klassenleitung)'
 FROM public.kinderschutz_faelle f
 WHERE f.aktenzeichen='NVG8-2026-0001'
 ON CONFLICT DO NOTHING;
 
--- Maßnahme
+-- 9) Maßnahme
 INSERT INTO public.massnahmen (fall_id, faellig_am, status, titel, typ, verantwortlich)
 SELECT f.id, CURRENT_DATE + INTERVAL '7 days', 'OFFEN', 'Hausbesuch terminieren', 'ABKLAERUNG', 'Jugendamt'
 FROM public.kinderschutz_faelle f
 WHERE f.aktenzeichen='NVG8-2026-0001'
 ON CONFLICT DO NOTHING;
 
--- Meldung/Hinweis (ohne OID-Inhalt)
+-- 10) Meldung/Hinweis
 INSERT INTO public.meldungen_hinweise (fall_id, eingang_am, meldende_stelle, meldungsweg, kontakt_info)
 SELECT f.id, CURRENT_DATE - INTERVAL '3 days', 'Schule', 'TELEFON', 'Klassenleitung, Tel. intern'
 FROM public.kinderschutz_faelle f
 WHERE f.aktenzeichen='NVG8-2026-0001'
 ON CONFLICT DO NOTHING;
 
--- Beispiel KWS Run + Antworten (damit KWS “lebt”)
+-- 11) Beispiel KWS Run + Antworten (setzt V2 voraus!)
 WITH admin_u AS (
     SELECT id FROM public.users WHERE email='admin@nvg8.de'
 ),
@@ -131,15 +139,11 @@ SELECT CURRENT_DATE, CURRENT_DATE + INTERVAL '90 days', now(), admin_u.id, k.id,
 FROM admin_u, k, t
 ON CONFLICT DO NOTHING;
 
--- 2 Beispiel-Antworten
 WITH r AS (
     SELECT id FROM public.kws_run ORDER BY id DESC LIMIT 1
 ),
      i1 AS (
          SELECT id FROM public.kws_template_item WHERE item_key='A01' ORDER BY id LIMIT 1
-     ),
-     i2 AS (
-         SELECT id FROM public.kws_template_item WHERE item_key='N01' ORDER BY id LIMIT 1
      )
 INSERT INTO public.kws_answer (run_id, item_id, updated_at, tri_state)
 SELECT r.id, i1.id, now(), 'KEINE_ANGABE' FROM r, i1
@@ -155,3 +159,18 @@ INSERT INTO public.kws_answer (run_id, item_id, updated_at, text_value)
 SELECT r.id, i2.id, now(), 'Initiale Anlage. Weitere Infos folgen.'
 FROM r, i2
 ON CONFLICT DO NOTHING;
+
+-- 12) Optional: Default Team + Admin zuordnen (damit Team-Dropdowns nie leer sind)
+INSERT INTO public.teams (name, facility_id)
+SELECT 'Default Team', f.id
+FROM public.facilities f
+WHERE f.name = 'Default'
+ON CONFLICT (facility_id, name) DO NOTHING;
+
+INSERT INTO public.user_teams (user_id, team_id)
+SELECT u.id, t.id
+FROM public.users u
+         JOIN public.facilities f ON f.id = u.facility_id
+         JOIN public.teams t ON t.facility_id = f.id AND t.name = 'Default Team'
+WHERE u.email = 'admin@nvg8.de'
+ON CONFLICT (user_id, team_id) DO NOTHING;

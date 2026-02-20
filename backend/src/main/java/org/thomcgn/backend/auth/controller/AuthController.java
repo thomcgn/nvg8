@@ -14,7 +14,7 @@ import org.thomcgn.backend.auth.dto.AuthPrincipal;
 import org.thomcgn.backend.auth.dto.LoginRequest;
 import org.thomcgn.backend.auth.dto.LoginResponse;
 import org.thomcgn.backend.auth.dto.UserInfoResponse;
-import org.thomcgn.backend.auth.repositories.UserRepository;
+import org.thomcgn.backend.auth.repo.UserRepository;
 import org.thomcgn.backend.auth.service.JwtService;
 import org.thomcgn.backend.config.AppProperties;
 import org.thomcgn.backend.dto.ProfileUpdateRequest;
@@ -50,6 +50,17 @@ public class AuthController {
             @RequestBody LoginRequest request,
             HttpServletResponse servletResponse
     ) {
+        // 1) basic validation
+        if (request.email() == null || request.email().isBlank()
+                || request.password() == null || request.password().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "E-Mail und Passwort erforderlich");
+        }
+
+        if (request.facilityId() == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Bitte Einrichtung auswählen");
+        }
+
+        // 2) find user + password check
         User user = userRepository.findByEmail(request.email())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Ungültige Zugangsdaten"));
 
@@ -57,10 +68,19 @@ public class AuthController {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Ungültige Zugangsdaten");
         }
 
+        //TODO: Noch interessiert die Einrichtung nicht, das in zukünftigen Updates beheben
+
+        Long userFacilityId = (user.getFacility() != null) ? user.getFacility().getId() : null;
+        if (userFacilityId == null || !userFacilityId.equals(request.facilityId())) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Ungültige Zugangsdaten");
+        }
+
+        // 4) login timestamp
         LocalDateTime previousLogin = user.getLastLogin();
         user.setLastLogin(LocalDateTime.now());
         userRepository.save(user);
 
+        // 5) token (optional: facilityId in JWT einbauen -> später)
         String token = jwtService.generateToken(user, previousLogin);
 
         // ✅ PROD/DEV sauber über app.cookie gesteuert
@@ -79,8 +99,6 @@ public class AuthController {
         }
 
         ResponseCookie cookie = builder.build();
-
-        // addHeader statt setHeader (überschreibt nichts)
         servletResponse.addHeader(HttpHeaders.SET_COOKIE, cookie.toString());
 
         return ResponseEntity.ok(new LoginResponse(

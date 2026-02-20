@@ -4,7 +4,7 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
-import org.thomcgn.backend.auth.repositories.UserRepository;
+import org.thomcgn.backend.auth.repo.UserRepository;
 
 @Service
 public class DbUserDetailsService implements UserDetailsService {

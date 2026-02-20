@@ -5,6 +5,7 @@ services:
       - "127.0.0.1:5432:5432"
 
   backend:
+    platform: linux/arm64
     container_name: nvg8-dev-backend
     environment:
       SPRING_PROFILES_ACTIVE: dev
@@ -27,6 +28,7 @@ services:
       - "127.0.0.1:8080:8080"
 
   frontend:
+    platform: linux/arm64
     container_name: nvg8-dev-frontend
     environment:
       BACKEND_URL: "http://backend:8080"

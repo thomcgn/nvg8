@@ -4,61 +4,54 @@ APP_NAME := nvg8
 COMPOSE_PROD := docker compose -p nvg8-prod -f docker-compose.yml -f docker-compose.prod.yml
 COMPOSE_DEV  := docker compose -p nvg8-dev  -f docker-compose.yml -f docker-compose.dev.yml
 
-
 # -------- SHADCN UI --------
-# Frontend-Ordner + Package Manager (npm/pnpm/yarn)
 FRONTEND_DIR ?= ./frontend
 PKG_MGR      ?= npm
 
-# CI/Flags:
-# - SKIP_SHADCN=1    -> shadcn steps komplett überspringen (z.B. wenn UI schon im Repo fix ist)
-# - SHADCN_ENFORCE=1 -> shadcn immer ausführen (z.B. in CI um sicherzugehen)
 SKIP_SHADCN    ?= 0
 SHADCN_ENFORCE ?= 0
 
-# Komponenten (entspricht deinem ui/ Ordner)
 SHADCN_COMPONENTS := \
 	accordion avatar badge button card checkbox \
 	dialog dropdown-menu input label progress radio-group \
 	select separator sheet skeleton sonner table \
 	tabs textarea toggle-group toggle
 
-# Eine "Sentinel"-Datei, die sicher existieren muss, wenn ShadCN komplett ist
 SHADCN_SENTINEL := $(FRONTEND_DIR)/components/ui/dialog.tsx
+
+# ---------- Helpers ----------
+# Usage: $(call rebuild_service,<compose_cmd>,<service_name>)
+define rebuild_service
+	@echo "-> Rebuild (no cache): $(2)"
+	@$(1) build --no-cache $(2)
+	@echo "-> Recreate container (no deps): $(2)"
+	@$(1) up -d --no-deps --force-recreate $(2)
+	@echo "✅ Done: $(2)"
+endef
 
 .PHONY: help ps up down restart build rebuild logs logs-backend logs-frontend \
         sh-backend sh-frontend db psql db-reset prune \
         dev-up dev-down dev-build dev-rebuild dev-logs \
         reset-prod reset-dev dev-back-fresh \
-        shadcn-all shadcn-add shadcn-deps shadcn-check shadcn-ci shadcn-needed
+        shadcn-all shadcn-add shadcn-deps shadcn-check shadcn-ci shadcn-needed \
+        dev-back-rebuild dev-front-rebuild dev-back-rebuild-hard dev-front-rebuild-hard \
+        prod-back-rebuild prod-front-rebuild prod-back-rebuild-hard prod-front-rebuild-hard
 
 help:
 	@echo ""
 	@echo "Targets:"
-	@echo "  up            Start prod stack (detached)"
-	@echo "  down          Stop prod stack"
-	@echo "  restart       Restart prod stack"
-	@echo "  ps            Show containers"
-	@echo "  build         Build images (prod) [CI-safe: runs shadcn-ci if needed]"
-	@echo "  rebuild       Rebuild images (no cache) (prod) [CI-safe: runs shadcn-ci if needed]"
-	@echo "  logs          Follow logs (all) (prod)"
-	@echo "  logs-backend  Follow backend logs (prod)"
-	@echo "  logs-frontend Follow frontend logs (prod)"
-	@echo "  sh-backend    Shell into backend container"
-	@echo "  sh-frontend   Shell into frontend container"
-	@echo "  db            Open psql shell"
-	@echo "  psql          Run example query (list users)"
-	@echo "  db-reset      Drop volume and recreate DB (DANGER)"
-	@echo "  prune         Remove unused docker stuff (DANGER)"
-	@echo "  reset-prod    HARD reset prod: containers+volumes+images then build+up (DANGER) [CI-safe]"
+	@echo "  up/down/restart/ps/logs..."
 	@echo ""
-	@echo "Dev (needs docker-compose.dev.yml):"
-	@echo "  dev-up, dev-down, dev-build, dev-rebuild, dev-logs [CI-safe]"
-	@echo "  dev-back-fresh  Recreate ONLY dev backend container + wipe backend/target (DB bleibt)"
-	@echo "  reset-dev     HARD reset dev: containers+volumes+images then build+up (DANGER) [CI-safe]"
+	@echo "Single-service rebuild (keeps other services running):"
+	@echo "  dev-back-rebuild       Rebuild backend (uses cache) + recreate container (DB+FE keep running)"
+	@echo "  dev-front-rebuild      Rebuild frontend (uses cache) + recreate container (DB+BE keep running)"
+	@echo "  dev-back-rebuild-hard  Rebuild backend NO-CACHE + recreate container (DB+FE keep running)"
+	@echo "  dev-front-rebuild-hard Rebuild frontend NO-CACHE + recreate container (DB+BE keep running)"
+	@echo ""
+	@echo "  prod-back-rebuild / prod-front-rebuild"
+	@echo "  prod-back-rebuild-hard / prod-front-rebuild-hard"
 	@echo ""
 	@echo "ShadCN:"
-	@echo "  shadcn-all    Force install/overwrite all ShadCN components"
 	@echo "  shadcn-ci     CI-safe: runs only if needed (or SHADCN_ENFORCE=1)"
 	@echo "Flags:"
 	@echo "  SKIP_SHADCN=1    -> skip shadcn completely"
@@ -139,8 +132,10 @@ reset-dev: shadcn-ci
 	@echo "-> Removing dev images built by this compose..."
 	@IMAGES="$$( $(COMPOSE_DEV) config --images 2>/dev/null | sort -u )"; \
 	if [ -n "$$IMAGES" ]; then echo "$$IMAGES" | xargs -r docker rmi -f; else echo "(no images found)"; fi
-	@echo "-> Rebuilding and starting dev stack..."
-	$(COMPOSE_DEV) up -d --build --force-recreate
+	@echo "-> Rebuilding images (NO CACHE)..."
+	$(COMPOSE_DEV) build --no-cache
+	@echo "-> Starting dev stack..."
+	$(COMPOSE_DEV) up -d --force-recreate
 	@echo "✅ DEV reset done."
 
 # -------- DEV (optional) --------
@@ -162,6 +157,7 @@ dev-rebuild: shadcn-ci
 dev-logs:
 	$(COMPOSE_DEV) logs -f --tail=200
 
+# Keep DB + FE running; just recreate backend container & wipe local build artifacts
 dev-back-fresh:
 	@echo "!!! DEV backend fresh (DB bleibt). Ctrl+C zum Abbrechen."
 	sleep 2
@@ -169,14 +165,54 @@ dev-back-fresh:
 	$(COMPOSE_DEV) rm -sf backend
 	@echo "-> Lösche lokale Build-Artefakte (backend/target)..."
 	rm -rf ./backend/target
-	@echo "-> (Optional) Maven local repo cache NICHT gelöscht (m2_cache bleibt)."
-	@echo "-> Starte backend neu..."
-	$(COMPOSE_DEV) up -d --no-deps backend
+	@echo "-> Starte backend neu (cache build)..."
+	$(COMPOSE_DEV) build backend
+	$(COMPOSE_DEV) up -d --no-deps --force-recreate backend
 	@echo "✅ DEV backend frisch gestartet (DB unverändert)."
+
+# -------- Single-service rebuilds (DEV) --------
+# Fast: uses cache
+dev-back-rebuild: shadcn-ci
+	$(call rebuild_service,$(COMPOSE_DEV),backend)
+
+dev-front-rebuild: shadcn-ci
+	$(call rebuild_service,$(COMPOSE_DEV),frontend)
+
+# Hard: no cache (what you want for backend migration fixes)
+dev-back-rebuild-hard: shadcn-ci
+	$(call rebuild_service,$(COMPOSE_DEV),backend)
+	@# NOTE: to truly enforce no-cache, we call build explicitly:
+	@$(COMPOSE_DEV) build --no-cache backend
+	@$(COMPOSE_DEV) up -d --no-deps --force-recreate backend
+
+dev-front-rebuild-hard: shadcn-ci
+	@$(COMPOSE_DEV) build --no-cache frontend
+	@$(COMPOSE_DEV) up -d --no-deps --force-recreate frontend
+	@echo "✅ Done: frontend"
+
+# -------- Single-service rebuilds (PROD) --------
+prod-back-rebuild: shadcn-ci
+	@$(COMPOSE_PROD) build backend
+	@$(COMPOSE_PROD) up -d --no-deps --force-recreate backend
+	@echo "✅ Done: backend"
+
+prod-front-rebuild: shadcn-ci
+	@$(COMPOSE_PROD) build frontend
+	@$(COMPOSE_PROD) up -d --no-deps --force-recreate frontend
+	@echo "✅ Done: frontend"
+
+prod-back-rebuild-hard: shadcn-ci
+	@$(COMPOSE_PROD) build --no-cache backend
+	@$(COMPOSE_PROD) up -d --no-deps --force-recreate backend
+	@echo "✅ Done: backend"
+
+prod-front-rebuild-hard: shadcn-ci
+	@$(COMPOSE_PROD) build --no-cache frontend
+	@$(COMPOSE_PROD) up -d --no-deps --force-recreate frontend
+	@echo "✅ Done: frontend"
 
 # -------- SHADCN TARGETS --------
 
-# Prüft, ob shadcn config existiert (shadcn.json ODER components.json)
 shadcn-check:
 	@test -f "$(FRONTEND_DIR)/shadcn.json" -o -f "$(FRONTEND_DIR)/components.json" || ( \
 		echo "❌ Weder shadcn.json noch components.json gefunden in $(FRONTEND_DIR)."; \
@@ -189,13 +225,11 @@ shadcn-deps:
 	@echo "-> Installiere Frontend Dependencies..."
 	@cd $(FRONTEND_DIR) && $(PKG_MGR) install
 
-# Hilfsziel: zeigt, ob ShadCN "gebraucht" wird
 shadcn-needed:
 	@if [ "$(SKIP_SHADCN)" = "1" ]; then \
 		echo "SKIP_SHADCN=1 -> shadcn wird übersprungen"; \
 		exit 1; \
 	fi
-	@# true -> needed, false -> not needed
 	@if [ "$(SHADCN_ENFORCE)" = "1" ]; then \
 		echo "SHADCN_ENFORCE=1 -> shadcn wird erzwungen"; \
 		exit 0; \
@@ -207,21 +241,16 @@ shadcn-needed:
 	@echo "ShadCN ok (Sentinel vorhanden): $(SHADCN_SENTINEL)"; \
 	exit 1
 
-# CI-safe: nur ausführen wenn nötig (oder erzwungen)
 shadcn-ci:
-	@# Wenn übersprungen: exit 0
 	@if [ "$(SKIP_SHADCN)" = "1" ]; then \
 		echo "-> SKIP_SHADCN=1: Überspringe ShadCN."; \
 		exit 0; \
 	fi
-	@# Wenn erzwungen oder Sentinel fehlt: ausführen
 	@$(MAKE) -s shadcn-needed && $(MAKE) shadcn-add || true
 
-# Force install/overwrite
 shadcn-all:
 	@$(MAKE) shadcn-add
 
-# Installiert/aktualisiert alle Komponenten
 shadcn-add: shadcn-check shadcn-deps
 	@echo "-> Installiere/aktualisiere ShadCN Components: $(SHADCN_COMPONENTS)"
 	@cd $(FRONTEND_DIR) && \
@@ -230,4 +259,3 @@ shadcn-add: shadcn-check shadcn-deps
 		npx shadcn@latest add $$c --yes --overwrite; \
 	done
 	@echo "✅ ShadCN Components installiert/aktualisiert."
-

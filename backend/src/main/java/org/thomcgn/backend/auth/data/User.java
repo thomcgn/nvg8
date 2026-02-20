@@ -3,10 +3,12 @@ package org.thomcgn.backend.auth.data;
 import jakarta.persistence.*;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
+import org.thomcgn.backend.facility.model.Facility;
 import org.thomcgn.backend.model.Person;
 
-
 import java.time.LocalDateTime;
+import java.util.HashSet;
+import java.util.Set;
 
 @EqualsAndHashCode(callSuper = true)
 @Data
@@ -16,14 +18,46 @@ public class User extends Person {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
     @Column(unique = true, nullable = false)
     private String email;
+
     @Column(nullable = false)
     private String passwordHash;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private Role role;
+
     private boolean enabled = true;
     private LocalDateTime lastLogin;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "facility_id")
+    private Facility facility;
+
+    @ManyToMany
+    @JoinTable(
+            name = "user_teams",
+            joinColumns = @JoinColumn(name = "user_id"),
+            inverseJoinColumns = @JoinColumn(name = "team_id"),
+            uniqueConstraints = @UniqueConstraint(name = "uk_user_team", columnNames = {"user_id", "team_id"})
+    )
+    private Set<org.thomcgn.backend.team.model.Team> teams = new HashSet<>();
+
+
+
+    public String getDisplayName() {
+        String first = getVorname() != null ? getVorname().trim() : "";
+        String last = getNachname() != null ? getNachname().trim() : "";
+
+        String full = (first + " " + last).trim();
+
+        return full.isEmpty() ? email : full;
+    }
+
+
+    public String getUsername() {
+        return email; // or change if you later add a real username field
+    }
 }

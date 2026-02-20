@@ -7,7 +7,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.thomcgn.backend.auth.data.Role;
 import org.thomcgn.backend.auth.data.User;
-import org.thomcgn.backend.auth.repositories.UserRepository;
+import org.thomcgn.backend.auth.repo.UserRepository;
 
 @Configuration
 public class AdminBootstrap {

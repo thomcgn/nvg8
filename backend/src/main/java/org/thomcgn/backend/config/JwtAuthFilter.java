@@ -14,7 +14,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 import org.thomcgn.backend.auth.data.Role;
 import org.thomcgn.backend.auth.dto.AuthPrincipal;
-import org.thomcgn.backend.auth.repositories.UserRepository;
+import org.thomcgn.backend.auth.repo.UserRepository;
 import org.thomcgn.backend.auth.service.JwtService;
 
 import java.io.IOException;

@@ -1,45 +1,39 @@
 -- V2__seed_kws_base.sql
--- Minimal aber sinnvoll: 1 Template (AH-3-01b) + Sections + Items
+-- Minimaler KWS Seed, damit V3 (AH-3-01b, A01, N01) sicher läuft.
 
-INSERT INTO public.kws_template (code, version, title, audience, active, min_age_months, max_age_months, created_at)
-VALUES
-    ('AH-3-01b', '2026-01', 'Mögliche Hinweise / Gewichtige Anhaltspunkte – Kindeswohlgefährdung (AH-3-01b)', 'ALL', true, 12, 35, now())
-ON CONFLICT (code) DO NOTHING;
+INSERT INTO public.kws_template (active, min_age_months, max_age_months, code, audience, title, version)
+VALUES (true, 0, 216, 'AH-3-01b', 'ALL', 'Basisprüfung (Demo)', '1.0')
+ON CONFLICT (code) DO UPDATE
+    SET active = EXCLUDED.active,
+        min_age_months = EXCLUDED.min_age_months,
+        max_age_months = EXCLUDED.max_age_months,
+        audience = EXCLUDED.audience,
+        title = EXCLUDED.title,
+        version = EXCLUDED.version;
 
--- Sections
-WITH t AS (
+WITH tpl AS (
     SELECT id FROM public.kws_template WHERE code = 'AH-3-01b'
 )
 INSERT INTO public.kws_template_section (template_id, section_key, title, sort)
-SELECT t.id, s.section_key, s.title, s.sort
-FROM t
-         JOIN (VALUES
-                   ('allgemein', 'Allgemeine Hinweise', 10),
-                   ('eltern', 'Eltern / Bezugspersonen', 20),
-                   ('kind', 'Kindbezogene Hinweise', 30),
-                   ('umfeld', 'Umfeld / Lebenslage', 40)
-) AS s(section_key, title, sort) ON true
+SELECT tpl.id, 'A', 'Allgemein', 1 FROM tpl
 ON CONFLICT DO NOTHING;
 
--- Items
 WITH sec AS (
-    SELECT id, section_key
-    FROM public.kws_template_section
-    WHERE template_id = (SELECT id FROM public.kws_template WHERE code = 'AH-3-01b')
+    SELECT s.id
+    FROM public.kws_template_section s
+             JOIN public.kws_template t ON t.id = s.template_id
+    WHERE t.code = 'AH-3-01b' AND s.section_key = 'A'
 )
-INSERT INTO public.kws_template_item (section_id, item_key, label, answer_type, sort)
-SELECT sec.id, i.item_key, i.label, i.answer_type, i.sort
-FROM sec
-         JOIN (VALUES
-                   ('allgemein','A01','Es gibt Hinweise auf akute Gefährdung (z.B. Verletzungen, Gewaltvorfälle).','TRI_STATE',10),
-                   ('allgemein','A02','Es bestehen wiederholte Auffälligkeiten / Eskalationen im Verlauf.','TRI_STATE',20),
-                   ('eltern','E01','Überforderung / fehlende Fürsorge erkennbar.','TRI_STATE',10),
-                   ('eltern','E02','Substanzkonsum im Haushalt wirkt sich negativ aus.','TRI_STATE',20),
-                   ('kind','K01','Kind wirkt verängstigt / zurückgezogen / auffällig belastet.','TRI_STATE',10),
-                   ('kind','K02','Kind berichtet selbst von Gewalt / Missbrauch / Vernachlässigung.','TRI_STATE',20),
-                   ('umfeld','U01','Instabile Wohn-/Lebenssituation (z.B. häufige Umzüge, Obdachlosigkeit).','TRI_STATE',10),
-                   ('umfeld','U02','Keine verlässlichen Unterstützungsnetzwerke vorhanden.','TRI_STATE',20),
-                   ('allgemein','N01','Freitext Notizen / Kontext','TEXT',999)
-) AS i(section_key, item_key, label, answer_type, sort)
-              ON i.section_key = sec.section_key
+INSERT INTO public.kws_template_item (section_id, answer_type, item_key, label, sort)
+SELECT sec.id, 'TRI_STATE', 'A01', 'Beispiel Item A01', 1 FROM sec
+ON CONFLICT DO NOTHING;
+
+WITH sec AS (
+    SELECT s.id
+    FROM public.kws_template_section s
+             JOIN public.kws_template t ON t.id = s.template_id
+    WHERE t.code = 'AH-3-01b' AND s.section_key = 'A'
+)
+INSERT INTO public.kws_template_item (section_id, answer_type, item_key, label, sort)
+SELECT sec.id, 'TEXT', 'N01', 'Beispiel Notiz N01', 2 FROM sec
 ON CONFLICT DO NOTHING;

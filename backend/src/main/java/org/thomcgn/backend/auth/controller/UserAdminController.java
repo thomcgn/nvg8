@@ -13,7 +13,9 @@ import org.thomcgn.backend.auth.dto.AuthPrincipal;
 import org.thomcgn.backend.auth.dto.CreateUserRequest;
 import org.thomcgn.backend.auth.dto.UpdateUserRoleRequest;
 import org.thomcgn.backend.auth.dto.UserAdminResponse;
-import org.thomcgn.backend.auth.repositories.UserRepository;
+import org.thomcgn.backend.auth.repo.UserRepository;
+import org.thomcgn.backend.facility.model.Facility;
+import org.thomcgn.backend.facility.repo.FacilityRepository;
 
 import java.util.List;
 
@@ -24,10 +26,12 @@ public class UserAdminController {
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+    private final FacilityRepository facilityRepository;
 
-    public UserAdminController(UserRepository userRepository, PasswordEncoder passwordEncoder) {
+    public UserAdminController(UserRepository userRepository, PasswordEncoder passwordEncoder, FacilityRepository facilityRepository) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
+        this.facilityRepository = facilityRepository;
     }
 
     @GetMapping
@@ -85,6 +89,13 @@ public class UserAdminController {
         u.setNachname(req.nachname());
         u.setRole(newUserRole);
         u.setPasswordHash(passwordEncoder.encode(req.password()));
+        Facility defaultFacility = facilityRepository.findById(1L)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.INTERNAL_SERVER_ERROR,
+                        "default facility (id=1) not found"
+                ));
+
+        u.setFacility(defaultFacility);
 
         userRepository.save(u);
 

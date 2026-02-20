@@ -180,3 +180,22 @@ export interface Case {
     lastActivity: string;
     kindId?: number;
 }
+
+export type InboxItem = {
+    recipientRowId: number;
+    isRead: boolean;
+    readAt?: string | null;
+    message: {
+        id: number;
+        subject: string;
+        bodyPreview: string;
+        createdAt: string;
+        senderId: number;
+        senderName?: string; // optional wenn Backend später liefert
+    };
+};
+
+export type  Facility = {
+    id: number;
+    name: string;
+}
