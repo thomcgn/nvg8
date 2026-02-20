@@ -1,13 +1,13 @@
 package org.thomcgn.backend.cases.api.mapper;
 
-import org.thomcgn.backend.auth.data.User;
+import org.thomcgn.backend.auth.model.User;
 import org.thomcgn.backend.cases.dto.response.*;
 import org.thomcgn.backend.cases.model.Bezugsperson;
 import org.thomcgn.backend.cases.model.Kind;
 import org.thomcgn.backend.cases.model.KindBezugspersonRelation;
 import org.thomcgn.backend.cases.model.KinderschutzFall;
-import org.thomcgn.backend.model.KommunikationsProfil;
-import org.thomcgn.backend.model.Person;
+import org.thomcgn.backend.users.model.KommunikationsProfil;
+import org.thomcgn.backend.users.model.Person;
 
 import java.util.Collections;
 import java.util.List;

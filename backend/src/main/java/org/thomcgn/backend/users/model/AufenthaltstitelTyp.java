@@ -1,0 +1,20 @@
+package org.thomcgn.backend.users.model;
+
+public enum AufenthaltstitelTyp {
+    DEUTSCH,
+    EU_EWR_FREIZUEGIGKEIT,
+    SCHWEIZ_FREIZUEGIGKEIT,
+
+    AUFENTHALTSERLAUBNIS,
+    NIEDERLASSUNGSERLAUBNIS,
+    DAUERAUFENTHALT_EU,
+    BLAUE_KARTE_EU,
+    VISUM_D,
+
+    AUFENTHALTSGESTATTUNG,
+    DULDUNG,
+
+    UNGEKLAERT,
+    KEIN_STATUS,
+    UNBEKANNT
+}

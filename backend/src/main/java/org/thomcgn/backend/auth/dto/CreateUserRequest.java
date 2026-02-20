@@ -1,6 +1,6 @@
 package org.thomcgn.backend.auth.dto;
 
-import org.thomcgn.backend.auth.data.Role;
+import org.thomcgn.backend.auth.model.Role;
 
 public record CreateUserRequest(
         String email,

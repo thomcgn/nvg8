@@ -12,8 +12,7 @@ import org.thomcgn.backend.cases.model.enums.RolleImAlltag;
 import org.thomcgn.backend.cases.model.enums.SorgeStatus;
 import org.thomcgn.backend.cases.repo.BezugspersonRepository;
 import org.thomcgn.backend.cases.repo.KindRepository;
-import org.thomcgn.backend.model.Person;
-import org.thomcgn.backend.model.enums.*;
+import org.thomcgn.backend.users.model.*;
 
 import java.time.LocalDate;
 import java.util.ArrayList;

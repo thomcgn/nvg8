@@ -1,10 +1,8 @@
 package org.thomcgn.backend.auth.dto;
 
-import java.time.LocalDateTime;
+import java.util.List;
 
 public record LoginResponse(
-        String token,
-        String name,
-        String role,
-        LocalDateTime lastLogin
+        String baseToken,
+        List<AvailableContextDto> contexts
 ) {}

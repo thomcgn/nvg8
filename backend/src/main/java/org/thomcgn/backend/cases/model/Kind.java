@@ -3,7 +3,7 @@ package org.thomcgn.backend.cases.model;
 import jakarta.persistence.*;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
-import org.thomcgn.backend.model.Person;
+import org.thomcgn.backend.users.model.Person;
 
 import java.time.LocalDate;
 import java.util.ArrayList;

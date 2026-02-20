@@ -5,8 +5,8 @@ import org.springframework.boot.CommandLineRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.crypto.password.PasswordEncoder;
-import org.thomcgn.backend.auth.data.Role;
-import org.thomcgn.backend.auth.data.User;
+import org.thomcgn.backend.auth.model.Role;
+import org.thomcgn.backend.auth.model.User;
 import org.thomcgn.backend.auth.repo.UserRepository;
 
 @Configuration

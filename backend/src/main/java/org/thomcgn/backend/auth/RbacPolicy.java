@@ -1,6 +1,6 @@
 package org.thomcgn.backend.auth;
 
-import org.thomcgn.backend.auth.data.Role;
+import org.thomcgn.backend.auth.model.Role;
 
 import java.util.Map;
 

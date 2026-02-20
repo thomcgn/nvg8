@@ -2,9 +2,12 @@ package org.thomcgn.backend;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.data.jpa.repository.config.EnableJpaAuditing;
+import org.thomcgn.backend.common.security.JwtProperties;
 
 @EnableJpaAuditing
+@EnableConfigurationProperties(JwtProperties.class)
 @SpringBootApplication(scanBasePackages = "org.thomcgn.backend")
 public class BackendApplication {
 

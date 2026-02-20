@@ -4,7 +4,7 @@ import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.thomcgn.backend.auth.data.User;
+import org.thomcgn.backend.auth.model.User;
 import org.thomcgn.backend.auth.dto.AuthPrincipal;
 import org.thomcgn.backend.cases.model.enums.FallStatus;
 import org.thomcgn.backend.cases.model.Kind;

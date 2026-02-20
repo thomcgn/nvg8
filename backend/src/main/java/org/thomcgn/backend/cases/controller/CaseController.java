@@ -4,7 +4,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
-import org.thomcgn.backend.auth.data.Role;
 import org.thomcgn.backend.auth.dto.AuthPrincipal;
 import org.thomcgn.backend.cases.api.mapper.CaseMapper;
 import org.thomcgn.backend.cases.dto.BezugspersonCreateRequest;
@@ -24,7 +23,6 @@ import org.thomcgn.backend.cases.services.FallService;
 import java.time.LocalDateTime;
 import java.util.List;
 
-import static org.springframework.http.HttpStatus.FORBIDDEN;
 import static org.springframework.http.HttpStatus.UNAUTHORIZED;
 
 @RestController
