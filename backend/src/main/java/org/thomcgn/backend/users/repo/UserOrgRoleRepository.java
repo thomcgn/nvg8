@@ -7,6 +7,7 @@ import org.thomcgn.backend.orgunits.model.OrgUnit;
 import org.thomcgn.backend.users.model.UserOrgRole;
 
 import java.util.List;
+import java.util.Optional;
 
 public interface UserOrgRoleRepository extends JpaRepository<UserOrgRole, Long> {
 
@@ -37,4 +38,8 @@ public interface UserOrgRoleRepository extends JpaRepository<UserOrgRole, Long> 
     order by ou.type, ou.name
   """)
     List<OrgUnit> findDistinctActiveOrgUnitsForUser(@Param("userId") Long userId);
+
+    Optional<UserOrgRole> findByUserIdAndOrgUnitIdAndRole(Long userId, Long orgUnitId, org.thomcgn.backend.auth.model.Role role);
+    List<UserOrgRole> findByUserIdAndEnabledTrue(Long userId);
+
 }

@@ -27,8 +27,9 @@ public class SecurityConfig {
                 )
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/auth/login").permitAll()
-                        .requestMatchers("/auth/context").authenticated() // base token reicht
-                        .anyRequest().authenticated() // ctx wird im Filter erzwungen
+                        .requestMatchers("/auth/accept-invite").permitAll()
+                        .requestMatchers("/auth/context").authenticated()
+                        .anyRequest().authenticated()
                 )
                 .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
                 .addFilterAfter(contextRequiredFilter, JwtAuthFilter.class)
