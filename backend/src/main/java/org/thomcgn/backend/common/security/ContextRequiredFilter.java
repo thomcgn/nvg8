@@ -16,10 +16,11 @@ public class ContextRequiredFilter extends OncePerRequestFilter {
     private final List<String> allowPrefixes = List.of(
             "/auth/login",
             "/auth/context",
+            "/auth/switch-context",
             "/actuator",
             "/swagger-ui",
             "/v3/api-docs",
-            "/external"
+            "/external/**"
     );
 
     @Override

@@ -25,13 +25,18 @@ public class Traeger extends AuditableEntity {
     @Column(nullable = false)
     private boolean enabled = true;
 
+    @Column(length = 40)
+    private String kurzcode;
 
+
+    public String getKurzcode(){return kurzcode;}
     public String getAktenPrefix(){return aktenPrefix;}
     public Long getId() { return id; }
     public String getName() { return name; }
     public String getSlug() { return slug; }
     public boolean isEnabled() { return enabled; }
 
+    public void setKurzcode(String kurzcode) {this.kurzcode = kurzcode;}
     public void setName(String name) { this.name = name; }
     public void setSlug(String slug) { this.slug = slug; }
     public void setAktenPrefix(String aktenPrefix){this.aktenPrefix = aktenPrefix;}
