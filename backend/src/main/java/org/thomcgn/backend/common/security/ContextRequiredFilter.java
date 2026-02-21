@@ -18,7 +18,8 @@ public class ContextRequiredFilter extends OncePerRequestFilter {
             "/auth/context",
             "/actuator",
             "/swagger-ui",
-            "/v3/api-docs"
+            "/v3/api-docs",
+            "/external"
     );
 
     @Override
