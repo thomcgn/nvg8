@@ -99,7 +99,13 @@ public class PdfExportServiceV2 {
                     ctx.spacer(6);
                 }
             }
+            ctx.h2("Bestätigung / Unterschrift");
 
+            ctx.paragraph("Name: ______________________________________________");
+            ctx.spacer(10);
+            ctx.paragraph("Datum: _____________________________________________");
+            ctx.spacer(10);
+            ctx.paragraph("Unterschrift: ______________________________________");
             // After all pages created, add footer with page numbers (we already render footer per page)
             ByteArrayOutputStream out = new ByteArrayOutputStream();
             doc.save(out);
@@ -202,15 +208,26 @@ public class PdfExportServiceV2 {
 
         void drawFooter() throws Exception {
             cs.setFont(font, 9f);
-            String footer = "Seite " + pageNo;
 
-            float w = width(font, 9f, footer);
+            String left = "Exportiert am: " + java.time.LocalDateTime.now();
+            String right = "Seite " + pageNo;
+
+            float leftWidth = width(font, 9f, left);
+            float rightWidth = width(font, 9f, right);
+
+            // left
             cs.beginText();
-            cs.newLineAtOffset(PAGE.getWidth() - MARGIN_RIGHT - w, FOOTER_Y);
-            cs.showText(footer);
+            cs.newLineAtOffset(MARGIN_LEFT, FOOTER_Y);
+            cs.showText(left);
             cs.endText();
 
-            // small divider
+            // right
+            cs.beginText();
+            cs.newLineAtOffset(PAGE.getWidth() - MARGIN_RIGHT - rightWidth, FOOTER_Y);
+            cs.showText(right);
+            cs.endText();
+
+            // divider
             cs.moveTo(MARGIN_LEFT, FOOTER_Y + 10);
             cs.lineTo(PAGE.getWidth() - MARGIN_RIGHT, FOOTER_Y + 10);
             cs.stroke();
