@@ -23,7 +23,8 @@ public class OrgUnitController {
         return ResponseEntity.ok(orgUnitService.getTreeForCurrentTraeger());
     }
 
-    @PreAuthorize("hasRole('TRAEGER_ADMIN') or hasRole('EINRICHTUNG_ADMIN')")
+    //@PreAuthorize("hasRole('TRAEGER_ADMIN') or hasRole('EINRICHTUNG_ADMIN')")
+    @PreAuthorize("@perm.canManageOrgUnit(#orgUnitId)")
     @PostMapping
     public ResponseEntity<OrgUnitNodeDto> create(@Valid @RequestBody CreateOrgUnitRequest req) {
         return ResponseEntity.ok(orgUnitService.create(req));

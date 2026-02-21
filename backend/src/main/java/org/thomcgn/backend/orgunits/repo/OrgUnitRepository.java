@@ -13,18 +13,10 @@ public interface OrgUnitRepository extends JpaRepository<OrgUnit, Long> {
     select ou
     from OrgUnit ou
     join fetch ou.traeger t
+    left join fetch ou.parent p
     where t.id = :traegerId
       and ou.enabled = true
       and t.enabled = true
   """)
     List<OrgUnit> findAllEnabledByTraegerId(@Param("traegerId") Long traegerId);
-
-    @Query("""
-    select ou
-    from OrgUnit ou
-    where ou.traeger.id = :traegerId
-      and ou.type = 'TRAEGER'
-      and ou.parent is null
-  """)
-    OrgUnit findTraegerRoot(@Param("traegerId") Long traegerId);
 }
