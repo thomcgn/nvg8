@@ -30,6 +30,7 @@ public class SecurityConfig {
                         .requestMatchers("/auth/accept-invite").permitAll()
                         .requestMatchers("/auth/context").authenticated()
                         .requestMatchers(("/external/share/download")).permitAll()
+                        .requestMatchers("/external/share/download.pdf").permitAll()
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
