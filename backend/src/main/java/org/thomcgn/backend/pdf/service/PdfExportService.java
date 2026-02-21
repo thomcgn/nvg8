@@ -1,4 +1,4 @@
-package org.thomcgn.backend.pdf;
+package org.thomcgn.backend.pdf.service;
 
 import org.apache.pdfbox.pdmodel.*;
 import org.apache.pdfbox.pdmodel.common.PDRectangle;

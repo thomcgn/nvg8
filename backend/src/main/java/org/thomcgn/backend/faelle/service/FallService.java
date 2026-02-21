@@ -64,7 +64,6 @@ public class FallService {
 
     @Transactional
     public FallResponse create(CreateFallRequest req) {
-        // Rollen: mindestens fachlich/admin
         access.requireAny(Role.FACHKRAFT, Role.TEAMLEITUNG, Role.EINRICHTUNG_ADMIN, Role.TRAEGER_ADMIN);
 
         Long traegerId = SecurityUtils.currentTraegerIdRequired();
@@ -76,7 +75,6 @@ public class FallService {
         OrgUnit einrichtung = orgUnitRepository.findById(req.einrichtungOrgUnitId())
                 .orElseThrow(() -> DomainException.notFound(ErrorCode.ORG_UNIT_NOT_FOUND, "Einrichtung org unit not found"));
 
-        // Zugriff: immer über Einrichtung (Owner-Scope)
         access.requireAccessToEinrichtungObject(
                 traeger.getId(),
                 einrichtung.getId(),
@@ -88,7 +86,6 @@ public class FallService {
             team = orgUnitRepository.findById(req.teamOrgUnitId())
                     .orElseThrow(() -> DomainException.notFound(ErrorCode.ORG_UNIT_NOT_FOUND, "Team org unit not found"));
 
-            // Domänenregel: Team muss unter Einrichtung hängen
             access.requireTeamUnderEinrichtung(team.getId(), einrichtung.getId());
         }
 
@@ -126,7 +123,6 @@ public class FallService {
         Fall fall = fallRepository.findByIdWithRefs(fallId)
                 .orElseThrow(() -> DomainException.notFound(ErrorCode.NOT_FOUND, "Fall not found"));
 
-        // Leserechte: LESEN oder fachliche/admin Rollen
         access.requireAccessToEinrichtungObject(
                 fall.getTraeger().getId(),
                 fall.getEinrichtungOrgUnit().getId(),
@@ -144,13 +140,6 @@ public class FallService {
                 ))
                 .toList();
 
-        NoteVisibility vis = NoteVisibility.INTERN;
-        if (req.visibility() != null && !req.visibility().isBlank()) {
-            try { vis = NoteVisibility.valueOf(req.visibility().trim()); }
-            catch (Exception e) { throw DomainException.badRequest(ErrorCode.VALIDATION_FAILED, "Unknown visibility: " + req.visibility()); }
-        }
-        n.setVisibility(vis);
-
         return toResponse(fall, notizen);
     }
 
@@ -160,13 +149,10 @@ public class FallService {
 
     @Transactional(readOnly = true)
     public FallListResponse list(String status, String q, Pageable pageable) {
-        // Mindestens Leserechte
         access.requireAny(Role.LESEN, Role.FACHKRAFT, Role.TEAMLEITUNG, Role.EINRICHTUNG_ADMIN, Role.TRAEGER_ADMIN);
 
         Long traegerId = SecurityUtils.currentTraegerIdRequired();
 
-        // WICHTIG: multi-Einrichtung/multi-Träger wird über Kontextwechsel gelöst.
-        // Deshalb listet das MVP nur Fälle der aktiven Einrichtung.
         Long activeEinrichtungId = access.activeEinrichtungId();
         if (activeEinrichtungId == null) {
             return new FallListResponse(List.of(), pageable.getPageNumber(), pageable.getPageSize(), 0);
@@ -207,7 +193,7 @@ public class FallService {
     }
 
     // =========================================================
-    // ADD NOTE (append-only)
+    // ADD NOTE (append-only) + VISIBILITY
     // =========================================================
 
     @Transactional
@@ -219,7 +205,6 @@ public class FallService {
             throw DomainException.forbidden(ErrorCode.ACCESS_DENIED, "Fall is closed (read-only).");
         }
 
-        // Schreibrechte
         access.requireAccessToEinrichtungObject(
                 fall.getTraeger().getId(),
                 fall.getEinrichtungOrgUnit().getId(),
@@ -229,11 +214,22 @@ public class FallService {
         User author = userRepository.findById(SecurityUtils.currentUserId())
                 .orElseThrow(() -> DomainException.notFound(ErrorCode.USER_NOT_FOUND, "User not found"));
 
+        // Visibility parsing (default INTERN)
+        NoteVisibility vis = NoteVisibility.INTERN;
+        if (req.visibility() != null && !req.visibility().isBlank()) {
+            try {
+                vis = NoteVisibility.valueOf(req.visibility().trim());
+            } catch (Exception e) {
+                throw DomainException.badRequest(ErrorCode.VALIDATION_FAILED, "Unknown visibility: " + req.visibility());
+            }
+        }
+
         FallNotiz n = new FallNotiz();
         n.setFall(fall);
         n.setCreatedBy(author);
         n.setTyp(req.typ());
         n.setText(req.text().trim());
+        n.setVisibility(vis);
 
         FallNotiz saved = notizRepository.save(n);
 
@@ -242,7 +238,7 @@ public class FallService {
                 "Fall",
                 fall.getId(),
                 fall.getEinrichtungOrgUnit().getId(),
-                "Note added" + (req.typ() != null ? " (" + req.typ() + ")" : "")
+                "Note added" + (req.typ() != null ? " (" + req.typ() + ")" : "") + " visibility=" + vis
         );
 
         return new FallNotizResponse(
@@ -263,7 +259,6 @@ public class FallService {
         Fall fall = fallRepository.findByIdWithRefs(fallId)
                 .orElseThrow(() -> DomainException.notFound(ErrorCode.NOT_FOUND, "Fall not found"));
 
-        // Basiszugriff + fachliche Rolle
         access.requireAccessToEinrichtungObject(
                 fall.getTraeger().getId(),
                 fall.getEinrichtungOrgUnit().getId(),
@@ -287,12 +282,10 @@ public class FallService {
             return get(fallId);
         }
 
-        // MVP Transition rules
         if (newStatus == FallStatus.IN_PRUEFUNG && oldStatus != FallStatus.OFFEN) {
             throw DomainException.badRequest(ErrorCode.VALIDATION_FAILED, "Invalid status transition.");
         }
 
-        // Closing requires elevated role
         if (newStatus == FallStatus.ABGESCHLOSSEN) {
             access.requireAny(Role.TEAMLEITUNG, Role.EINRICHTUNG_ADMIN, Role.TRAEGER_ADMIN);
         }
