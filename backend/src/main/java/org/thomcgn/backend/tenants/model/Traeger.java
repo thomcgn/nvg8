@@ -19,9 +19,14 @@ public class Traeger extends AuditableEntity {
     @Column(nullable = false, length = 80)
     private String slug;
 
+    @Column(nullable = false, length = 200)
+    private String aktenPrefix;
+
     @Column(nullable = false)
     private boolean enabled = true;
 
+
+    public String getAktenPrefix(){return aktenPrefix;}
     public Long getId() { return id; }
     public String getName() { return name; }
     public String getSlug() { return slug; }
@@ -29,5 +34,6 @@ public class Traeger extends AuditableEntity {
 
     public void setName(String name) { this.name = name; }
     public void setSlug(String slug) { this.slug = slug; }
+    public void setAktenPrefix(String aktenPrefix){this.aktenPrefix = aktenPrefix;}
     public void setEnabled(boolean enabled) { this.enabled = enabled; }
 }

@@ -39,6 +39,7 @@ public class FallService {
 
     private final AccessControlService access;
     private final AuditService auditService;
+    private final org.thomcgn.backend.aktenzeichen.service.AktennummerService aktennummerService;
 
     public FallService(
             FallRepository fallRepository,
@@ -47,7 +48,7 @@ public class FallService {
             OrgUnitRepository orgUnitRepository,
             UserRepository userRepository,
             AccessControlService access,
-            AuditService auditService
+            AuditService auditService, org.thomcgn.backend.aktenzeichen.service.AktennummerService aktennummerService
     ) {
         this.fallRepository = fallRepository;
         this.notizRepository = notizRepository;
@@ -56,6 +57,7 @@ public class FallService {
         this.userRepository = userRepository;
         this.access = access;
         this.auditService = auditService;
+        this.aktennummerService = aktennummerService;
     }
 
     // =========================================================
@@ -71,6 +73,9 @@ public class FallService {
 
         Traeger traeger = traegerRepository.findById(traegerId)
                 .orElseThrow(() -> DomainException.notFound(ErrorCode.TRAEGER_NOT_FOUND, "Traeger not found"));
+
+        String prefix = traeger.getAktenPrefix();
+        String aktenzeichen = aktennummerService.next(traeger.getId(), prefix);
 
         OrgUnit einrichtung = orgUnitRepository.findById(req.einrichtungOrgUnitId())
                 .orElseThrow(() -> DomainException.notFound(ErrorCode.ORG_UNIT_NOT_FOUND, "Einrichtung org unit not found"));
@@ -94,6 +99,7 @@ public class FallService {
 
         Fall f = new Fall();
         f.setTraeger(traeger);
+        f.setAktenzeichen(aktenzeichen);
         f.setEinrichtungOrgUnit(einrichtung);
         f.setTeamOrgUnit(team);
         f.setStatus(FallStatus.OFFEN);

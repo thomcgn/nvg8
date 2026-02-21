@@ -48,6 +48,12 @@ public class Fall extends AuditableEntity {
     @JoinColumn(name = "created_by_user_id", nullable = false)
     private User createdBy;
 
+    @Column(name = "aktenzeichen", nullable = false, length = 50, unique = true)
+    private String aktenzeichen;
+
+    public String getAktenzeichen() { return aktenzeichen; }
+    public void setAktenzeichen(String aktenzeichen) { this.aktenzeichen = aktenzeichen; }
+
     // --- getters/setters ---
     public Long getId() { return id; }
 
