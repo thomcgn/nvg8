@@ -32,4 +32,11 @@ public class ShareInboxController {
     public ResponseEntity<ShareRequestDetailResponse> detail(@PathVariable Long requestId) {
         return ResponseEntity.ok(inbox.getDetail(requestId));
     }
+
+    @GetMapping("/mine")
+    public ResponseEntity<ShareRequestListResponse> my(
+            @PageableDefault(size = 30) Pageable pageable
+    ) {
+        return ResponseEntity.ok(inbox.myRequests(pageable));
+    }
 }

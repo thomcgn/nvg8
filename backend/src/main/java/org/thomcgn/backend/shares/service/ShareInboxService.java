@@ -33,10 +33,13 @@ public class ShareInboxService {
 
         Long traegerId = SecurityUtils.currentTraegerIdRequired();
 
-        ShareRequestStatus st = null;
+        ShareRequestStatus st = ShareRequestStatus.OPEN;
+
         if (status != null && !status.isBlank()) {
             try { st = ShareRequestStatus.valueOf(status.trim()); }
-            catch (Exception e) { throw DomainException.badRequest(ErrorCode.VALIDATION_FAILED, "Unknown status: " + status); }
+            catch (Exception e) {
+                throw DomainException.badRequest(ErrorCode.VALIDATION_FAILED, "Unknown status: " + status);
+            }
         }
 
         Page<CaseShareRequest> page;
@@ -66,6 +69,33 @@ public class ShareInboxService {
                 .toList();
 
         return new ShareRequestListResponse(items, page.getNumber(), page.getSize(), page.getTotalElements());
+    }
+
+    @Transactional(readOnly = true)
+    public ShareRequestListResponse myRequests(Pageable pageable) {
+        Long userId = SecurityUtils.currentUserId();
+
+        Page<CaseShareRequest> page =
+                requestRepo.findMyRequests(userId, pageable);
+
+        var items = page.getContent().stream()
+                .map(r -> new ShareRequestListItemResponse(
+                        r.getId(),
+                        r.getStatus().name(),
+                        r.getFall().getId(),
+                        r.getPartner().getName(),
+                        r.getLegalBasisType().name(),
+                        r.getPurpose(),
+                        r.getCreatedAt()
+                ))
+                .toList();
+
+        return new ShareRequestListResponse(
+                items,
+                page.getNumber(),
+                page.getSize(),
+                page.getTotalElements()
+        );
     }
 
     @Transactional(readOnly = true)

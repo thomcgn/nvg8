@@ -104,7 +104,7 @@ public class CaseShareService {
 
         CaseShareRequest saved = requestRepo.save(r);
 
-        auditService.log(AuditEventAction.INVITE_CREATED, // wenn du willst: neues AuditAction CASE_SHARE_REQUESTED anlegen
+        auditService.log(AuditEventAction.CASE_SHARE_REQUESTED, // wenn du willst: neues AuditAction CASE_SHARE_REQUESTED anlegen
                 "CaseShareRequest",
                 saved.getId(),
                 fall.getEinrichtungOrgUnit().getId(),
@@ -174,7 +174,7 @@ public class CaseShareService {
         r.setDecisionReason(req.decisionReason().trim());
 
         auditService.log(
-                AuditEventAction.INVITE_ACCEPTED, // besser: CASE_SHARE_APPROVED (neues enum)
+                AuditEventAction.CASE_SHARE_APPROVED, // besser: CASE_SHARE_APPROVED (neues enum)
                 "CaseTransferPackage",
                 savedPkg.getId(),
                 fall.getEinrichtungOrgUnit().getId(),
@@ -218,7 +218,7 @@ public class CaseShareService {
         r.setDecisionReason(req.decisionReason().trim());
 
         auditService.log(
-                AuditEventAction.INVITE_REVOKED, // besser: CASE_SHARE_REJECTED (neues enum)
+                AuditEventAction.CASE_SHARE_REJECTED, // besser: CASE_SHARE_REJECTED (neues enum)
                 "CaseShareRequest",
                 r.getId(),
                 fall.getEinrichtungOrgUnit().getId(),
@@ -236,6 +236,22 @@ public class CaseShareService {
         CaseTransferPackage pkg = packageRepo.findByTokenHash(hash)
                 .orElseThrow(() -> DomainException.unauthorized(ErrorCode.AUTH_TOKEN_INVALID, "Invalid token"));
 
+        if (pkg.isExpired()) {
+            CaseShareRequest r = pkg.getShareRequest();
+            if (r.getStatus() == ShareRequestStatus.APPROVED) {
+                r.setStatus(ShareRequestStatus.EXPIRED);
+
+                auditService.log(
+                        AuditEventAction.CASE_SHARE_EXPIRED,
+                        "CaseShareRequest",
+                        r.getId(),
+                        r.getOwningEinrichtung().getId(),
+                        "Share expired automatically."
+                );
+            }
+            throw DomainException.forbidden(ErrorCode.ACCESS_DENIED, "Package expired.");
+        }
+
         if (!pkg.canDownload()) {
             throw DomainException.forbidden(ErrorCode.ACCESS_DENIED, "Package expired or download limit reached.");
         }
@@ -243,7 +259,7 @@ public class CaseShareService {
         pkg.setDownloadCount(pkg.getDownloadCount() + 1);
 
         auditService.log(
-                AuditEventAction.INVITE_ACCEPTED, // besser: CASE_SHARE_DOWNLOADED
+                AuditEventAction.CASE_SHARE_DOWNLOADED, // besser: CASE_SHARE_DOWNLOADED
                 "CaseTransferPackage",
                 pkg.getId(),
                 pkg.getShareRequest().getOwningEinrichtung().getId(),
