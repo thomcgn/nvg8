@@ -15,6 +15,7 @@ import org.thomcgn.backend.faelle.dto.*;
 import org.thomcgn.backend.faelle.model.Fall;
 import org.thomcgn.backend.faelle.model.FallNotiz;
 import org.thomcgn.backend.faelle.model.FallStatus;
+import org.thomcgn.backend.faelle.model.NoteVisibility;
 import org.thomcgn.backend.faelle.repo.FallNotizRepository;
 import org.thomcgn.backend.faelle.repo.FallRepository;
 import org.thomcgn.backend.orgunits.model.OrgUnit;
@@ -142,6 +143,13 @@ public class FallService {
                         n.getCreatedAt()
                 ))
                 .toList();
+
+        NoteVisibility vis = NoteVisibility.INTERN;
+        if (req.visibility() != null && !req.visibility().isBlank()) {
+            try { vis = NoteVisibility.valueOf(req.visibility().trim()); }
+            catch (Exception e) { throw DomainException.badRequest(ErrorCode.VALIDATION_FAILED, "Unknown visibility: " + req.visibility()); }
+        }
+        n.setVisibility(vis);
 
         return toResponse(fall, notizen);
     }

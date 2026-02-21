@@ -31,6 +31,13 @@ public class FallNotiz extends AuditableEntity {
     @Column(length = 40)
     private String typ; // optional: "TELEFONAT", "HAUSBESUCH", ...
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 10)
+    private NoteVisibility visibility = NoteVisibility.INTERN;
+
+    public NoteVisibility getVisibility() { return visibility; }
+    public void setVisibility(NoteVisibility visibility) { this.visibility = visibility; }
+
     public Long getId() { return id; }
     public Fall getFall() { return fall; }
     public void setFall(Fall fall) { this.fall = fall; }

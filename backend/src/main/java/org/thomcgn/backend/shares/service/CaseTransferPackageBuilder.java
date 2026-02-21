@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Component;
 import org.thomcgn.backend.faelle.model.Fall;
 import org.thomcgn.backend.faelle.model.FallNotiz;
+import org.thomcgn.backend.faelle.model.NoteVisibility;
 import org.thomcgn.backend.faelle.repo.FallNotizRepository;
 
 import java.time.Instant;
@@ -21,16 +22,25 @@ public class CaseTransferPackageBuilder {
         this.notizRepository = notizRepository;
     }
 
+    private String redactText(String s) {
+        if (s == null) return null;
+        // super simple MVP patterns:
+        String out = s.replaceAll("[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}", "[REDACTED_EMAIL]");
+        out = out.replaceAll("\\+?\\d[\\d\\s().-]{7,}\\d", "[REDACTED_PHONE]");
+        return out;
+    }
+
     public String buildPayloadJson(Fall fall, Instant notesFrom, Instant notesTo) {
         List<FallNotiz> all = notizRepository.findAllByFallId(fall.getId());
 
         List<Map<String, Object>> notes = all.stream()
                 .filter(n -> inRange(n.getCreatedAt(), notesFrom, notesTo))
+                .filter(n -> n.getVisibility() == NoteVisibility.EXTERN)
                 .map(n -> {
                     Map<String, Object> m = new LinkedHashMap<>();
                     m.put("id", n.getId());
                     m.put("typ", n.getTyp());
-                    m.put("text", n.getText());
+                    m.put("text", redactText(n.getText()));
                     m.put("createdAt", n.getCreatedAt());
                     m.put("createdBy", n.getCreatedBy().getDisplayName());
                     return m;
