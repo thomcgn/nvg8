@@ -12,10 +12,10 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
-import org.thomcgn.backend.auth.data.Role;
+import org.thomcgn.backend.auth.model.Role;
 import org.thomcgn.backend.auth.dto.AuthPrincipal;
 import org.thomcgn.backend.auth.repo.UserRepository;
-import org.thomcgn.backend.auth.service.JwtService;
+import org.thomcgn.backend.common.security.JwtService;
 
 import java.io.IOException;
 import java.util.List;

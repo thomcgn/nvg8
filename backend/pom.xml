@@ -85,6 +85,14 @@
             <artifactId>spring-boot-starter-flyway</artifactId>
         </dependency>
 
+        <!-- Source: https://mvnrepository.com/artifact/jakarta.validation/jakarta.validation-api -->
+        <dependency>
+            <groupId>jakarta.validation</groupId>
+            <artifactId>jakarta.validation-api</artifactId>
+            <version>4.0.0-M1</version>
+            <scope>compile</scope>
+        </dependency>
+
         <!-- Wichtig für PostgreSQL (ab Flyway 9/10 empfohlen) -->
         <dependency>
             <groupId>org.flywaydb</groupId>

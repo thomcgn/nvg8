@@ -22,9 +22,9 @@ spring:
 
 app:
   devMode: ${APP_DEV_MODE:true}
-  bootstrapAdmin: ${APP_BOOTSTRAP_ADMIN:false}
-  bootstrapAdminEmail: ${APP_BOOTSTRAP_ADMIN_EMAIL:admin@nvg8.de}
-  bootstrapAdminPassword: ${APP_BOOTSTRAP_ADMIN_PASSWORD:}
+
+
+
 
   cookie:
     name: token

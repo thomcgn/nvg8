@@ -27,5 +27,5 @@ public class Team {
 
     // bidirektional optional (nicht zwingend)
     @ManyToMany(mappedBy = "teams")
-    private Set<org.thomcgn.backend.auth.data.User> users = new HashSet<>();
+    private Set<org.thomcgn.backend.auth.model.User> users = new HashSet<>();
 }
