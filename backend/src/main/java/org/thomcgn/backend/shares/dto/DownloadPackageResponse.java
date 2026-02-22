@@ -4,9 +4,9 @@ import java.time.Instant;
 
 public record DownloadPackageResponse(
         Long packageId,
-        String partnerName,
-        Long fallId,
+        String status,
+        Long shareRequestId,
         Instant expiresAt,
-        int downloadsRemaining,
+        int downloadCount,
         String payloadJson
 ) {}

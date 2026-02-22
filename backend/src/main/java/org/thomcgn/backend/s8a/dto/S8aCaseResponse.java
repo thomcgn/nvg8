@@ -4,7 +4,7 @@ import java.util.List;
 
 public record S8aCaseResponse(
         Long id,
-        Long fallId,
+        Long falloeffnungId,
         String status,
         String riskLevel,
         String title,

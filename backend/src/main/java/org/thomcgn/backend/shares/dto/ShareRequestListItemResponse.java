@@ -5,9 +5,9 @@ import java.time.Instant;
 public record ShareRequestListItemResponse(
         Long id,
         String status,
-        Long fallId,
+        Long partnerId,
         String partnerName,
-        String legalBasisType,
-        String purpose,
+        Long falloeffnungId,
+        String aktenzeichen,
         Instant createdAt
 ) {}

@@ -1,72 +1,67 @@
 package org.thomcgn.backend.shares.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.springframework.stereotype.Component;
-import org.thomcgn.backend.faelle.model.Fall;
-import org.thomcgn.backend.faelle.model.FallNotiz;
-import org.thomcgn.backend.faelle.model.NoteVisibility;
-import org.thomcgn.backend.faelle.repo.FallNotizRepository;
+import org.springframework.stereotype.Service;
+import org.thomcgn.backend.falloeffnungen.model.Falleroeffnung;
+import org.thomcgn.backend.falloeffnungen.model.NoteVisibility;
+import org.thomcgn.backend.falloeffnungen.repo.FalleroeffnungNotizRepository;
 
 import java.time.Instant;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
-@Component
+@Service
 public class CaseTransferPackageBuilder {
 
-    private final FallNotizRepository notizRepository;
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    private final FalleroeffnungNotizRepository notizRepo;
+    private final ObjectMapper mapper = new ObjectMapper();
 
-    public CaseTransferPackageBuilder(FallNotizRepository notizRepository) {
-        this.notizRepository = notizRepository;
+    public CaseTransferPackageBuilder(FalleroeffnungNotizRepository notizRepo) {
+        this.notizRepo = notizRepo;
     }
 
-    private String redactText(String s) {
-        if (s == null) return null;
-        // super simple MVP patterns:
-        String out = s.replaceAll("[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}", "[REDACTED_EMAIL]");
-        out = out.replaceAll("\\+?\\d[\\d\\s().-]{7,}\\d", "[REDACTED_PHONE]");
-        return out;
-    }
-
-    public String buildPayloadJson(Fall fall, Instant notesFrom, Instant notesTo) {
-        List<FallNotiz> all = notizRepository.findAllByFallId(fall.getId());
-
-        List<Map<String, Object>> notes = all.stream()
-                .filter(n -> inRange(n.getCreatedAt(), notesFrom, notesTo))
-                .filter(n -> n.getVisibility() == NoteVisibility.EXTERN)
-                .map(n -> {
-                    Map<String, Object> m = new LinkedHashMap<>();
-                    m.put("id", n.getId());
-                    m.put("typ", n.getTyp());
-                    m.put("text", redactText(n.getText()));
-                    m.put("createdAt", n.getCreatedAt());
-                    m.put("createdBy", n.getCreatedBy().getDisplayName());
-                    return m;
-                })
-                .toList();
-
-        Map<String, Object> root = new LinkedHashMap<>();
-        root.put("fallId", fall.getId());
-        root.put("status", fall.getStatus().name());
-        root.put("titel", fall.getTitel());
-        root.put("kurzbeschreibung", fall.getKurzbeschreibung());
-        root.put("einrichtungOrgUnitId", fall.getEinrichtungOrgUnit().getId());
-        root.put("teamOrgUnitId", fall.getTeamOrgUnit() != null ? fall.getTeamOrgUnit().getId() : null);
-        root.put("createdAt", fall.getCreatedAt());
-        root.put("notes", notes);
-
+    public String buildPayloadJson(Falleroeffnung f, Instant notesFrom, Instant notesTo) {
         try {
-            return objectMapper.writeValueAsString(root);
-        } catch (Exception e) {
-            throw new IllegalStateException("Cannot serialize transfer payload", e);
-        }
-    }
+            Map<String, Object> root = new LinkedHashMap<>();
 
-    private boolean inRange(Instant t, Instant from, Instant to) {
-        if (t == null) return false;
-        if (from != null && t.isBefore(from)) return false;
-        return to == null || !t.isAfter(to);
+            root.put("aktenzeichen", f.getAktenzeichen());
+            root.put("titel", f.getTitel());
+            root.put("status", f.getStatus().name());
+            root.put("createdAt", f.getCreatedAt());
+            root.put("openedAt", f.getOpenedAt());
+            root.put("closedAt", f.getClosedAt());
+
+            var kind = f.getDossier().getKind();
+            Map<String, Object> kindNode = new LinkedHashMap<>();
+            kindNode.put("id", kind.getId());
+            kindNode.put("vorname", kind.getVorname());
+            kindNode.put("nachname", kind.getNachname());
+            kindNode.put("geburtsdatum", kind.getGeburtsdatum());
+            kindNode.put("gender", kind.getGender() != null ? kind.getGender().name() : null);
+            kindNode.put("foerderbedarf", kind.isFoerderbedarf());
+            root.put("kind", kindNode);
+
+            // Notizen: nur SHAREABLE und optional Zeitraumfilter
+            List<Map<String, Object>> notes = new ArrayList<>();
+            for (var n : notizRepo.findAllByFalleroeffnungIdOrderByCreatedAtAsc(f.getId())) {
+                if (n.getVisibility() != NoteVisibility.SHAREABLE) continue;
+
+                Instant created = n.getCreatedAt();
+                if (notesFrom != null && created != null && created.isBefore(notesFrom)) continue;
+                if (notesTo != null && created != null && created.isAfter(notesTo)) continue;
+
+                Map<String, Object> nn = new LinkedHashMap<>();
+                nn.put("id", n.getId());
+                nn.put("typ", n.getTyp());
+                nn.put("text", n.getText());
+                nn.put("createdAt", n.getCreatedAt());
+                nn.put("createdBy", n.getCreatedBy() != null ? n.getCreatedBy().getDisplayName() : null);
+                notes.add(nn);
+            }
+            root.put("notizen", notes);
+
+            return mapper.writeValueAsString(root);
+        } catch (Exception e) {
+            throw new IllegalStateException("Failed to build share payload", e);
+        }
     }
 }

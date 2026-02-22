@@ -4,7 +4,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.thomcgn.backend.auth.model.Role;
-import org.thomcgn.backend.auth.model.User;
+import org.thomcgn.backend.users.model.User;
 
 import java.util.List;
 import java.util.Optional;

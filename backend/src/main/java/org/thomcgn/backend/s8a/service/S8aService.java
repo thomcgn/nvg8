@@ -9,8 +9,7 @@ import org.thomcgn.backend.auth.service.AccessControlService;
 import org.thomcgn.backend.common.errors.DomainException;
 import org.thomcgn.backend.common.errors.ErrorCode;
 import org.thomcgn.backend.common.security.SecurityUtils;
-import org.thomcgn.backend.faelle.model.Fall;
-import org.thomcgn.backend.faelle.repo.FallRepository;
+import org.thomcgn.backend.falloeffnungen.repo.FalleroeffnungRepository;
 import org.thomcgn.backend.s8a.dto.*;
 import org.thomcgn.backend.s8a.model.*;
 import org.thomcgn.backend.s8a.repo.S8aCaseRepository;
@@ -25,31 +24,31 @@ public class S8aService {
 
     private final S8aCaseRepository caseRepo;
     private final S8aEventRepository eventRepo;
-    private final FallRepository fallRepo;
+    private final FalleroeffnungRepository falloeffnungRepo;
     private final UserRepository userRepo;
     private final AccessControlService access;
     private final AuditService audit;
 
     public S8aService(S8aCaseRepository caseRepo,
                       S8aEventRepository eventRepo,
-                      FallRepository fallRepo,
+                      FalleroeffnungRepository falloeffnungRepo,
                       UserRepository userRepo,
                       AccessControlService access,
                       AuditService audit) {
         this.caseRepo = caseRepo;
         this.eventRepo = eventRepo;
-        this.fallRepo = fallRepo;
+        this.falloeffnungRepo = falloeffnungRepo;
         this.userRepo = userRepo;
         this.access = access;
         this.audit = audit;
     }
 
     @Transactional
-    public S8aCaseResponse create(CreateS8aCaseRequest req) {
+    public S8aCaseResponse createForFalleroeffnung(Long falleroeffnungId, CreateS8aForEpisodeRequest req) {
         access.requireAny(Role.FACHKRAFT, Role.TEAMLEITUNG, Role.EINRICHTUNG_ADMIN, Role.TRAEGER_ADMIN);
 
-        Fall fall = fallRepo.findByIdWithRefs(req.fallId())
-                .orElseThrow(() -> DomainException.notFound(ErrorCode.NOT_FOUND, "Fall not found"));
+        var fall = falloeffnungRepo.findByIdWithRefs(falleroeffnungId)
+                .orElseThrow(() -> DomainException.notFound(ErrorCode.NOT_FOUND, "Falleröffnung not found"));
 
         access.requireAccessToEinrichtungObject(
                 fall.getTraeger().getId(),
@@ -61,7 +60,7 @@ public class S8aService {
                 .orElseThrow(() -> DomainException.notFound(ErrorCode.USER_NOT_FOUND, "User not found"));
 
         S8aCase c = new S8aCase();
-        c.setFall(fall);
+        c.setFalleroeffnung(fall);
         c.setTraeger(fall.getTraeger());
         c.setEinrichtung(fall.getEinrichtungOrgUnit());
         c.setTitle(req.title());
@@ -71,7 +70,6 @@ public class S8aService {
 
         S8aCase saved = caseRepo.save(c);
 
-        // created event
         S8aEvent ev = new S8aEvent();
         ev.setS8aCase(saved);
         ev.setType(S8aEventType.CREATED);
@@ -79,9 +77,88 @@ public class S8aService {
         ev.setCreatedBy(creator);
         eventRepo.save(ev);
 
-        audit.log(AuditEventAction.S8A_CREATED, "S8aCase", saved.getId(), saved.getEinrichtung().getId(), "S8a case created");
+        audit.log(AuditEventAction.S8A_CREATED, "S8aCase", saved.getId(),
+                fall.getEinrichtungOrgUnit().getId(), "S8a created for falloeffnung=" + falleroeffnungId);
 
         return get(saved.getId());
+    }
+
+    @Transactional
+    public S8aEventResponse addEvent(Long s8aCaseId, AddS8aEventRequest req) {
+        access.requireAny(Role.FACHKRAFT, Role.TEAMLEITUNG, Role.EINRICHTUNG_ADMIN, Role.TRAEGER_ADMIN);
+
+        S8aCase c = caseRepo.findByIdWithRefs(s8aCaseId)
+                .orElseThrow(() -> DomainException.notFound(ErrorCode.NOT_FOUND, "S8a case not found"));
+
+        access.requireAccessToEinrichtungObject(
+                c.getTraeger().getId(),
+                c.getEinrichtung().getId(),
+                Role.FACHKRAFT, Role.TEAMLEITUNG, Role.EINRICHTUNG_ADMIN, Role.TRAEGER_ADMIN
+        );
+
+        if (c.getStatus() == S8aStatus.ABGESCHLOSSEN) {
+            throw DomainException.forbidden(ErrorCode.ACCESS_DENIED, "S8a case is closed (read-only).");
+        }
+
+        S8aEventType type;
+        try {
+            type = S8aEventType.valueOf(req.type().trim());
+        } catch (Exception e) {
+            throw DomainException.badRequest(ErrorCode.VALIDATION_FAILED, "Unknown event type: " + req.type());
+        }
+
+        User actor = userRepo.findById(SecurityUtils.currentUserId())
+                .orElseThrow(() -> DomainException.notFound(ErrorCode.USER_NOT_FOUND, "User not found"));
+
+        S8aEvent ev = new S8aEvent();
+        ev.setS8aCase(c);
+        ev.setType(type);
+        ev.setText(req.text());
+        ev.setPayloadJson(req.payloadJson());
+        ev.setCreatedBy(actor);
+
+        S8aEvent saved = eventRepo.save(ev);
+
+        audit.log(
+                AuditEventAction.S8A_EVENT_ADDED,
+                "S8aCase",
+                c.getId(),
+                c.getEinrichtung().getId(),
+                "Event added: " + type.name()
+        );
+
+        return new S8aEventResponse(
+                saved.getId(),
+                saved.getType().name(),
+                saved.getText(),
+                saved.getPayloadJson(),
+                actor.getDisplayName(),
+                saved.getCreatedAt()
+        );
+    }
+
+    @Transactional(readOnly = true)
+    public List<S8aCaseListItemResponse> listByFalleroeffnung(Long falleroeffnungId) {
+        access.requireAny(Role.LESEN, Role.FACHKRAFT, Role.TEAMLEITUNG, Role.EINRICHTUNG_ADMIN, Role.TRAEGER_ADMIN);
+
+        var fall = falloeffnungRepo.findByIdWithRefs(falleroeffnungId)
+                .orElseThrow(() -> DomainException.notFound(ErrorCode.NOT_FOUND, "Falleröffnung not found"));
+
+        access.requireAccessToEinrichtungObject(
+                fall.getTraeger().getId(),
+                fall.getEinrichtungOrgUnit().getId(),
+                Role.LESEN, Role.FACHKRAFT, Role.TEAMLEITUNG, Role.EINRICHTUNG_ADMIN, Role.TRAEGER_ADMIN
+        );
+
+        return caseRepo.findAllByFalleroeffnungIdOrderByCreatedAtDesc(falleroeffnungId).stream()
+                .map(c -> new S8aCaseListItemResponse(
+                        c.getId(),
+                        c.getStatus().name(),
+                        c.getRiskLevel().name(),
+                        c.getTitle(),
+                        c.getCreatedAt()
+                ))
+                .toList();
     }
 
     @Transactional(readOnly = true)
@@ -95,8 +172,7 @@ public class S8aService {
                 Role.LESEN, Role.FACHKRAFT, Role.TEAMLEITUNG, Role.EINRICHTUNG_ADMIN, Role.TRAEGER_ADMIN
         );
 
-        List<S8aEventResponse> events = eventRepo.findAllByS8aCaseIdOrderByCreatedAtAsc(s8aCaseId)
-                .stream()
+        var events = eventRepo.findAllByS8aCaseIdOrderByCreatedAtAsc(s8aCaseId).stream()
                 .map(e -> new S8aEventResponse(
                         e.getId(),
                         e.getType().name(),
@@ -109,7 +185,7 @@ public class S8aService {
 
         return new S8aCaseResponse(
                 c.getId(),
-                c.getFall().getId(),
+                c.getFalleroeffnung().getId(),
                 c.getStatus().name(),
                 c.getRiskLevel().name(),
                 c.getTitle(),
@@ -119,87 +195,11 @@ public class S8aService {
     }
 
     @Transactional
-    public S8aEventResponse addEvent(Long s8aCaseId, AddS8aEventRequest req) {
-        S8aCase c = caseRepo.findByIdWithRefs(s8aCaseId)
-                .orElseThrow(() -> DomainException.notFound(ErrorCode.NOT_FOUND, "S8a case not found"));
-
-        if (c.getStatus() == S8aStatus.ABGESCHLOSSEN) {
-            throw DomainException.forbidden(ErrorCode.ACCESS_DENIED, "S8a case is closed (read-only).");
-        }
-
-        access.requireAccessToEinrichtungObject(
-                c.getTraeger().getId(),
-                c.getEinrichtung().getId(),
-                Role.SCHREIBEN, Role.FACHKRAFT, Role.TEAMLEITUNG, Role.EINRICHTUNG_ADMIN, Role.TRAEGER_ADMIN
-        );
-
-        S8aEventType type;
-        try { type = S8aEventType.valueOf(req.type().trim()); }
-        catch (Exception e) { throw DomainException.badRequest(ErrorCode.VALIDATION_FAILED, "Unknown event type: " + req.type()); }
-
-        User author = userRepo.findById(SecurityUtils.currentUserId())
-                .orElseThrow(() -> DomainException.notFound(ErrorCode.USER_NOT_FOUND, "User not found"));
-
-        S8aEvent ev = new S8aEvent();
-        ev.setS8aCase(c);
-        ev.setType(type);
-        ev.setPayloadJson(req.payloadJson());
-        ev.setText(req.text());
-        ev.setCreatedBy(author);
-
-        S8aEvent saved = eventRepo.save(ev);
-
-        audit.log(AuditEventAction.S8A_EVENT_ADDED, "S8aCase", c.getId(), c.getEinrichtung().getId(), "S8a event: " + type);
-
-        return new S8aEventResponse(saved.getId(), saved.getType().name(), saved.getText(),
-                saved.getPayloadJson(), author.getDisplayName(), saved.getCreatedAt());
-    }
-
-    @Transactional
     public S8aCaseResponse updateStatus(Long s8aCaseId, UpdateS8aStatusRequest req) {
+        access.requireAny(Role.FACHKRAFT, Role.TEAMLEITUNG, Role.EINRICHTUNG_ADMIN, Role.TRAEGER_ADMIN);
+
         S8aCase c = caseRepo.findByIdWithRefs(s8aCaseId)
                 .orElseThrow(() -> DomainException.notFound(ErrorCode.NOT_FOUND, "S8a case not found"));
-
-        access.requireAccessToEinrichtungObject(
-                c.getTraeger().getId(),
-                c.getEinrichtung().getId(),
-                Role.TEAMLEITUNG, Role.EINRICHTUNG_ADMIN, Role.TRAEGER_ADMIN
-        );
-
-        S8aStatus newStatus;
-        try { newStatus = S8aStatus.valueOf(req.status().trim()); }
-        catch (Exception e) { throw DomainException.badRequest(ErrorCode.VALIDATION_FAILED, "Unknown status: " + req.status()); }
-
-        S8aStatus old = c.getStatus();
-        if (old == S8aStatus.ABGESCHLOSSEN) {
-            throw DomainException.forbidden(ErrorCode.ACCESS_DENIED, "Closed s8a cannot change status.");
-        }
-
-        c.setStatus(newStatus);
-
-        User author = userRepo.findById(SecurityUtils.currentUserId())
-                .orElseThrow(() -> DomainException.notFound(ErrorCode.USER_NOT_FOUND, "User not found"));
-
-        S8aEvent ev = new S8aEvent();
-        ev.setS8aCase(c);
-        ev.setType(newStatus == S8aStatus.ABGESCHLOSSEN ? S8aEventType.CLOSED : S8aEventType.STATUS_CHANGED);
-        ev.setText("Status: " + old + " -> " + newStatus);
-        ev.setCreatedBy(author);
-        eventRepo.save(ev);
-
-        audit.log(AuditEventAction.S8A_STATUS_CHANGED, "S8aCase", c.getId(), c.getEinrichtung().getId(), "S8a status changed");
-
-        return get(s8aCaseId);
-    }
-
-    @Transactional
-    public S8aCaseResponse updateRisk(Long s8aCaseId, UpdateS8aRiskRequest req) {
-        S8aCase c = caseRepo.findByIdWithRefs(s8aCaseId)
-                .orElseThrow(() -> DomainException.notFound(ErrorCode.NOT_FOUND, "S8a case not found"));
-
-        if (c.getStatus() == S8aStatus.ABGESCHLOSSEN) {
-            throw DomainException.forbidden(ErrorCode.ACCESS_DENIED, "S8a case is closed (read-only).");
-        }
 
         access.requireAccessToEinrichtungObject(
                 c.getTraeger().getId(),
@@ -207,49 +207,88 @@ public class S8aService {
                 Role.FACHKRAFT, Role.TEAMLEITUNG, Role.EINRICHTUNG_ADMIN, Role.TRAEGER_ADMIN
         );
 
+        S8aStatus newStatus;
+        try {
+            newStatus = S8aStatus.valueOf(req.status().trim());
+        } catch (Exception e) {
+            throw DomainException.badRequest(ErrorCode.VALIDATION_FAILED, "Unknown status: " + req.status());
+        }
+
+        c.setStatus(newStatus);
+        caseRepo.save(c);
+
+        // Timeline-Event erzeugen
+        User actor = userRepo.findById(SecurityUtils.currentUserId())
+                .orElseThrow(() -> DomainException.notFound(ErrorCode.USER_NOT_FOUND, "User not found"));
+
+        S8aEvent ev = new S8aEvent();
+        ev.setS8aCase(c);
+        ev.setType(S8aEventType.STATUS_CHANGED);
+        ev.setText("Status geändert zu: " + newStatus.name());
+        ev.setCreatedBy(actor);
+        eventRepo.save(ev);
+
+        audit.log(
+                AuditEventAction.S8A_STATUS_CHANGED,
+                "S8aCase",
+                c.getId(),
+                c.getEinrichtung().getId(),
+                "Status changed to " + newStatus.name()
+        );
+
+        return get(c.getId());
+    }
+
+    @Transactional
+    public S8aCaseResponse updateRisk(Long s8aCaseId, UpdateS8aRiskRequest req) {
+        access.requireAny(Role.FACHKRAFT, Role.TEAMLEITUNG, Role.EINRICHTUNG_ADMIN, Role.TRAEGER_ADMIN);
+
+        S8aCase c = caseRepo.findByIdWithRefs(s8aCaseId)
+                .orElseThrow(() -> DomainException.notFound(ErrorCode.NOT_FOUND, "S8a case not found"));
+
+        access.requireAccessToEinrichtungObject(
+                c.getTraeger().getId(),
+                c.getEinrichtung().getId(),
+                Role.FACHKRAFT, Role.TEAMLEITUNG, Role.EINRICHTUNG_ADMIN, Role.TRAEGER_ADMIN
+        );
+
+        if (c.getStatus() == S8aStatus.ABGESCHLOSSEN) {
+            throw DomainException.forbidden(ErrorCode.ACCESS_DENIED, "S8a case is closed (read-only).");
+        }
+
         S8aRiskLevel newLevel;
-        try { newLevel = S8aRiskLevel.valueOf(req.riskLevel().trim()); }
-        catch (Exception e) { throw DomainException.badRequest(ErrorCode.VALIDATION_FAILED, "Unknown riskLevel: " + req.riskLevel()); }
+        try {
+            newLevel = S8aRiskLevel.valueOf(req.riskLevel().trim());
+        } catch (Exception e) {
+            throw DomainException.badRequest(ErrorCode.VALIDATION_FAILED, "Unknown riskLevel: " + req.riskLevel());
+        }
 
         S8aRiskLevel old = c.getRiskLevel();
-        if (old == newLevel) return get(s8aCaseId);
+        if (old == newLevel) {
+            return get(c.getId());
+        }
 
         c.setRiskLevel(newLevel);
+        caseRepo.save(c);
 
-        User author = userRepo.findById(SecurityUtils.currentUserId())
+        User actor = userRepo.findById(SecurityUtils.currentUserId())
                 .orElseThrow(() -> DomainException.notFound(ErrorCode.USER_NOT_FOUND, "User not found"));
 
         S8aEvent ev = new S8aEvent();
         ev.setS8aCase(c);
         ev.setType(S8aEventType.RISK_ASSESSMENT);
-        ev.setText("Risiko: " + old + " -> " + newLevel);
-        ev.setCreatedBy(author);
+        ev.setText("Risiko geändert: " + old.name() + " -> " + newLevel.name());
+        ev.setCreatedBy(actor);
         eventRepo.save(ev);
 
-        audit.log(AuditEventAction.S8A_RISK_CHANGED, "S8aCase", c.getId(), c.getEinrichtung().getId(), "S8a risk changed");
-
-        return get(s8aCaseId);
-    }
-
-    @Transactional(readOnly = true)
-    public java.util.List<S8aCaseListItemResponse> listByFall(Long fallId) {
-        Fall fall = fallRepo.findByIdWithRefs(fallId)
-                .orElseThrow(() -> DomainException.notFound(ErrorCode.NOT_FOUND, "Fall not found"));
-
-        access.requireAccessToEinrichtungObject(
-                fall.getTraeger().getId(),
-                fall.getEinrichtungOrgUnit().getId(),
-                Role.LESEN, Role.FACHKRAFT, Role.TEAMLEITUNG, Role.EINRICHTUNG_ADMIN, Role.TRAEGER_ADMIN
+        audit.log(
+                AuditEventAction.S8A_RISK_CHANGED,
+                "S8aCase",
+                c.getId(),
+                c.getEinrichtung().getId(),
+                "Risk changed to " + newLevel.name()
         );
 
-        return caseRepo.findAllByFallIdOrderByCreatedAtDesc(fallId).stream()
-                .map(c -> new S8aCaseListItemResponse(
-                        c.getId(),
-                        c.getStatus().name(),
-                        c.getRiskLevel().name(),
-                        c.getTitle(),
-                        c.getCreatedAt()
-                ))
-                .toList();
+        return get(c.getId());
     }
 }

@@ -9,12 +9,9 @@ import org.thomcgn.backend.auth.service.AccessControlService;
 import org.thomcgn.backend.common.errors.DomainException;
 import org.thomcgn.backend.common.errors.ErrorCode;
 import org.thomcgn.backend.common.security.SecurityUtils;
-import org.thomcgn.backend.shares.dto.*;
 import org.thomcgn.backend.shares.model.CaseShareRequest;
 import org.thomcgn.backend.shares.model.ShareRequestStatus;
 import org.thomcgn.backend.shares.repo.CaseShareRequestRepository;
-
-import java.util.List;
 
 @Service
 public class ShareInboxService {
@@ -28,13 +25,22 @@ public class ShareInboxService {
     }
 
     @Transactional(readOnly = true)
-    public ShareRequestListResponse inbox(String status, boolean traegerWide, Pageable pageable) {
-        access.requireAny(Role.EINRICHTUNG_ADMIN, Role.TRAEGER_ADMIN);
+    public Page<CaseShareRequest> inbox(String status, boolean mine, Pageable pageable) {
+        access.requireAny(Role.LESEN, Role.FACHKRAFT, Role.TEAMLEITUNG, Role.EINRICHTUNG_ADMIN, Role.TRAEGER_ADMIN);
 
-        Long traegerId = SecurityUtils.currentTraegerIdRequired();
+        if (mine) {
+            // "mine" -> nur meine Requests (ohne Traeger/Einh.-Filter)
+            return requestRepo.findAllByRequestedBy(SecurityUtils.currentUserId(), pageable);
+        }
+
+        Long traegerId = SecurityUtils.currentTraegerIdRequired();   // ✅ statt access.activeTraegerIdRequired()
+        Long einrichtungId = access.activeEinrichtungId();           // ✅ existiert bei dir
+
+        if (einrichtungId == null) {
+            return Page.empty(pageable);
+        }
 
         ShareRequestStatus st = ShareRequestStatus.OPEN;
-
         if (status != null && !status.isBlank()) {
             try { st = ShareRequestStatus.valueOf(status.trim()); }
             catch (Exception e) {
@@ -42,91 +48,28 @@ public class ShareInboxService {
             }
         }
 
-        Page<CaseShareRequest> page;
-
-        if (traegerWide) {
-            // nur TRAEGER_ADMIN darf das
-            access.requireAny(Role.TRAEGER_ADMIN);
-            page = requestRepo.inboxTraegerWide(traegerId, st, pageable);
-        } else {
-            Long einrichtungId = access.activeEinrichtungId();
-            if (einrichtungId == null) {
-                return new ShareRequestListResponse(List.of(), pageable.getPageNumber(), pageable.getPageSize(), 0);
-            }
-            page = requestRepo.inboxForEinrichtung(traegerId, einrichtungId, st, pageable);
-        }
-
-        var items = page.getContent().stream()
-                .map(r -> new ShareRequestListItemResponse(
-                        r.getId(),
-                        r.getStatus().name(),
-                        r.getFall().getId(),
-                        r.getPartner().getName(),
-                        r.getLegalBasisType().name(),
-                        r.getPurpose(),
-                        r.getCreatedAt()
-                ))
-                .toList();
-
-        return new ShareRequestListResponse(items, page.getNumber(), page.getSize(), page.getTotalElements());
+        return requestRepo.findAllOpenByOwningScope(traegerId, einrichtungId, st, pageable);
     }
 
     @Transactional(readOnly = true)
-    public ShareRequestListResponse myRequests(Pageable pageable) {
-        Long userId = SecurityUtils.currentUserId();
+    public CaseShareRequest getDetail(Long id) {
+        access.requireAny(Role.LESEN, Role.FACHKRAFT, Role.TEAMLEITUNG, Role.EINRICHTUNG_ADMIN, Role.TRAEGER_ADMIN);
 
-        Page<CaseShareRequest> page =
-                requestRepo.findMyRequests(userId, pageable);
-
-        var items = page.getContent().stream()
-                .map(r -> new ShareRequestListItemResponse(
-                        r.getId(),
-                        r.getStatus().name(),
-                        r.getFall().getId(),
-                        r.getPartner().getName(),
-                        r.getLegalBasisType().name(),
-                        r.getPurpose(),
-                        r.getCreatedAt()
-                ))
-                .toList();
-
-        return new ShareRequestListResponse(
-                items,
-                page.getNumber(),
-                page.getSize(),
-                page.getTotalElements()
-        );
-    }
-
-    @Transactional(readOnly = true)
-    public ShareRequestDetailResponse getDetail(Long requestId) {
-        access.requireAny(Role.EINRICHTUNG_ADMIN, Role.TRAEGER_ADMIN);
-
-        CaseShareRequest r = requestRepo.findByIdWithDetailRefs(requestId)
+        CaseShareRequest r = requestRepo.findByIdWithRefs(id)
                 .orElseThrow(() -> DomainException.notFound(ErrorCode.NOT_FOUND, "Share request not found"));
 
-        // Sicherstellen: nur owning einrichtung im scope (oder TraegerAdmin)
         access.requireAccessToEinrichtungObject(
-                r.getOwningTraeger().getId(),
-                r.getOwningEinrichtung().getId(),
-                Role.EINRICHTUNG_ADMIN, Role.TRAEGER_ADMIN
+                r.getFalleroeffnung().getTraeger().getId(),
+                r.getFalleroeffnung().getEinrichtungOrgUnit().getId(),
+                Role.LESEN, Role.FACHKRAFT, Role.TEAMLEITUNG, Role.EINRICHTUNG_ADMIN, Role.TRAEGER_ADMIN
         );
 
-        return new ShareRequestDetailResponse(
-                r.getId(),
-                r.getStatus().name(),
-                r.getFall().getId(),
-                r.getPartner().getId(),
-                r.getPartner().getName(),
-                r.getLegalBasisType().name(),
-                r.getPurpose(),
-                r.getNotesFrom(),
-                r.getNotesTo(),
-                r.getRequestedBy().getDisplayName(),
-                r.getCreatedAt(),
-                r.getDecisionReason(),
-                r.getDecidedBy() != null ? r.getDecidedBy().getDisplayName() : null,
-                r.getDecidedAt()
-        );
+        return r;
+    }
+
+    @Transactional(readOnly = true)
+    public Page<CaseShareRequest> myRequests(Pageable pageable) {
+        access.requireAny(Role.LESEN, Role.FACHKRAFT, Role.TEAMLEITUNG, Role.EINRICHTUNG_ADMIN, Role.TRAEGER_ADMIN);
+        return requestRepo.findAllByRequestedBy(SecurityUtils.currentUserId(), pageable);
     }
 }

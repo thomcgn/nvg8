@@ -2,8 +2,10 @@ package org.thomcgn.backend.users.model;
 
 import jakarta.persistence.*;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
 import org.thomcgn.backend.common.persistence.AuditableEntity;
 
+@EqualsAndHashCode(callSuper = false)
 @Data
 @MappedSuperclass
 public abstract class Person extends AuditableEntity {

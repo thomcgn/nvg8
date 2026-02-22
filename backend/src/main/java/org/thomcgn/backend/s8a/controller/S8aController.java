@@ -16,11 +16,6 @@ public class S8aController {
         this.service = service;
     }
 
-    @PostMapping
-    public ResponseEntity<S8aCaseResponse> create(@Valid @RequestBody CreateS8aCaseRequest req) {
-        return ResponseEntity.ok(service.create(req));
-    }
-
     @GetMapping("/{id}")
     public ResponseEntity<S8aCaseResponse> get(@PathVariable Long id) {
         return ResponseEntity.ok(service.get(id));
@@ -39,10 +34,5 @@ public class S8aController {
     @PatchMapping("/{id}/risk-level")
     public ResponseEntity<S8aCaseResponse> updateRisk(@PathVariable Long id, @Valid @RequestBody UpdateS8aRiskRequest req) {
         return ResponseEntity.ok(service.updateRisk(id, req));
-    }
-
-    @GetMapping("/by-fall/{fallId}")
-    public ResponseEntity<java.util.List<S8aCaseListItemResponse>> listByFall(@PathVariable Long fallId) {
-        return ResponseEntity.ok(service.listByFall(fallId));
     }
 }

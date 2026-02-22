@@ -10,14 +10,16 @@ import java.util.Optional;
 public interface S8aCaseRepository extends JpaRepository<S8aCase, Long> {
 
     @Query("""
-    select c from S8aCase c
-    join fetch c.fall f
-    join fetch c.traeger t
-    join fetch c.einrichtung e
-    join fetch c.createdBy cb
-    where c.id = :id
-  """)
+      select c from S8aCase c
+      join fetch c.falleroeffnung f
+      join fetch f.dossier d
+      join fetch d.kind k
+      join fetch c.traeger t
+      join fetch c.einrichtung ein
+      join fetch c.createdBy cb
+      where c.id = :id
+    """)
     Optional<S8aCase> findByIdWithRefs(@Param("id") Long id);
 
-    List<S8aCase> findAllByFallIdOrderByCreatedAtDesc(Long fallId);
+    List<S8aCase> findAllByFalleroeffnungIdOrderByCreatedAtDesc(Long falloeffnungId);
 }
