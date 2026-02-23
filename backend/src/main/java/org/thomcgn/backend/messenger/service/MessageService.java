@@ -10,7 +10,7 @@ import org.thomcgn.backend.messenger.model.Message;
 import org.thomcgn.backend.messenger.model.MessageRecipient;
 import org.thomcgn.backend.messenger.repo.MessageRecipientRepository;
 import org.thomcgn.backend.messenger.repo.MessageRepository;
-import org.thomcgn.backend.auth.repo.UserRepository;
+import org.thomcgn.backend.users.repo.UserRepository;
 
 import java.time.OffsetDateTime;
 import java.util.List;

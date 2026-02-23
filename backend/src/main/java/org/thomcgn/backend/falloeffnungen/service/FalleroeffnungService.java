@@ -76,7 +76,16 @@ public class FalleroeffnungService {
         access.requireAny(Role.FACHKRAFT, Role.TEAMLEITUNG, Role.EINRICHTUNG_ADMIN, Role.TRAEGER_ADMIN);
 
         Long traegerId = SecurityUtils.currentTraegerIdRequired();
+        Long einrichtungId = SecurityUtils.currentOrgUnitIdRequired();
         Long userId = SecurityUtils.currentUserId();
+
+        // Kontext-Härtung: create immer im aktiven EINRICHTUNG-Kontext
+        if (req.einrichtungOrgUnitId() == null || !req.einrichtungOrgUnitId().equals(einrichtungId)) {
+            throw DomainException.forbidden(
+                    ErrorCode.CONTEXT_REQUIRED,
+                    "Active context differs from requested EINRICHTUNG. Switch context first."
+            );
+        }
 
         Traeger traeger = traegerRepo.findById(traegerId)
                 .orElseThrow(() -> DomainException.notFound(ErrorCode.TRAEGER_NOT_FOUND, "Traeger not found"));
@@ -93,9 +102,10 @@ public class FalleroeffnungService {
                     return dossierRepo.save(d);
                 });
 
-        OrgUnit einrichtung = orgUnitRepo.findById(req.einrichtungOrgUnitId())
+        OrgUnit einrichtung = orgUnitRepo.findById(einrichtungId)
                 .orElseThrow(() -> DomainException.notFound(ErrorCode.ORG_UNIT_NOT_FOUND, "Einrichtung org unit not found"));
 
+        // Defense-in-depth Rollencheck
         access.requireAccessToEinrichtungObject(
                 traeger.getId(),
                 einrichtung.getId(),
@@ -141,11 +151,14 @@ public class FalleroeffnungService {
     }
 
     // =========================================================
-    // GET (inkl. Notizen)
+    // GET (inkl. Notizen) - SCOPED
     // =========================================================
     @Transactional(readOnly = true)
     public FalleroeffnungResponse get(Long id) {
-        Falleroeffnung f = repo.findByIdWithRefs(id)
+        Long tid = SecurityUtils.currentTraegerIdRequired();
+        Long oid = SecurityUtils.currentOrgUnitIdRequired();
+
+        Falleroeffnung f = repo.findByIdWithRefsScoped(id, tid, oid)
                 .orElseThrow(() -> DomainException.notFound(ErrorCode.NOT_FOUND, "Falleröffnung not found"));
 
         access.requireAccessToEinrichtungObject(
@@ -154,7 +167,9 @@ public class FalleroeffnungService {
                 Role.LESEN, Role.FACHKRAFT, Role.TEAMLEITUNG, Role.EINRICHTUNG_ADMIN, Role.TRAEGER_ADMIN
         );
 
-        List<FalleroeffnungNotizResponse> notizen = notizRepo.findAllByFalleroeffnungIdOrderByCreatedAtAsc(id)
+        // Notizen scoped laden (sonst Leak über fallId)
+        List<FalleroeffnungNotizResponse> notizen = notizRepo
+                .findAllByFalleroeffnungIdScopedOrderByCreatedAtAsc(id, tid, oid)
                 .stream()
                 .map(n -> new FalleroeffnungNotizResponse(
                         n.getId(),
@@ -176,11 +191,7 @@ public class FalleroeffnungService {
         access.requireAny(Role.LESEN, Role.FACHKRAFT, Role.TEAMLEITUNG, Role.EINRICHTUNG_ADMIN, Role.TRAEGER_ADMIN);
 
         Long traegerId = SecurityUtils.currentTraegerIdRequired();
-
-        Long activeEinrichtungId = access.activeEinrichtungId();
-        if (activeEinrichtungId == null) {
-            return new FalleroeffnungListResponse(List.of(), pageable.getPageNumber(), pageable.getPageSize(), 0);
-        }
+        Long activeEinrichtungId = SecurityUtils.currentOrgUnitIdRequired();
 
         FalleroeffnungStatus st = null;
         if (status != null && !status.isBlank()) {
@@ -223,11 +234,14 @@ public class FalleroeffnungService {
     }
 
     // =========================================================
-    // ADD NOTE (append-only) + VISIBILITY
+    // ADD NOTE (append-only) + VISIBILITY - SCOPED
     // =========================================================
     @Transactional
     public FalleroeffnungNotizResponse addNotiz(Long id, AddNotizRequest req) {
-        Falleroeffnung f = repo.findByIdWithRefs(id)
+        Long tid = SecurityUtils.currentTraegerIdRequired();
+        Long oid = SecurityUtils.currentOrgUnitIdRequired();
+
+        Falleroeffnung f = repo.findByIdWithRefsScoped(id, tid, oid)
                 .orElseThrow(() -> DomainException.notFound(ErrorCode.NOT_FOUND, "Falleröffnung not found"));
 
         if (f.getStatus() == FalleroeffnungStatus.ABGESCHLOSSEN) {
@@ -276,11 +290,14 @@ public class FalleroeffnungService {
     }
 
     // =========================================================
-    // UPDATE STATUS
+    // UPDATE STATUS - SCOPED
     // =========================================================
     @Transactional
     public FalleroeffnungResponse updateStatus(Long id, UpdateFalleroeffnungStatusRequest req) {
-        Falleroeffnung f = repo.findByIdWithRefs(id)
+        Long tid = SecurityUtils.currentTraegerIdRequired();
+        Long oid = SecurityUtils.currentOrgUnitIdRequired();
+
+        Falleroeffnung f = repo.findByIdWithRefsScoped(id, tid, oid)
                 .orElseThrow(() -> DomainException.notFound(ErrorCode.NOT_FOUND, "Falleröffnung not found"));
 
         access.requireAccessToEinrichtungObject(

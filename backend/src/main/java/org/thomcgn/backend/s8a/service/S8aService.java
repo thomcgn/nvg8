@@ -47,9 +47,14 @@ public class S8aService {
     public S8aCaseResponse createForFalleroeffnung(Long falleroeffnungId, CreateS8aForEpisodeRequest req) {
         access.requireAny(Role.FACHKRAFT, Role.TEAMLEITUNG, Role.EINRICHTUNG_ADMIN, Role.TRAEGER_ADMIN);
 
-        var fall = falloeffnungRepo.findByIdWithRefs(falleroeffnungId)
+        Long tid = SecurityUtils.currentTraegerIdRequired();
+        Long oid = SecurityUtils.currentOrgUnitIdRequired();
+
+        // WICHTIG: Fallöffnung scoped laden (sonst ID-Leak)
+        var fall = falloeffnungRepo.findByIdWithRefsScoped(falleroeffnungId, tid, oid)
                 .orElseThrow(() -> DomainException.notFound(ErrorCode.NOT_FOUND, "Falleröffnung not found"));
 
+        // Defense-in-depth: zusätzlich rollenbasiert (falls ihr später z.B. traegerweit lesen erlaubt)
         access.requireAccessToEinrichtungObject(
                 fall.getTraeger().getId(),
                 fall.getEinrichtungOrgUnit().getId(),
@@ -77,8 +82,13 @@ public class S8aService {
         ev.setCreatedBy(creator);
         eventRepo.save(ev);
 
-        audit.log(AuditEventAction.S8A_CREATED, "S8aCase", saved.getId(),
-                fall.getEinrichtungOrgUnit().getId(), "S8a created for falloeffnung=" + falleroeffnungId);
+        audit.log(
+                AuditEventAction.S8A_CREATED,
+                "S8aCase",
+                saved.getId(),
+                fall.getEinrichtungOrgUnit().getId(),
+                "S8a created for falloeffnung=" + falleroeffnungId
+        );
 
         return get(saved.getId());
     }
@@ -87,7 +97,10 @@ public class S8aService {
     public S8aEventResponse addEvent(Long s8aCaseId, AddS8aEventRequest req) {
         access.requireAny(Role.FACHKRAFT, Role.TEAMLEITUNG, Role.EINRICHTUNG_ADMIN, Role.TRAEGER_ADMIN);
 
-        S8aCase c = caseRepo.findByIdWithRefs(s8aCaseId)
+        Long tid = SecurityUtils.currentTraegerIdRequired();
+        Long oid = SecurityUtils.currentOrgUnitIdRequired();
+
+        S8aCase c = caseRepo.findByIdWithRefsScoped(s8aCaseId, tid, oid)
                 .orElseThrow(() -> DomainException.notFound(ErrorCode.NOT_FOUND, "S8a case not found"));
 
         access.requireAccessToEinrichtungObject(
@@ -141,7 +154,11 @@ public class S8aService {
     public List<S8aCaseListItemResponse> listByFalleroeffnung(Long falleroeffnungId) {
         access.requireAny(Role.LESEN, Role.FACHKRAFT, Role.TEAMLEITUNG, Role.EINRICHTUNG_ADMIN, Role.TRAEGER_ADMIN);
 
-        var fall = falloeffnungRepo.findByIdWithRefs(falleroeffnungId)
+        Long tid = SecurityUtils.currentTraegerIdRequired();
+        Long oid = SecurityUtils.currentOrgUnitIdRequired();
+
+        // scoped Fallöffnung laden (verhindert Leak über fallId)
+        var fall = falloeffnungRepo.findByIdWithRefsScoped(falleroeffnungId, tid, oid)
                 .orElseThrow(() -> DomainException.notFound(ErrorCode.NOT_FOUND, "Falleröffnung not found"));
 
         access.requireAccessToEinrichtungObject(
@@ -150,7 +167,7 @@ public class S8aService {
                 Role.LESEN, Role.FACHKRAFT, Role.TEAMLEITUNG, Role.EINRICHTUNG_ADMIN, Role.TRAEGER_ADMIN
         );
 
-        return caseRepo.findAllByFalleroeffnungIdOrderByCreatedAtDesc(falleroeffnungId).stream()
+        return caseRepo.findAllByFalleroeffnungIdScopedOrderByCreatedAtDesc(falleroeffnungId, tid, oid).stream()
                 .map(c -> new S8aCaseListItemResponse(
                         c.getId(),
                         c.getStatus().name(),
@@ -163,7 +180,10 @@ public class S8aService {
 
     @Transactional(readOnly = true)
     public S8aCaseResponse get(Long s8aCaseId) {
-        S8aCase c = caseRepo.findByIdWithRefs(s8aCaseId)
+        Long tid = SecurityUtils.currentTraegerIdRequired();
+        Long oid = SecurityUtils.currentOrgUnitIdRequired();
+
+        S8aCase c = caseRepo.findByIdWithRefsScoped(s8aCaseId, tid, oid)
                 .orElseThrow(() -> DomainException.notFound(ErrorCode.NOT_FOUND, "S8a case not found"));
 
         access.requireAccessToEinrichtungObject(
@@ -198,7 +218,10 @@ public class S8aService {
     public S8aCaseResponse updateStatus(Long s8aCaseId, UpdateS8aStatusRequest req) {
         access.requireAny(Role.FACHKRAFT, Role.TEAMLEITUNG, Role.EINRICHTUNG_ADMIN, Role.TRAEGER_ADMIN);
 
-        S8aCase c = caseRepo.findByIdWithRefs(s8aCaseId)
+        Long tid = SecurityUtils.currentTraegerIdRequired();
+        Long oid = SecurityUtils.currentOrgUnitIdRequired();
+
+        S8aCase c = caseRepo.findByIdWithRefsScoped(s8aCaseId, tid, oid)
                 .orElseThrow(() -> DomainException.notFound(ErrorCode.NOT_FOUND, "S8a case not found"));
 
         access.requireAccessToEinrichtungObject(
@@ -217,7 +240,6 @@ public class S8aService {
         c.setStatus(newStatus);
         caseRepo.save(c);
 
-        // Timeline-Event erzeugen
         User actor = userRepo.findById(SecurityUtils.currentUserId())
                 .orElseThrow(() -> DomainException.notFound(ErrorCode.USER_NOT_FOUND, "User not found"));
 
@@ -243,7 +265,10 @@ public class S8aService {
     public S8aCaseResponse updateRisk(Long s8aCaseId, UpdateS8aRiskRequest req) {
         access.requireAny(Role.FACHKRAFT, Role.TEAMLEITUNG, Role.EINRICHTUNG_ADMIN, Role.TRAEGER_ADMIN);
 
-        S8aCase c = caseRepo.findByIdWithRefs(s8aCaseId)
+        Long tid = SecurityUtils.currentTraegerIdRequired();
+        Long oid = SecurityUtils.currentOrgUnitIdRequired();
+
+        S8aCase c = caseRepo.findByIdWithRefsScoped(s8aCaseId, tid, oid)
                 .orElseThrow(() -> DomainException.notFound(ErrorCode.NOT_FOUND, "S8a case not found"));
 
         access.requireAccessToEinrichtungObject(

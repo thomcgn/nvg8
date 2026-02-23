@@ -15,7 +15,7 @@ public class CaseShareExternalPdfController {
         this.shareService = shareService;
     }
 
-    @GetMapping("/download")
+    @GetMapping("/download/pdf")
     public ResponseEntity<String> downloadJson(@RequestParam String token) {
         DownloadPackageResponse pkg = shareService.downloadByToken(token);
 

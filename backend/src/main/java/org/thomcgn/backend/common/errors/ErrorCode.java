@@ -2,6 +2,7 @@ package org.thomcgn.backend.common.errors;
 
 public enum ErrorCode {
     // Auth / Security
+    AUTH_REQUIRED,
     AUTH_INVALID_CREDENTIALS,
     AUTH_TOKEN_INVALID,
     CONTEXT_REQUIRED,

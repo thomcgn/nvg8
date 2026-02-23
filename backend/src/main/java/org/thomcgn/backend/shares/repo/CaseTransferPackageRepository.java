@@ -10,11 +10,11 @@ import java.util.Optional;
 public interface CaseTransferPackageRepository extends JpaRepository<CaseTransferPackage, Long> {
 
     @Query("""
-    select p from CaseTransferPackage p
-    join fetch p.shareRequest r
-    join fetch r.partner partner
-    join fetch r.fall f
-    where p.tokenHashHex = :hash
-  """)
-    Optional<CaseTransferPackage> findByTokenHash(@Param("hash") String tokenHashHex);
+        select p from CaseTransferPackage p
+        join fetch p.shareRequest r
+        join fetch r.partner partner
+        join fetch r.falleroeffnung f
+        where p.tokenHashHex = :hash
+    """)
+    Optional<CaseTransferPackage> findByTokenHash(@Param("hash") String hash);
 }

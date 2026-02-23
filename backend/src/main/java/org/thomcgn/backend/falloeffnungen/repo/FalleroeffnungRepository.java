@@ -12,6 +12,11 @@ import java.util.Set;
 
 public interface FalleroeffnungRepository extends JpaRepository<Falleroeffnung, Long> {
 
+    /**
+     * UNSCOPED: Nur für interne Admin/Debug Zwecke nutzen.
+     * Wenn ihr das nicht braucht: löschen, um Leaks zu verhindern.
+     */
+    @Deprecated(forRemoval = true)
     @Query("""
       select f from Falleroeffnung f
       join fetch f.dossier d
@@ -23,6 +28,24 @@ public interface FalleroeffnungRepository extends JpaRepository<Falleroeffnung, 
       where f.id = :id
     """)
     Optional<Falleroeffnung> findByIdWithRefs(@Param("id") Long id);
+
+    @Query("""
+      select f from Falleroeffnung f
+      join fetch f.dossier d
+      join fetch d.kind k
+      join fetch f.traeger t
+      join fetch f.einrichtungOrgUnit ein
+      left join fetch f.teamOrgUnit team
+      join fetch f.createdBy cb
+      where f.id = :id
+        and f.traeger.id = :traegerId
+        and f.einrichtungOrgUnit.id = :einrichtungId
+    """)
+    Optional<Falleroeffnung> findByIdWithRefsScoped(
+            @Param("id") Long id,
+            @Param("traegerId") Long traegerId,
+            @Param("einrichtungId") Long einrichtungId
+    );
 
     @Query("""
       select f from Falleroeffnung f

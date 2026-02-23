@@ -42,4 +42,10 @@ public interface UserOrgRoleRepository extends JpaRepository<UserOrgRole, Long> 
     Optional<UserOrgRole> findByUserIdAndOrgUnitIdAndRole(Long userId, Long orgUnitId, org.thomcgn.backend.auth.model.Role role);
     List<UserOrgRole> findByUserIdAndEnabledTrue(Long userId);
 
+    @Query("""
+        select uor from UserOrgRole uor
+        join fetch uor.orgUnit ou
+        where uor.user.id = :userId and uor.enabled = true
+    """)
+    List<UserOrgRole> findAllEnabledWithOrgUnit(@Param("userId") Long userId);
 }

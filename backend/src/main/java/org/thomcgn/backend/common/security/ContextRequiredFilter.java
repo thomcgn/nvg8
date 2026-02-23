@@ -5,8 +5,6 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.web.filter.OncePerRequestFilter;
-import org.thomcgn.backend.common.errors.DomainException;
-import org.thomcgn.backend.common.errors.ErrorCode;
 
 import java.io.IOException;
 import java.util.List;
@@ -15,12 +13,12 @@ public class ContextRequiredFilter extends OncePerRequestFilter {
 
     private final List<String> allowPrefixes = List.of(
             "/auth/login",
-            "/auth/context",
-            "/auth/switch-context",
+            "/auth/context",         // GET /auth/context
+            "/auth/context/switch",  // POST /auth/context/switch
             "/actuator",
             "/swagger-ui",
             "/v3/api-docs",
-            "/external/**"
+            "/external"
     );
 
     @Override
@@ -33,23 +31,21 @@ public class ContextRequiredFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
             throws ServletException, IOException {
 
-        // JwtAuthFilter hat bereits principal gesetzt, wenn Token ok ist.
-        // Wenn nicht authentifiziert -> Spring Security handled 401 via EntryPoint.
         var auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
         if (auth == null || auth.getDetails() == null) {
-            // Wird in der Praxis selten hier landen, aber safe:
-            throw DomainException.unauthorized(ErrorCode.AUTH_TOKEN_INVALID, "Authentication required.");
+            response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Authentication required.");
+            return;
         }
 
         if (!(auth.getDetails() instanceof JwtPrincipal principal)) {
-            throw DomainException.unauthorized(ErrorCode.AUTH_TOKEN_INVALID, "Invalid authentication context.");
+            response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Invalid authentication context.");
+            return;
         }
 
-        if (!principal.isContext()) {
-            throw DomainException.forbidden(
-                    ErrorCode.CONTEXT_REQUIRED,
-                    "You must select an active organization context before accessing this resource."
-            );
+        if (!principal.isContext() || principal.getTraegerId() == null || principal.getOrgUnitId() == null) {
+            response.sendError(HttpServletResponse.SC_FORBIDDEN,
+                    "You must select an active organization context before accessing this resource.");
+            return;
         }
 
         filterChain.doFilter(request, response);

@@ -9,6 +9,11 @@ import java.util.Optional;
 
 public interface S8aCaseRepository extends JpaRepository<S8aCase, Long> {
 
+    /**
+     * UNSCOPED: Nur für interne Admin/Debug Zwecke nutzen.
+     * Wenn ihr das nicht braucht: löschen, um Leaks zu verhindern.
+     */
+
     @Query("""
       select c from S8aCase c
       join fetch c.falleroeffnung f
@@ -18,8 +23,26 @@ public interface S8aCaseRepository extends JpaRepository<S8aCase, Long> {
       join fetch c.einrichtung ein
       join fetch c.createdBy cb
       where c.id = :id
+        and c.traeger.id = :traegerId
+        and c.einrichtung.id = :einrichtungId
     """)
-    Optional<S8aCase> findByIdWithRefs(@Param("id") Long id);
+    Optional<S8aCase> findByIdWithRefsScoped(
+            @Param("id") Long id,
+            @Param("traegerId") Long traegerId,
+            @Param("einrichtungId") Long einrichtungId
+    );
 
-    List<S8aCase> findAllByFalleroeffnungIdOrderByCreatedAtDesc(Long falloeffnungId);
+    @Query("""
+      select c from S8aCase c
+      join c.falleroeffnung f
+      where f.id = :falleroeffnungId
+        and f.traeger.id = :traegerId
+        and f.einrichtungOrgUnit.id = :einrichtungId
+      order by c.createdAt desc
+    """)
+    List<S8aCase> findAllByFalleroeffnungIdScopedOrderByCreatedAtDesc(
+            @Param("falleroeffnungId") Long falleroeffnungId,
+            @Param("traegerId") Long traegerId,
+            @Param("einrichtungId") Long einrichtungId
+    );
 }
