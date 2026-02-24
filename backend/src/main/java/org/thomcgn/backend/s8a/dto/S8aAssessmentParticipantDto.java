@@ -3,12 +3,18 @@ package org.thomcgn.backend.s8a.dto;
 /**
  * Beteiligter innerhalb einer Assessment-Version.
  *
- * Referenziert eine S8aCasePerson (konkret im Vorgang) und friert
- * die juristisch relevanten Punkte als Snapshot ein.
+ * casePersonId: eindeutige Person im S8aCase-Kontext
+ * childCasePersonId (optional): falls Snapshots aus Kind<->Bezugsperson Records gezogen werden sollen
+ *
+ * Snapshot-Felder:
+ * - Wenn im Request gesetzt -> werden 1:1 gespeichert (Override).
+ * - Wenn leer/null -> werden automatisch aus Records generiert (Auto-Snapshot).
  */
 public record S8aAssessmentParticipantDto(
         Long casePersonId,
+        Long childCasePersonId,            // optional
         String roleInAssessment,
+
         String custodySnapshot,
         String residenceRightSnapshot,
         String contactSnapshot,
