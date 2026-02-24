@@ -30,14 +30,16 @@ public class S8aPeopleController {
 
     @GetMapping("/custody-records")
     public List<S8aCustodyRecordResponse> listCustodyRecords(@PathVariable Long s8aCaseId,
-                                                             @RequestParam(required = false) Long childPersonId) {
-        return service.listCustodyRecords(s8aCaseId, childPersonId);
+                                                             @RequestParam(required = false) Long childPersonId,
+                                                             @RequestParam(required = false, defaultValue = "false") boolean includeHistory) {
+        return service.listCustodyRecords(s8aCaseId, childPersonId, includeHistory);
     }
 
     @GetMapping("/contact-restrictions")
     public List<S8aContactRestrictionResponse> listContactRestrictions(@PathVariable Long s8aCaseId,
-                                                                       @RequestParam(required = false) Long childPersonId) {
-        return service.listContactRestrictions(s8aCaseId, childPersonId);
+                                                                       @RequestParam(required = false) Long childPersonId,
+                                                                       @RequestParam(required = false, defaultValue = "false") boolean includeHistory) {
+        return service.listContactRestrictions(s8aCaseId, childPersonId, includeHistory);
     }
 
     @GetMapping("/orders")

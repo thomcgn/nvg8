@@ -406,6 +406,66 @@ public class S8aPeopleService {
                 "Corrected custody record originalId=" + original.getId() + " reason=" + req.correctionReason().trim()
         );
     }
+    @Transactional(readOnly = true)
+    public List<S8aCustodyRecordResponse> listCustodyRecords(Long s8aCaseId, Long childPersonId, boolean includeHistory) {
+        S8aCase c = loadCaseScoped(s8aCaseId, true);
+
+        List<S8aCustodyRecord> records = (childPersonId == null)
+                ? custodyRepo.findAllByS8aCaseIdOrderByCreatedAtAsc(c.getId())
+                : custodyRepo.findAllByS8aCaseIdAndChildPersonIdOrderByCreatedAtAsc(c.getId(), childPersonId);
+
+        List<S8aCustodyRecord> visible = includeHistory
+                ? records
+                : headsOnly(records,
+                S8aCustodyRecord::getId,
+                S8aCustodyRecord::getSupersedesId);
+
+        return visible.stream()
+                .map(cr -> new S8aCustodyRecordResponse(
+                        cr.getId(),
+                        cr.getChildPerson().getId(),
+                        cr.getRightHolderPerson().getId(),
+                        cr.getCustodyType().name(),
+                        cr.getResidenceRight().name(),
+                        cr.getValidFrom(),
+                        cr.getValidTo(),
+                        cr.getSourceTitle(),
+                        cr.getSourceReference(),
+                        cr.getSourceOrder() != null ? cr.getSourceOrder().getId() : null,
+                        cr.getNotes()
+                ))
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<S8aContactRestrictionResponse> listContactRestrictions(Long s8aCaseId, Long childPersonId, boolean includeHistory) {
+        S8aCase c = loadCaseScoped(s8aCaseId, true);
+
+        List<S8aContactRestriction> records = (childPersonId == null)
+                ? contactRepo.findAllByS8aCaseIdOrderByCreatedAtAsc(c.getId())
+                : contactRepo.findAllByS8aCaseIdAndChildPersonIdOrderByCreatedAtAsc(c.getId(), childPersonId);
+
+        List<S8aContactRestriction> visible = includeHistory
+                ? records
+                : headsOnly(records,
+                S8aContactRestriction::getId,
+                S8aContactRestriction::getSupersedesId);
+
+        return visible.stream()
+                .map(r -> new S8aContactRestrictionResponse(
+                        r.getId(),
+                        r.getChildPerson().getId(),
+                        r.getOtherPerson().getId(),
+                        r.getRestrictionType().name(),
+                        r.getReason(),
+                        r.getValidFrom(),
+                        r.getValidTo(),
+                        r.getSourceTitle(),
+                        r.getSourceReference(),
+                        r.getSourceOrder() != null ? r.getSourceOrder().getId() : null
+                ))
+                .toList();
+    }
 
     @Transactional
     public void correctContactRestriction(Long s8aCaseId, Long originalId, CreateS8aContactRestrictionCorrectionRequest req) {
@@ -537,6 +597,24 @@ public class S8aPeopleService {
 
     // ---------- helpers ----------
 
+    private <T> List<T> headsOnly(List<T> records,
+                                  java.util.function.Function<T, Long> idExtractor,
+                                  java.util.function.Function<T, Long> supersedesExtractor) {
+
+        if (records == null || records.isEmpty()) return List.of();
+
+        java.util.Set<Long> supersededIds = new java.util.HashSet<>();
+
+        for (T r : records) {
+            Long supersedesId = supersedesExtractor.apply(r);
+            if (supersedesId != null) supersededIds.add(supersedesId);
+        }
+
+        return records.stream()
+                .filter(r -> !supersededIds.contains(idExtractor.apply(r)))
+                .toList();
+    }
+
     private void ensureCaseWritable(S8aCase c) {
         if (c.getStatus() == S8aStatus.ABGESCHLOSSEN) {
             throw DomainException.forbidden(ErrorCode.ACCESS_DENIED, "S8a case is closed (read-only).");
@@ -568,4 +646,5 @@ public class S8aPeopleService {
         );
         return c;
     }
+
 }
