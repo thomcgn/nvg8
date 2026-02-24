@@ -9,5 +9,6 @@ public record S8aContactRestrictionResponse(
         String validFrom,
         String validTo,
         String sourceTitle,
-        String sourceReference
+        String sourceReference,
+        Long sourceOrderId
 ) {}

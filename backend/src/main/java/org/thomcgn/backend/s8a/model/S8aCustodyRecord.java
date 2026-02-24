@@ -59,6 +59,13 @@ public class S8aCustodyRecord extends AuditableEntity {
     @Column(name = "notes", length = 2000)
     private String notes;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "source_order_id")
+    private S8aOrder sourceOrder;
+
+    public S8aOrder getSourceOrder() { return sourceOrder; }
+    public void setSourceOrder(S8aOrder sourceOrder) { this.sourceOrder = sourceOrder; }
+
     public Long getId() { return id; }
 
     public S8aCase getS8aCase() { return s8aCase; }

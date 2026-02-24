@@ -8,5 +8,7 @@ public record CreateS8aContactRestrictionRequest(
         String validFrom,
         String validTo,
         String sourceTitle,
-        String sourceReference
+        String sourceReference,
+        Long sourceOrderId
+
 ) {}

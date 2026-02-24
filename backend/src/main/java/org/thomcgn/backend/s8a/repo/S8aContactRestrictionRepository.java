@@ -12,4 +12,7 @@ public interface S8aContactRestrictionRepository extends JpaRepository<S8aContac
     Optional<S8aContactRestriction> findTopByS8aCaseIdAndChildPersonIdAndOtherPersonIdOrderByCreatedAtDesc(
             Long s8aCaseId, Long childPersonId, Long otherPersonId
     );
+    List<S8aContactRestriction> findAllByS8aCaseIdAndChildPersonIdAndOtherPersonIdOrderByCreatedAtDesc(
+            Long s8aCaseId, Long childPersonId, Long otherPersonId
+    );
 }

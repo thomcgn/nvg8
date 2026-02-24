@@ -54,6 +54,13 @@ public class S8aContactRestriction extends AuditableEntity {
     @Column(name = "source_reference", length = 120)
     private String sourceReference;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "source_order_id")
+    private S8aOrder sourceOrder;
+
+    public S8aOrder getSourceOrder() { return sourceOrder; }
+    public void setSourceOrder(S8aOrder sourceOrder) { this.sourceOrder = sourceOrder; }
+
     public Long getId() { return id; }
 
     public S8aCase getS8aCase() { return s8aCase; }

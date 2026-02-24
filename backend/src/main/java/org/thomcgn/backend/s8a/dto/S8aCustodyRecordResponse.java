@@ -10,5 +10,6 @@ public record S8aCustodyRecordResponse(
         String validTo,
         String sourceTitle,
         String sourceReference,
+        Long sourceOrderId,
         String notes
 ) {}

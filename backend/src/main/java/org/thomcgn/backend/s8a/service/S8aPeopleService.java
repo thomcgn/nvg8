@@ -86,6 +86,7 @@ public class S8aPeopleService {
                         cr.getValidTo(),
                         cr.getSourceTitle(),
                         cr.getSourceReference(),
+                        cr.getSourceOrder() != null ? cr.getSourceOrder().getId() : null,
                         cr.getNotes()
                 ))
                 .toList();
@@ -109,7 +110,8 @@ public class S8aPeopleService {
                         r.getValidFrom(),
                         r.getValidTo(),
                         r.getSourceTitle(),
-                        r.getSourceReference()
+                        r.getSourceReference(),
+                        r.getSourceOrder() != null ? r.getSourceOrder().getId() : null
                 ))
                 .toList();
     }
@@ -132,9 +134,187 @@ public class S8aPeopleService {
                 .toList();
     }
 
-    // ---------- CREATE (deine bestehenden Methoden bleiben) ----------
-    // Hinweis: Wenn du schon eine Version hast, kannst du diese Methoden 1:1 stehen lassen.
-    // Ich lasse hier bewusst nur loadCaseScoped drin, damit du nicht doppelt pflegen musst.
+    // ---------- CREATE ----------
+
+    @Transactional
+    public S8aCasePersonResponse createPerson(Long s8aCaseId, CreateS8aCasePersonRequest req) {
+        S8aCase c = loadCaseScoped(s8aCaseId, false);
+        ensureCaseWritable(c);
+
+        S8aPersonType type;
+        try { type = S8aPersonType.valueOf(req.personType().trim()); }
+        catch (Exception e) {
+            throw DomainException.badRequest(ErrorCode.VALIDATION_FAILED, "Unknown personType: " + req.personType());
+        }
+
+        S8aCasePerson p = new S8aCasePerson();
+        p.setS8aCase(c);
+        p.setPersonType(type);
+        p.setDisplayName(req.displayName());
+        p.setFirstName(req.firstName());
+        p.setLastName(req.lastName());
+        p.setDateOfBirth(req.dateOfBirth());
+        p.setNotes(req.notes());
+        p.setExternalPersonRef(req.externalPersonRef());
+
+        S8aCasePerson saved = personRepo.save(p);
+
+        return new S8aCasePersonResponse(
+                saved.getId(), c.getId(), saved.getPersonType().name(), saved.getDisplayName(),
+                saved.getFirstName(), saved.getLastName(), saved.getDateOfBirth(), saved.getNotes(), saved.getExternalPersonRef()
+        );
+    }
+
+    @Transactional
+    public S8aRelationResponse createRelation(Long s8aCaseId, CreateS8aRelationRequest req) {
+        S8aCase c = loadCaseScoped(s8aCaseId, false);
+        ensureCaseWritable(c);
+
+        S8aRelationshipType rt;
+        try { rt = S8aRelationshipType.valueOf(req.relationType().trim()); }
+        catch (Exception e) {
+            throw DomainException.badRequest(ErrorCode.VALIDATION_FAILED, "Unknown relationType: " + req.relationType());
+        }
+
+        S8aCasePerson from = personRepo.findById(req.fromPersonId())
+                .orElseThrow(() -> DomainException.notFound(ErrorCode.NOT_FOUND, "fromPerson not found"));
+        S8aCasePerson to = personRepo.findById(req.toPersonId())
+                .orElseThrow(() -> DomainException.notFound(ErrorCode.NOT_FOUND, "toPerson not found"));
+
+        if (!from.getS8aCase().getId().equals(c.getId()) || !to.getS8aCase().getId().equals(c.getId())) {
+            throw DomainException.forbidden(ErrorCode.ACCESS_DENIED, "Persons must belong to same s8aCase");
+        }
+
+        S8aCasePersonRelation rel = new S8aCasePersonRelation();
+        rel.setS8aCase(c);
+        rel.setFromPerson(from);
+        rel.setToPerson(to);
+        rel.setRelationType(rt);
+        rel.setNotes(req.notes());
+
+        S8aCasePersonRelation saved = relationRepo.save(rel);
+
+        return new S8aRelationResponse(saved.getId(), from.getId(), to.getId(), saved.getRelationType().name(), saved.getNotes());
+    }
+
+    @Transactional
+    public void addCustodyRecord(Long s8aCaseId, CreateS8aCustodyRecordRequest req) {
+        S8aCase c = loadCaseScoped(s8aCaseId, false);
+        ensureCaseWritable(c);
+
+        S8aCasePerson child = personRepo.findById(req.childPersonId())
+                .orElseThrow(() -> DomainException.notFound(ErrorCode.NOT_FOUND, "childPerson not found"));
+        S8aCasePerson holder = personRepo.findById(req.rightHolderPersonId())
+                .orElseThrow(() -> DomainException.notFound(ErrorCode.NOT_FOUND, "rightHolderPerson not found"));
+
+        if (!child.getS8aCase().getId().equals(c.getId()) || !holder.getS8aCase().getId().equals(c.getId())) {
+            throw DomainException.forbidden(ErrorCode.ACCESS_DENIED, "Persons must belong to same s8aCase");
+        }
+
+        S8aCustodyType ct;
+        try { ct = S8aCustodyType.valueOf(req.custodyType().trim()); }
+        catch (Exception e) {
+            throw DomainException.badRequest(ErrorCode.VALIDATION_FAILED, "Unknown custodyType: " + req.custodyType());
+        }
+
+        S8aResidenceDeterminationRight rr;
+        try { rr = S8aResidenceDeterminationRight.valueOf(req.residenceRight().trim()); }
+        catch (Exception e) {
+            throw DomainException.badRequest(ErrorCode.VALIDATION_FAILED, "Unknown residenceRight: " + req.residenceRight());
+        }
+
+        S8aCustodyRecord cr = new S8aCustodyRecord();
+        cr.setS8aCase(c);
+        cr.setChildPerson(child);
+        cr.setRightHolderPerson(holder);
+        cr.setCustodyType(ct);
+        cr.setResidenceRight(rr);
+        cr.setValidFrom(req.validFrom());
+        cr.setValidTo(req.validTo());
+        cr.setSourceTitle(req.sourceTitle());
+        cr.setSourceReference(req.sourceReference());
+        cr.setNotes(req.notes());
+
+        if (req.sourceOrderId() != null) {
+            S8aOrder o = orderRepo.findById(req.sourceOrderId())
+                    .orElseThrow(() -> DomainException.notFound(ErrorCode.NOT_FOUND, "Order not found: " + req.sourceOrderId()));
+            if (!o.getS8aCase().getId().equals(c.getId())) {
+                throw DomainException.forbidden(ErrorCode.ACCESS_DENIED, "Order does not belong to this s8aCase");
+            }
+            cr.setSourceOrder(o);
+        }
+
+        custodyRepo.save(cr);
+    }
+
+    @Transactional
+    public void addContactRestriction(Long s8aCaseId, CreateS8aContactRestrictionRequest req) {
+        S8aCase c = loadCaseScoped(s8aCaseId, false);
+        ensureCaseWritable(c);
+
+        S8aCasePerson child = personRepo.findById(req.childPersonId())
+                .orElseThrow(() -> DomainException.notFound(ErrorCode.NOT_FOUND, "childPerson not found"));
+        S8aCasePerson other = personRepo.findById(req.otherPersonId())
+                .orElseThrow(() -> DomainException.notFound(ErrorCode.NOT_FOUND, "otherPerson not found"));
+
+        if (!child.getS8aCase().getId().equals(c.getId()) || !other.getS8aCase().getId().equals(c.getId())) {
+            throw DomainException.forbidden(ErrorCode.ACCESS_DENIED, "Persons must belong to same s8aCase");
+        }
+
+        S8aContactRestrictionType rt;
+        try { rt = S8aContactRestrictionType.valueOf(req.restrictionType().trim()); }
+        catch (Exception e) {
+            throw DomainException.badRequest(ErrorCode.VALIDATION_FAILED, "Unknown restrictionType: " + req.restrictionType());
+        }
+
+        S8aContactRestriction r = new S8aContactRestriction();
+        r.setS8aCase(c);
+        r.setChildPerson(child);
+        r.setOtherPerson(other);
+        r.setRestrictionType(rt);
+        r.setReason(req.reason());
+        r.setValidFrom(req.validFrom());
+        r.setValidTo(req.validTo());
+        r.setSourceTitle(req.sourceTitle());
+        r.setSourceReference(req.sourceReference());
+
+        if (req.sourceOrderId() != null) {
+            S8aOrder o = orderRepo.findById(req.sourceOrderId())
+                    .orElseThrow(() -> DomainException.notFound(ErrorCode.NOT_FOUND, "Order not found: " + req.sourceOrderId()));
+            if (!o.getS8aCase().getId().equals(c.getId())) {
+                throw DomainException.forbidden(ErrorCode.ACCESS_DENIED, "Order does not belong to this s8aCase");
+            }
+            r.setSourceOrder(o);
+        }
+
+        contactRepo.save(r);
+    }
+
+    @Transactional
+    public void addOrder(Long s8aCaseId, CreateS8aOrderRequest req) {
+        S8aCase c = loadCaseScoped(s8aCaseId, false);
+        ensureCaseWritable(c);
+
+        S8aOrder o = new S8aOrder();
+        o.setS8aCase(c);
+        o.setOrderType(req.orderType());
+        o.setTitle(req.title());
+        o.setIssuedBy(req.issuedBy());
+        o.setIssuedAt(req.issuedAt());
+        o.setExpiresAt(req.expiresAt());
+        o.setReference(req.reference());
+        o.setNotes(req.notes());
+
+        orderRepo.save(o);
+    }
+
+    // ---------- helpers ----------
+
+    private void ensureCaseWritable(S8aCase c) {
+        if (c.getStatus() == S8aStatus.ABGESCHLOSSEN) {
+            throw DomainException.forbidden(ErrorCode.ACCESS_DENIED, "S8a case is closed (read-only).");
+        }
+    }
 
     private S8aCase loadCaseScoped(Long s8aCaseId, boolean allowReadOnlyRole) {
         if (allowReadOnlyRole) {

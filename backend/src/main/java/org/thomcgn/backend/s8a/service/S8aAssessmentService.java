@@ -18,10 +18,27 @@ import org.thomcgn.backend.s8a.repo.*;
 import org.thomcgn.backend.users.model.User;
 import org.thomcgn.backend.users.repo.UserRepository;
 
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
+/**
+ * §8a Assessment (Schutzkonzept) – versioniert + Beteiligte als Participants.
+ *
+ * - Beteiligte werden relational in S8aAssessmentParticipant gespeichert (kein JSON-Feld).
+ * - Snapshot-Felder können vom Client geliefert werden; wenn leer/null, werden sie automatisch aus
+ *   S8aCustodyRecord / S8aContactRestriction gezogen.
+ *
+ * Auto-Snapshot Auswahl:
+ * - "Aktiver" Record zum Assessment-Zeitpunkt (validFrom/validTo, ISO yyyy-MM-dd) hat Vorrang.
+ * - Fallback: neuester Record (createdAt DESC).
+ *
+ * Orders in Snapshots:
+ * - FK-only: Order wird ausschließlich über record.getSourceOrder() formatiert.
+ */
 @Service
 public class S8aAssessmentService {
 
@@ -105,7 +122,7 @@ public class S8aAssessmentService {
             throw DomainException.badRequest(ErrorCode.VALIDATION_FAILED, "beteiligte must not be empty");
         }
 
-        // ✅ Duplikate verhindern
+        // Duplikate verhindern
         Set<Long> seen = new HashSet<>();
         for (S8aAssessmentParticipantDto p : req.beteiligte()) {
             if (p.casePersonId() == null) continue;
@@ -140,6 +157,9 @@ public class S8aAssessmentService {
 
         S8aAssessment saved = assessmentRepo.save(a);
 
+        Instant at = saved.getCreatedAt();
+
+        // Participants persistieren (revisionssichere Beteiligtenliste + Auto-Snapshots)
         for (S8aAssessmentParticipantDto p : req.beteiligte()) {
             if (p.casePersonId() == null) {
                 throw DomainException.badRequest(ErrorCode.VALIDATION_FAILED, "participant.casePersonId is required");
@@ -155,7 +175,7 @@ public class S8aAssessmentService {
                 throw DomainException.forbidden(ErrorCode.ACCESS_DENIED, "casePerson does not belong to this s8aCase");
             }
 
-            // ✅ Strenge Regel:
+            // Strenge Regel:
             // Wenn Participant NICHT Kind ist und mindestens ein Snapshot-Feld leer ist,
             // dann muss childCasePersonId gesetzt sein, damit Auto-Snapshots möglich sind.
             boolean needsAuto = isBlank(p.custodySnapshot())
@@ -170,8 +190,11 @@ public class S8aAssessmentService {
                 );
             }
 
+            // Kind-Kontext bestimmen (für custody/contact restrictions)
             S8aCasePerson child = resolveChildContext(c.getId(), person, p.childCasePersonId());
-            SnapshotPack auto = buildAutoSnapshots(c.getId(), child, person);
+
+            // Auto-Snapshots ziehen (nur wenn Request-Feld leer)
+            SnapshotPack auto = buildAutoSnapshots(c.getId(), child, person, at);
 
             S8aAssessmentParticipant ap = new S8aAssessmentParticipant();
             ap.setAssessment(saved);
@@ -187,6 +210,7 @@ public class S8aAssessmentService {
             participantRepo.save(ap);
         }
 
+        // Timeline-Event: Hinweis, aber nicht fachliche Quelle (Assessment + Participants sind die Quelle)
         S8aEvent ev = new S8aEvent();
         ev.setS8aCase(c);
         ev.setType(S8aEventType.ASSESSMENT_SAVED);
@@ -270,66 +294,187 @@ public class S8aAssessmentService {
             return child;
         }
 
+        // Wenn Participant selbst Kind ist: Kind-Kontext = self
         if (person.getPersonType() == S8aPersonType.KIND) {
             return person;
         }
 
+        // Keine Kind-Referenz -> keine Auto-Snapshots möglich
         return null;
     }
 
-    private SnapshotPack buildAutoSnapshots(Long caseId, S8aCasePerson child, S8aCasePerson person) {
+    // ---------------- Auto-Snapshots (effective record selection + FK-only orders) ----------------
+
+    private SnapshotPack buildAutoSnapshots(Long caseId, S8aCasePerson child, S8aCasePerson person, Instant assessmentCreatedAt) {
         if (child == null) return SnapshotPack.empty();
 
-        var custodyOpt = custodyRepo.findTopByS8aCaseIdAndChildPersonIdAndRightHolderPersonIdOrderByCreatedAtDesc(
-                caseId, child.getId(), person.getId()
-        );
+        LocalDate at = assessmentCreatedAt != null
+                ? LocalDate.ofInstant(assessmentCreatedAt, ZoneOffset.UTC)
+                : LocalDate.now(ZoneOffset.UTC);
 
-        String custody = custodyOpt.map(cr -> {
-            String src = formatSource(cr.getSourceTitle(), cr.getSourceReference());
-            String s = "Sorgerecht: " + cr.getCustodyType().name();
-            if (!isBlank(cr.getValidFrom())) s += " (ab " + cr.getValidFrom() + ")";
-            if (src != null) s += " | Quelle: " + src;
-            return s;
-        }).orElse(null);
+        // Custody/Residence: records DESC by createdAt
+        List<S8aCustodyRecord> custodyRecords =
+                custodyRepo.findAllByS8aCaseIdAndChildPersonIdAndRightHolderPersonIdOrderByCreatedAtDesc(
+                        caseId, child.getId(), person.getId()
+                );
+        S8aCustodyRecord custodyEffective = pickEffectiveCustody(custodyRecords, at);
 
-        String residence = custodyOpt.map(cr -> {
-            String src = formatSource(cr.getSourceTitle(), cr.getSourceReference());
-            String s = "Aufenthaltsbestimmungsrecht: " + cr.getResidenceRight().name();
-            if (!isBlank(cr.getValidFrom())) s += " (ab " + cr.getValidFrom() + ")";
-            if (src != null) s += " | Quelle: " + src;
-            return s;
-        }).orElse(null);
+        String custody = custodyEffective != null ? formatCustodySnapshot(custodyEffective) : null;
+        String residence = custodyEffective != null ? formatResidenceSnapshot(custodyEffective) : null;
 
-        var restrOpt = contactRestrictionRepo.findTopByS8aCaseIdAndChildPersonIdAndOtherPersonIdOrderByCreatedAtDesc(
-                caseId, child.getId(), person.getId()
-        );
+        // Restriction: records DESC by createdAt
+        List<S8aContactRestriction> restrictionRecords =
+                contactRestrictionRepo.findAllByS8aCaseIdAndChildPersonIdAndOtherPersonIdOrderByCreatedAtDesc(
+                        caseId, child.getId(), person.getId()
+                );
+        S8aContactRestriction restrictionEffective = pickEffectiveRestriction(restrictionRecords, at);
 
-        String restriction = restrOpt.map(r -> {
-            String src = formatSource(r.getSourceTitle(), r.getSourceReference());
-            String s = "Kontaktregelung: " + r.getRestrictionType().name();
-            if (!isBlank(r.getReason())) s += " | Grund: " + r.getReason();
-            if (src != null) s += " | Quelle: " + src;
-            return s;
-        }).orElse(null);
+        String restriction = restrictionEffective != null ? formatRestrictionSnapshot(restrictionEffective) : null;
 
-        // optional: contactSnapshot separat
+        // optional: contactSnapshot separat (kann später abgeleitet werden)
         String contact = null;
 
         return new SnapshotPack(custody, residence, contact, restriction);
     }
 
-    private String firstNonBlank(String preferred, String fallback) {
-        if (!isBlank(preferred)) return preferred;
-        return fallback;
+    private S8aCustodyRecord pickEffectiveCustody(List<S8aCustodyRecord> records, LocalDate at) {
+        if (records == null || records.isEmpty()) return null;
+
+        // 1) Suche erste, die zum Zeitpunkt "at" gilt (records sind DESC createdAt)
+        for (S8aCustodyRecord r : records) {
+            if (isEffectiveAt(r.getValidFrom(), r.getValidTo(), at)) return r;
+        }
+
+        // 2) Fallback: neuester
+        return records.get(0);
+    }
+
+    private S8aContactRestriction pickEffectiveRestriction(List<S8aContactRestriction> records, LocalDate at) {
+        if (records == null || records.isEmpty()) return null;
+
+        for (S8aContactRestriction r : records) {
+            if (isEffectiveAt(r.getValidFrom(), r.getValidTo(), at)) return r;
+        }
+
+        return records.get(0);
+    }
+
+    private boolean isEffectiveAt(String validFrom, String validTo, LocalDate at) {
+        LocalDate from = parseIsoDateOrNull(validFrom);
+        LocalDate to = parseIsoDateOrNull(validTo);
+
+        if (from != null && at.isBefore(from)) return false;
+        if (to != null && at.isAfter(to)) return false;
+
+        // wenn beide null -> "immer gültig"
+        return true;
+    }
+
+    private LocalDate parseIsoDateOrNull(String s) {
+        if (s == null || s.isBlank()) return null;
+        try {
+            // erwartet yyyy-MM-dd
+            return LocalDate.parse(s.trim());
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
+    private String formatCustodySnapshot(S8aCustodyRecord cr) {
+        StringBuilder s = new StringBuilder();
+        s.append("Sorgerecht: ").append(cr.getCustodyType().name());
+
+        appendValidity(s, cr.getValidFrom(), cr.getValidTo());
+
+        String src = formatSource(cr.getSourceTitle(), cr.getSourceReference());
+        if (src != null) s.append(" | Quelle: ").append(src);
+
+        // FK-only order
+        if (cr.getSourceOrder() != null) {
+            s.append(" | Verfügung: ").append(formatOrderInline(cr.getSourceOrder()));
+        }
+
+        return s.toString();
+    }
+
+    private String formatResidenceSnapshot(S8aCustodyRecord cr) {
+        StringBuilder s = new StringBuilder();
+        s.append("Aufenthaltsbestimmungsrecht: ").append(cr.getResidenceRight().name());
+
+        appendValidity(s, cr.getValidFrom(), cr.getValidTo());
+
+        String src = formatSource(cr.getSourceTitle(), cr.getSourceReference());
+        if (src != null) s.append(" | Quelle: ").append(src);
+
+        // FK-only order
+        if (cr.getSourceOrder() != null) {
+            s.append(" | Verfügung: ").append(formatOrderInline(cr.getSourceOrder()));
+        }
+
+        return s.toString();
+    }
+
+    private String formatRestrictionSnapshot(S8aContactRestriction r) {
+        StringBuilder s = new StringBuilder();
+        s.append("Kontaktregelung: ").append(r.getRestrictionType().name());
+
+        appendValidity(s, r.getValidFrom(), r.getValidTo());
+
+        if (!isBlank(r.getReason())) {
+            s.append(" | Grund: ").append(r.getReason().trim());
+        }
+
+        String src = formatSource(r.getSourceTitle(), r.getSourceReference());
+        if (src != null) s.append(" | Quelle: ").append(src);
+
+        // FK-only order
+        if (r.getSourceOrder() != null) {
+            s.append(" | Verfügung: ").append(formatOrderInline(r.getSourceOrder()));
+        }
+
+        return s.toString();
+    }
+
+    private void appendValidity(StringBuilder sb, String validFrom, String validTo) {
+        boolean hasFrom = validFrom != null && !validFrom.isBlank();
+        boolean hasTo = validTo != null && !validTo.isBlank();
+        if (!hasFrom && !hasTo) return;
+
+        sb.append(" (");
+        if (hasFrom) sb.append("ab ").append(validFrom.trim());
+        if (hasFrom && hasTo) sb.append(", ");
+        if (hasTo) sb.append("bis ").append(validTo.trim());
+        sb.append(")");
     }
 
     private String formatSource(String title, String ref) {
-        boolean t = !isBlank(title);
-        boolean r = !isBlank(ref);
+        boolean t = title != null && !title.isBlank();
+        boolean r = ref != null && !ref.isBlank();
         if (!t && !r) return null;
-        if (t && !r) return title;
-        if (!t) return ref;
-        return title + " (" + ref + ")";
+        if (t && !r) return title.trim();
+        if (!t) return ref.trim();
+        return title.trim() + " (" + ref.trim() + ")";
+    }
+
+    private String formatOrderInline(S8aOrder o) {
+        StringBuilder sb = new StringBuilder();
+
+        if (!isBlank(o.getTitle())) sb.append(o.getTitle().trim());
+        else if (!isBlank(o.getOrderType())) sb.append(o.getOrderType().trim());
+        else sb.append("Verfügung");
+
+        if (!isBlank(o.getIssuedBy())) sb.append(", ").append(o.getIssuedBy().trim());
+        if (!isBlank(o.getIssuedAt())) sb.append(", ").append(o.getIssuedAt().trim());
+        if (!isBlank(o.getReference())) sb.append(", Ref ").append(o.getReference().trim());
+
+        return sb.toString();
+    }
+
+    // ---------------- small helpers ----------------
+
+    private String firstNonBlank(String preferred, String fallback) {
+        if (!isBlank(preferred)) return preferred;
+        return fallback;
     }
 
     private boolean isBlank(String s) {
