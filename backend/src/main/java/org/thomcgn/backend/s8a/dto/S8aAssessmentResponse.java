@@ -8,7 +8,7 @@ public record S8aAssessmentResponse(
         Long s8aCaseId,
         int version,
         String gefaehrdungsart,
-        List<String> beteiligte,
+        List<S8aAssessmentParticipantDto> beteiligte,
         boolean kindesanhoerung,
         boolean iefkBeteiligt,
         boolean jugendamtInformiert,
