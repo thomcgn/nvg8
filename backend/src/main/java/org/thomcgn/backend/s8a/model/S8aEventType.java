@@ -8,5 +8,6 @@ public enum S8aEventType {
     NOTE,
     STATUS_CHANGED,
     CLOSED,
-    ASSESSMENT_SAVED
+    ASSESSMENT_SAVED,
+    PEOPLE_RECORD_CORRECTED
 }

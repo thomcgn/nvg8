@@ -6,12 +6,6 @@ import org.thomcgn.backend.s8a.service.S8aPeopleService;
 
 import java.util.List;
 
-/**
- * §8a: Pflege von Beteiligten (CasePerson), Beziehungen, Sorgerecht/Aufenthalt,
- * Kontaktregelungen/Sperren und Verfügungen/Beschlüssen.
- *
- * Scope: immer innerhalb eines S8aCase.
- */
 @RestController
 @RequestMapping("/api/s8a/cases/{s8aCaseId}/people")
 public class S8aPeopleController {
@@ -81,5 +75,21 @@ public class S8aPeopleController {
     public void addOrder(@PathVariable Long s8aCaseId,
                          @RequestBody CreateS8aOrderRequest req) {
         service.addOrder(s8aCaseId, req);
+    }
+
+    // -------- CORRECTIONS (revisionssicher) --------
+
+    @PostMapping("/custody-records/{recordId}/corrections")
+    public void correctCustodyRecord(@PathVariable Long s8aCaseId,
+                                     @PathVariable Long recordId,
+                                     @RequestBody CreateS8aCustodyRecordCorrectionRequest req) {
+        service.correctCustodyRecord(s8aCaseId, recordId, req);
+    }
+
+    @PostMapping("/contact-restrictions/{recordId}/corrections")
+    public void correctContactRestriction(@PathVariable Long s8aCaseId,
+                                          @PathVariable Long recordId,
+                                          @RequestBody CreateS8aContactRestrictionCorrectionRequest req) {
+        service.correctContactRestriction(s8aCaseId, recordId, req);
     }
 }

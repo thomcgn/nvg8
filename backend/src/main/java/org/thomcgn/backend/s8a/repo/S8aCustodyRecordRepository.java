@@ -15,4 +15,7 @@ public interface S8aCustodyRecordRepository extends JpaRepository<S8aCustodyReco
     List<S8aCustodyRecord> findAllByS8aCaseIdAndChildPersonIdAndRightHolderPersonIdOrderByCreatedAtDesc(
             Long s8aCaseId, Long childPersonId, Long rightHolderPersonId
     );
+    java.util.Optional<S8aCustodyRecord> findByIdAndS8aCaseId(Long id, Long s8aCaseId);
+
+    List<S8aCustodyRecord> findAllByS8aCaseIdAndSupersedesIdOrderByCreatedAtAsc(Long s8aCaseId, Long supersedesId);
 }

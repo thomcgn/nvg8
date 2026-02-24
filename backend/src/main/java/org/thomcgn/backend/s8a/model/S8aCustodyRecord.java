@@ -63,6 +63,12 @@ public class S8aCustodyRecord extends AuditableEntity {
     @JoinColumn(name = "source_order_id")
     private S8aOrder sourceOrder;
 
+    @Column(name = "supersedes_id")
+    private Long supersedesId;
+
+    public Long getSupersedesId() { return supersedesId; }
+    public void setSupersedesId(Long supersedesId) { this.supersedesId = supersedesId; }
+
     public S8aOrder getSourceOrder() { return sourceOrder; }
     public void setSourceOrder(S8aOrder sourceOrder) { this.sourceOrder = sourceOrder; }
 

@@ -1,7 +1,10 @@
 package org.thomcgn.backend.s8a.service;
 
+import org.jspecify.annotations.NonNull;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.thomcgn.backend.audit.model.AuditEventAction;
+import org.thomcgn.backend.audit.service.AuditService;
 import org.thomcgn.backend.auth.model.Role;
 import org.thomcgn.backend.auth.service.AccessControlService;
 import org.thomcgn.backend.common.errors.DomainException;
@@ -10,7 +13,10 @@ import org.thomcgn.backend.common.security.SecurityUtils;
 import org.thomcgn.backend.s8a.dto.*;
 import org.thomcgn.backend.s8a.model.*;
 import org.thomcgn.backend.s8a.repo.*;
+import org.thomcgn.backend.users.model.User;
+import org.thomcgn.backend.users.repo.UserRepository;
 
+import java.time.LocalDate;
 import java.util.List;
 
 @Service
@@ -22,7 +28,10 @@ public class S8aPeopleService {
     private final S8aCustodyRecordRepository custodyRepo;
     private final S8aContactRestrictionRepository contactRepo;
     private final S8aOrderRepository orderRepo;
+    private final S8aEventRepository eventRepo;
+    private final UserRepository userRepo;
     private final AccessControlService access;
+    private final AuditService audit;
 
     public S8aPeopleService(S8aCaseRepository caseRepo,
                             S8aCasePersonRepository personRepo,
@@ -30,14 +39,20 @@ public class S8aPeopleService {
                             S8aCustodyRecordRepository custodyRepo,
                             S8aContactRestrictionRepository contactRepo,
                             S8aOrderRepository orderRepo,
-                            AccessControlService access) {
+                            S8aEventRepository eventRepo,
+                            UserRepository userRepo,
+                            AccessControlService access,
+                            AuditService audit) {
         this.caseRepo = caseRepo;
         this.personRepo = personRepo;
         this.relationRepo = relationRepo;
         this.custodyRepo = custodyRepo;
         this.contactRepo = contactRepo;
         this.orderRepo = orderRepo;
+        this.eventRepo = eventRepo;
+        this.userRepo = userRepo;
         this.access = access;
+        this.audit = audit;
     }
 
     // ---------- LIST ----------
@@ -134,7 +149,7 @@ public class S8aPeopleService {
                 .toList();
     }
 
-    // ---------- CREATE ----------
+    // ---------- CREATE (append-only) ----------
 
     @Transactional
     public S8aCasePersonResponse createPerson(Long s8aCaseId, CreateS8aCasePersonRequest req) {
@@ -210,18 +225,19 @@ public class S8aPeopleService {
         if (!child.getS8aCase().getId().equals(c.getId()) || !holder.getS8aCase().getId().equals(c.getId())) {
             throw DomainException.forbidden(ErrorCode.ACCESS_DENIED, "Persons must belong to same s8aCase");
         }
+        if (child.getPersonType() != S8aPersonType.KIND) {
+            throw DomainException.badRequest(ErrorCode.VALIDATION_FAILED, "childPersonId must reference a KIND person");
+        }
 
         S8aCustodyType ct;
         try { ct = S8aCustodyType.valueOf(req.custodyType().trim()); }
-        catch (Exception e) {
-            throw DomainException.badRequest(ErrorCode.VALIDATION_FAILED, "Unknown custodyType: " + req.custodyType());
-        }
+        catch (Exception e) { throw DomainException.badRequest(ErrorCode.VALIDATION_FAILED, "Unknown custodyType: " + req.custodyType()); }
 
         S8aResidenceDeterminationRight rr;
         try { rr = S8aResidenceDeterminationRight.valueOf(req.residenceRight().trim()); }
-        catch (Exception e) {
-            throw DomainException.badRequest(ErrorCode.VALIDATION_FAILED, "Unknown residenceRight: " + req.residenceRight());
-        }
+        catch (Exception e) { throw DomainException.badRequest(ErrorCode.VALIDATION_FAILED, "Unknown residenceRight: " + req.residenceRight()); }
+
+        ensureNoCustodyOverlap(c.getId(), child.getId(), holder.getId(), null, req.validFrom(), req.validTo());
 
         S8aCustodyRecord cr = new S8aCustodyRecord();
         cr.setS8aCase(c);
@@ -234,6 +250,7 @@ public class S8aPeopleService {
         cr.setSourceTitle(req.sourceTitle());
         cr.setSourceReference(req.sourceReference());
         cr.setNotes(req.notes());
+        cr.setSupersedesId(null);
 
         if (req.sourceOrderId() != null) {
             S8aOrder o = orderRepo.findById(req.sourceOrderId())
@@ -260,12 +277,15 @@ public class S8aPeopleService {
         if (!child.getS8aCase().getId().equals(c.getId()) || !other.getS8aCase().getId().equals(c.getId())) {
             throw DomainException.forbidden(ErrorCode.ACCESS_DENIED, "Persons must belong to same s8aCase");
         }
+        if (child.getPersonType() != S8aPersonType.KIND) {
+            throw DomainException.badRequest(ErrorCode.VALIDATION_FAILED, "childPersonId must reference a KIND person");
+        }
 
         S8aContactRestrictionType rt;
         try { rt = S8aContactRestrictionType.valueOf(req.restrictionType().trim()); }
-        catch (Exception e) {
-            throw DomainException.badRequest(ErrorCode.VALIDATION_FAILED, "Unknown restrictionType: " + req.restrictionType());
-        }
+        catch (Exception e) { throw DomainException.badRequest(ErrorCode.VALIDATION_FAILED, "Unknown restrictionType: " + req.restrictionType()); }
+
+        ensureNoRestrictionOverlap(c.getId(), child.getId(), other.getId(), null, req.validFrom(), req.validTo());
 
         S8aContactRestriction r = new S8aContactRestriction();
         r.setS8aCase(c);
@@ -277,6 +297,7 @@ public class S8aPeopleService {
         r.setValidTo(req.validTo());
         r.setSourceTitle(req.sourceTitle());
         r.setSourceReference(req.sourceReference());
+        r.setSupersedesId(null);
 
         if (req.sourceOrderId() != null) {
             S8aOrder o = orderRepo.findById(req.sourceOrderId())
@@ -308,6 +329,212 @@ public class S8aPeopleService {
         orderRepo.save(o);
     }
 
+    // ---------- CORRECTIONS (revisionssicher: neuer Eintrag) ----------
+
+    @Transactional
+    public void correctCustodyRecord(Long s8aCaseId, Long originalId, CreateS8aCustodyRecordCorrectionRequest req) {
+        S8aCase c = loadCaseScoped(s8aCaseId, false);
+        ensureCaseWritable(c);
+
+        if (req.correctionReason() == null || req.correctionReason().isBlank()) {
+            throw DomainException.badRequest(ErrorCode.VALIDATION_FAILED, "correctionReason is required");
+        }
+
+        S8aCustodyRecord original = custodyRepo.findByIdAndS8aCaseId(originalId, c.getId())
+                .orElseThrow(() -> DomainException.notFound(ErrorCode.NOT_FOUND, "CustodyRecord not found"));
+
+        S8aCustodyType ct;
+        try { ct = S8aCustodyType.valueOf(req.custodyType().trim()); }
+        catch (Exception e) { throw DomainException.badRequest(ErrorCode.VALIDATION_FAILED, "Unknown custodyType: " + req.custodyType()); }
+
+        S8aResidenceDeterminationRight rr;
+        try { rr = S8aResidenceDeterminationRight.valueOf(req.residenceRight().trim()); }
+        catch (Exception e) { throw DomainException.badRequest(ErrorCode.VALIDATION_FAILED, "Unknown residenceRight: " + req.residenceRight()); }
+
+        ensureNoCustodyOverlap(
+                c.getId(),
+                original.getChildPerson().getId(),
+                original.getRightHolderPerson().getId(),
+                null,
+                req.validFrom(),
+                req.validTo()
+        );
+
+        S8aCustodyRecord cr = new S8aCustodyRecord();
+        cr.setS8aCase(c);
+        cr.setChildPerson(original.getChildPerson());
+        cr.setRightHolderPerson(original.getRightHolderPerson());
+        cr.setCustodyType(ct);
+        cr.setResidenceRight(rr);
+        cr.setValidFrom(req.validFrom());
+        cr.setValidTo(req.validTo());
+        cr.setSourceTitle(req.sourceTitle());
+        cr.setSourceReference(req.sourceReference());
+        cr.setNotes(req.notes());
+        cr.setSupersedesId(original.getId());
+
+        if (req.sourceOrderId() != null) {
+            S8aOrder o = orderRepo.findById(req.sourceOrderId())
+                    .orElseThrow(() -> DomainException.notFound(ErrorCode.NOT_FOUND, "Order not found: " + req.sourceOrderId()));
+            if (!o.getS8aCase().getId().equals(c.getId())) {
+                throw DomainException.forbidden(ErrorCode.ACCESS_DENIED, "Order does not belong to this s8aCase");
+            }
+            cr.setSourceOrder(o);
+        }
+
+        S8aCustodyRecord saved = custodyRepo.save(cr);
+
+        User actor = userRepo.findById(SecurityUtils.currentUserId())
+                .orElseThrow(() -> DomainException.notFound(ErrorCode.USER_NOT_FOUND, "User not found"));
+
+        // Sichtbar im Vorgang
+        S8aEvent ev = new S8aEvent();
+        ev.setS8aCase(c);
+        ev.setType(S8aEventType.PEOPLE_RECORD_CORRECTED);
+        ev.setText("Korrektur Sorgerecht/Aufenthalt: #" + original.getId() + " → #" + saved.getId()
+                + " | Grund: " + req.correctionReason().trim());
+        ev.setPayloadJson("{\"type\":\"CUSTODY\",\"originalId\":" + original.getId() + ",\"newId\":" + saved.getId() + "}");
+        ev.setCreatedBy(actor);
+        eventRepo.save(ev);
+
+        // Audit
+        audit.log(
+                AuditEventAction.S8A_PEOPLE_RECORD_CORRECTED,
+                "S8aCustodyRecord",
+                saved.getId(),
+                c.getEinrichtung().getId(),
+                "Corrected custody record originalId=" + original.getId() + " reason=" + req.correctionReason().trim()
+        );
+    }
+
+    @Transactional
+    public void correctContactRestriction(Long s8aCaseId, Long originalId, CreateS8aContactRestrictionCorrectionRequest req) {
+        S8aCase c = loadCaseScoped(s8aCaseId, false);
+        ensureCaseWritable(c);
+
+        if (req.correctionReason() == null || req.correctionReason().isBlank()) {
+            throw DomainException.badRequest(ErrorCode.VALIDATION_FAILED, "correctionReason is required");
+        }
+
+        S8aContactRestriction original = contactRepo.findByIdAndS8aCaseId(originalId, c.getId())
+                .orElseThrow(() -> DomainException.notFound(ErrorCode.NOT_FOUND, "ContactRestriction not found"));
+
+        S8aContactRestrictionType rt;
+        try { rt = S8aContactRestrictionType.valueOf(req.restrictionType().trim()); }
+        catch (Exception e) { throw DomainException.badRequest(ErrorCode.VALIDATION_FAILED, "Unknown restrictionType: " + req.restrictionType()); }
+
+        ensureNoRestrictionOverlap(
+                c.getId(),
+                original.getChildPerson().getId(),
+                original.getOtherPerson().getId(),
+                null,
+                req.validFrom(),
+                req.validTo()
+        );
+
+        S8aContactRestriction r = new S8aContactRestriction();
+        r.setS8aCase(c);
+        r.setChildPerson(original.getChildPerson());
+        r.setOtherPerson(original.getOtherPerson());
+        r.setRestrictionType(rt);
+        r.setReason(req.reason());
+        r.setValidFrom(req.validFrom());
+        r.setValidTo(req.validTo());
+        r.setSourceTitle(req.sourceTitle());
+        r.setSourceReference(req.sourceReference());
+        r.setSupersedesId(original.getId());
+
+        if (req.sourceOrderId() != null) {
+            S8aOrder o = orderRepo.findById(req.sourceOrderId())
+                    .orElseThrow(() -> DomainException.notFound(ErrorCode.NOT_FOUND, "Order not found: " + req.sourceOrderId()));
+            if (!o.getS8aCase().getId().equals(c.getId())) {
+                throw DomainException.forbidden(ErrorCode.ACCESS_DENIED, "Order does not belong to this s8aCase");
+            }
+            r.setSourceOrder(o);
+        }
+
+        S8aContactRestriction saved = contactRepo.save(r);
+
+        User actor = userRepo.findById(SecurityUtils.currentUserId())
+                .orElseThrow(() -> DomainException.notFound(ErrorCode.USER_NOT_FOUND, "User not found"));
+
+        S8aEvent ev = new S8aEvent();
+        ev.setS8aCase(c);
+        ev.setType(S8aEventType.PEOPLE_RECORD_CORRECTED);
+        ev.setText("Korrektur Kontaktregelung: #" + original.getId() + " → #" + saved.getId()
+                + " | Grund: " + req.correctionReason().trim());
+        ev.setPayloadJson("{\"type\":\"CONTACT_RESTRICTION\",\"originalId\":" + original.getId() + ",\"newId\":" + saved.getId() + "}");
+        ev.setCreatedBy(actor);
+        eventRepo.save(ev);
+
+        audit.log(
+                AuditEventAction.S8A_PEOPLE_RECORD_CORRECTED,
+                "S8aContactRestriction",
+                saved.getId(),
+                c.getEinrichtung().getId(),
+                "Corrected contact restriction originalId=" + original.getId() + " reason=" + req.correctionReason().trim()
+        );
+    }
+
+    // ---------- overlap checks (unbounded ranges supported) ----------
+
+    private void ensureNoCustodyOverlap(Long caseId,
+                                        Long childId,
+                                        Long holderId,
+                                        Long excludeId,
+                                        String newFrom,
+                                        String newTo) {
+        LocalDate from = parseIsoDateOrNull(newFrom);
+        LocalDate to = parseIsoDateOrNull(newTo);
+
+        List<S8aCustodyRecord> existing =
+                custodyRepo.findAllByS8aCaseIdAndChildPersonIdAndRightHolderPersonIdOrderByCreatedAtDesc(caseId, childId, holderId);
+
+        for (S8aCustodyRecord e : existing) {
+            if (excludeId != null && excludeId.equals(e.getId())) continue;
+
+            if (rangesOverlap(from, to, parseIsoDateOrNull(e.getValidFrom()), parseIsoDateOrNull(e.getValidTo()))) {
+                throw DomainException.conflict(ErrorCode.CONFLICT,
+                        "CustodyRecord date range overlaps with existing record id=" + e.getId());
+            }
+        }
+    }
+
+    private void ensureNoRestrictionOverlap(Long caseId,
+                                            Long childId,
+                                            Long otherId,
+                                            Long excludeId,
+                                            String newFrom,
+                                            String newTo) {
+        LocalDate from = parseIsoDateOrNull(newFrom);
+        LocalDate to = parseIsoDateOrNull(newTo);
+
+        List<S8aContactRestriction> existing =
+                contactRepo.findAllByS8aCaseIdAndChildPersonIdAndOtherPersonIdOrderByCreatedAtDesc(caseId, childId, otherId);
+
+        for (S8aContactRestriction e : existing) {
+            if (excludeId != null && excludeId.equals(e.getId())) continue;
+
+            if (rangesOverlap(from, to, parseIsoDateOrNull(e.getValidFrom()), parseIsoDateOrNull(e.getValidTo()))) {
+                throw DomainException.conflict(ErrorCode.CONFLICT,
+                        "ContactRestriction date range overlaps with existing record id=" + e.getId());
+            }
+        }
+    }
+
+    private boolean rangesOverlap(LocalDate aFrom, LocalDate aTo, LocalDate bFrom, LocalDate bTo) {
+        LocalDate aStart = aFrom != null ? aFrom : LocalDate.MIN;
+        LocalDate aEnd = aTo != null ? aTo : LocalDate.MAX;
+        LocalDate bStart = bFrom != null ? bFrom : LocalDate.MIN;
+        LocalDate bEnd = bTo != null ? bTo : LocalDate.MAX;
+        return !aStart.isAfter(bEnd) && !bStart.isAfter(aEnd);
+    }
+
+    private LocalDate parseIsoDateOrNull(String s) {
+        if (s == null || s.isBlank()) return null;
+        try { return LocalDate.parse(s.trim()); } catch (Exception ignored) { return null; }
+    }
+
     // ---------- helpers ----------
 
     private void ensureCaseWritable(S8aCase c) {
@@ -317,6 +544,11 @@ public class S8aPeopleService {
     }
 
     private S8aCase loadCaseScoped(Long s8aCaseId, boolean allowReadOnlyRole) {
+        return getS8aCase(s8aCaseId, allowReadOnlyRole, access, caseRepo);
+    }
+
+    @NonNull
+    static S8aCase getS8aCase(Long s8aCaseId, boolean allowReadOnlyRole, AccessControlService access, S8aCaseRepository caseRepo) {
         if (allowReadOnlyRole) {
             access.requireAny(Role.LESEN, Role.FACHKRAFT, Role.TEAMLEITUNG, Role.EINRICHTUNG_ADMIN, Role.TRAEGER_ADMIN);
         } else {
