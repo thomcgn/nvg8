@@ -18,5 +18,6 @@ public enum AuditEventAction {
     S8A_CREATED,
     S8A_EVENT_ADDED,
     S8A_STATUS_CHANGED,
-    S8A_RISK_CHANGED
+    S8A_RISK_CHANGED,
+    S8A_ASSESSMENT_SAVED
 }

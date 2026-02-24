@@ -7,5 +7,6 @@ public enum S8aEventType {
     CONTACT_LOGGED,
     NOTE,
     STATUS_CHANGED,
-    CLOSED
+    CLOSED,
+    ASSESSMENT_SAVED
 }
