@@ -1,12 +1,14 @@
 package org.thomcgn.backend.people.dto;
 
+import org.thomcgn.backend.people.model.Gender;
+
 import java.time.LocalDate;
 
 public record CreateKindRequest(
         String vorname,
         String nachname,
         LocalDate geburtsdatum,
-        String gender,              // Gender enum name
+        Gender gender,
         boolean foerderbedarf,
         String foerderbedarfDetails,
         String gesundheitsHinweise

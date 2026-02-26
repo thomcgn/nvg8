@@ -21,6 +21,9 @@ public class Kind extends BasePerson {
     @Column(length = 1000)
     private String gesundheitsHinweise;
 
+    @OneToMany(mappedBy = "kind", cascade = CascadeType.ALL, orphanRemoval = true)
+    private java.util.Set<KindBezugsperson> bezugspersonBeziehungen = new java.util.HashSet<>();
+
     public Long getId() { return id; }
 
     public boolean isFoerderbedarf() { return foerderbedarf; }

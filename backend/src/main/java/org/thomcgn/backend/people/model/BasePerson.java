@@ -8,27 +8,44 @@ import java.time.LocalDate;
 @MappedSuperclass
 public abstract class BasePerson extends AuditableEntity {
 
+    // =====================================================
+    // OWNER / TENANT (Option A)
+    // =====================================================
+
+    @Column(name = "traeger_id", nullable = false, updatable = false)
+    private Long traegerId;
+
+    @Column(name = "owner_einrichtung_org_unit_id", nullable = false, updatable = false)
+    private Long ownerEinrichtungOrgUnitId;
+
+    public Long getTraegerId() { return traegerId; }
+    public void setTraegerId(Long traegerId) { this.traegerId = traegerId; }
+
+    public Long getOwnerEinrichtungOrgUnitId() { return ownerEinrichtungOrgUnitId; }
+    public void setOwnerEinrichtungOrgUnitId(Long ownerEinrichtungOrgUnitId) { this.ownerEinrichtungOrgUnitId = ownerEinrichtungOrgUnitId; }
+
+    // =====================================================
+    // PERSONENFELDER
+    // =====================================================
+
     @Column(length = 100)
     private String vorname;
 
     @Column(length = 100)
     private String nachname;
 
-    // Für jede Person sinnvoll:
     private LocalDate geburtsdatum;
 
     @Enumerated(EnumType.STRING)
     @Column(length = 20)
     private Gender gender = Gender.UNBEKANNT;
 
-    // Kontakt (optional)
     @Column(length = 50)
     private String telefon;
 
     @Column(name = "kontakt_email", length = 254)
     private String kontaktEmail;
 
-    // Adresse (optional)
     @Column(length = 200)
     private String strasse;
 
