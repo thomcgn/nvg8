@@ -5,6 +5,8 @@ import org.springframework.stereotype.Service;
 import org.thomcgn.backend.auth.dto.AvailableContextDto;
 import org.thomcgn.backend.auth.dto.LoginRequest;
 import org.thomcgn.backend.auth.dto.LoginResponse;
+import org.thomcgn.backend.common.errors.DomainException;
+import org.thomcgn.backend.common.errors.ErrorCode;
 import org.thomcgn.backend.common.security.JwtService;
 import org.thomcgn.backend.users.model.User;
 import org.thomcgn.backend.users.model.UserOrgRole;
@@ -36,19 +38,23 @@ public class AuthService {
     public LoginResponse login(LoginRequest req) {
         User user = userRepository.findByEmailIgnoreCase(req.email())
                 .filter(User::isEnabled)
-                .orElseThrow(() -> new RuntimeException("Invalid credentials"));
+                .orElseThrow(() -> DomainException.unauthorized(
+                        ErrorCode.AUTH_INVALID_CREDENTIALS,
+                        "Invalid email or password"
+                ));
 
-        if (!passwordEncoder.matches(req.password(), user.getPasswordHash())) {
-            throw new RuntimeException("Invalid credentials");
+        if (user.getPasswordHash() == null || !passwordEncoder.matches(req.password(), user.getPasswordHash())) {
+            throw DomainException.unauthorized(
+                    ErrorCode.AUTH_INVALID_CREDENTIALS,
+                    "Invalid email or password"
+            );
         }
 
-        // Base token: nur Identität (noch kein Kontext)
         String baseToken = jwtService.issueBaseToken(user.getId(), user.getEmail());
 
         List<AvailableContextDto> contexts = userOrgRoleRepository.findAllActiveByUserId(user.getId())
                 .stream()
                 .map(this::toContextDto)
-                // optional: distinct by orgUnitId
                 .toList();
 
         return new LoginResponse(baseToken, contexts);
@@ -57,6 +63,7 @@ public class AuthService {
     private AvailableContextDto toContextDto(UserOrgRole uor) {
         return new AvailableContextDto(
                 uor.getOrgUnit().getTraeger().getId(),
+                uor.getOrgUnit().getTraeger().getName(),
                 uor.getOrgUnit().getId(),
                 uor.getOrgUnit().getType().name(),
                 uor.getOrgUnit().getName()

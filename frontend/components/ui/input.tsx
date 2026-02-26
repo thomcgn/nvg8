@@ -1,21 +1,31 @@
-import * as React from "react"
+import React from "react";
 
-import { cn } from "@/lib/utils"
+type Props = React.InputHTMLAttributes<HTMLInputElement> & {
+  label?: string;
+  hint?: string;
+  error?: string;
+};
 
-function Input({ className, type, ...props }: React.ComponentProps<"input">) {
+export function Input({ label, hint, error, className = "", ...props }: Props) {
   return (
-    <input
-      type={type}
-      data-slot="input"
-      className={cn(
-        "file:text-foreground placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground dark:bg-input/30 border-input h-9 w-full min-w-0 rounded-md border bg-transparent px-3 py-1 text-base shadow-xs transition-[color,box-shadow] outline-none file:inline-flex file:h-7 file:border-0 file:bg-transparent file:text-sm file:font-medium disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm",
-        "focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]",
-        "aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive",
-        className
-      )}
-      {...props}
-    />
-  )
+    <label className="block">
+      {label ? (
+        <div className="mb-1 text-sm font-medium text-brand-text">{label}</div>
+      ) : null}
+      <input
+        className={
+          "h-11 w-full rounded-xl border bg-white px-3 text-sm outline-none transition " +
+          "border-brand-border focus:border-brand-teal focus:ring-2 focus:ring-brand-teal/25 " +
+          (error ? "border-brand-danger focus:border-brand-danger focus:ring-brand-danger/20 " : "") +
+          className
+        }
+        {...props}
+      />
+      {error ? (
+        <div className="mt-1 text-xs text-brand-danger">{error}</div>
+      ) : hint ? (
+        <div className="mt-1 text-xs text-brand-text2">{hint}</div>
+      ) : null}
+    </label>
+  );
 }
-
-export { Input }

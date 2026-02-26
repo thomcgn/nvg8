@@ -34,6 +34,7 @@ public class Invite extends AuditableEntity {
     private Long id;
 
     @Version
+    @Column(nullable = false)
     private Long version;
 
 

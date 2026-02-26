@@ -75,6 +75,7 @@ public class AuthQueryService {
     private AvailableContextDto toDto(OrgUnit ou) {
         return new AvailableContextDto(
                 ou.getTraeger().getId(),
+                ou.getTraeger().getName(),
                 ou.getId(),
                 ou.getType().name(),
                 ou.getName()

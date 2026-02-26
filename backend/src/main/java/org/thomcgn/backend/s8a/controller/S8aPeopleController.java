@@ -94,4 +94,16 @@ public class S8aPeopleController {
                                           @RequestBody CreateS8aContactRestrictionCorrectionRequest req) {
         service.correctContactRestriction(s8aCaseId, recordId, req);
     }
+
+    @GetMapping("/custody-records/{recordId}/history")
+    public List<S8aCustodyRecordResponse> custodyHistory(@PathVariable Long s8aCaseId,
+                                                         @PathVariable Long recordId) {
+        return service.getCustodyRecordHistory(s8aCaseId, recordId);
+    }
+
+    @GetMapping("/contact-restrictions/{recordId}/history")
+    public List<S8aContactRestrictionResponse> contactRestrictionHistory(@PathVariable Long s8aCaseId,
+                                                                         @PathVariable Long recordId) {
+        return service.getContactRestrictionHistory(s8aCaseId, recordId);
+    }
 }

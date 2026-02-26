@@ -1,6 +1,5 @@
 package org.thomcgn.backend.s8a.service;
 
-import org.jspecify.annotations.NonNull;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.thomcgn.backend.audit.model.AuditEventAction;
@@ -82,15 +81,22 @@ public class S8aPeopleService {
                 .toList();
     }
 
+    /**
+     * Default: Heads-only (aktueller Stand). Historie nur mit includeHistory=true.
+     */
     @Transactional(readOnly = true)
-    public List<S8aCustodyRecordResponse> listCustodyRecords(Long s8aCaseId, Long childPersonId) {
+    public List<S8aCustodyRecordResponse> listCustodyRecords(Long s8aCaseId, Long childPersonId, boolean includeHistory) {
         S8aCase c = loadCaseScoped(s8aCaseId, true);
 
         List<S8aCustodyRecord> records = (childPersonId == null)
                 ? custodyRepo.findAllByS8aCaseIdOrderByCreatedAtAsc(c.getId())
                 : custodyRepo.findAllByS8aCaseIdAndChildPersonIdOrderByCreatedAtAsc(c.getId(), childPersonId);
 
-        return records.stream()
+        List<S8aCustodyRecord> visible = includeHistory
+                ? records
+                : headsOnly(records, S8aCustodyRecord::getId, S8aCustodyRecord::getSupersedesId);
+
+        return visible.stream()
                 .map(cr -> new S8aCustodyRecordResponse(
                         cr.getId(),
                         cr.getChildPerson().getId(),
@@ -107,15 +113,22 @@ public class S8aPeopleService {
                 .toList();
     }
 
+    /**
+     * Default: Heads-only (aktueller Stand). Historie nur mit includeHistory=true.
+     */
     @Transactional(readOnly = true)
-    public List<S8aContactRestrictionResponse> listContactRestrictions(Long s8aCaseId, Long childPersonId) {
+    public List<S8aContactRestrictionResponse> listContactRestrictions(Long s8aCaseId, Long childPersonId, boolean includeHistory) {
         S8aCase c = loadCaseScoped(s8aCaseId, true);
 
         List<S8aContactRestriction> records = (childPersonId == null)
                 ? contactRepo.findAllByS8aCaseIdOrderByCreatedAtAsc(c.getId())
                 : contactRepo.findAllByS8aCaseIdAndChildPersonIdOrderByCreatedAtAsc(c.getId(), childPersonId);
 
-        return records.stream()
+        List<S8aContactRestriction> visible = includeHistory
+                ? records
+                : headsOnly(records, S8aContactRestriction::getId, S8aContactRestriction::getSupersedesId);
+
+        return visible.stream()
                 .map(r -> new S8aContactRestrictionResponse(
                         r.getId(),
                         r.getChildPerson().getId(),
@@ -145,6 +158,61 @@ public class S8aPeopleService {
                         o.getExpiresAt(),
                         o.getReference(),
                         o.getNotes()
+                ))
+                .toList();
+    }
+
+    // ---------- HISTORY ----------
+
+    @Transactional(readOnly = true)
+    public List<S8aCustodyRecordResponse> getCustodyRecordHistory(Long s8aCaseId, Long recordId) {
+        S8aCase c = loadCaseScoped(s8aCaseId, true);
+
+        S8aCustodyRecord start = custodyRepo.findByIdAndS8aCaseId(recordId, c.getId())
+                .orElseThrow(() -> DomainException.notFound(ErrorCode.NOT_FOUND, "CustodyRecord not found"));
+
+        List<S8aCustodyRecord> chain = buildCustodyChainBackwards(c.getId(), start);
+        java.util.Collections.reverse(chain); // älteste -> neueste
+
+        return chain.stream()
+                .map(cr -> new S8aCustodyRecordResponse(
+                        cr.getId(),
+                        cr.getChildPerson().getId(),
+                        cr.getRightHolderPerson().getId(),
+                        cr.getCustodyType().name(),
+                        cr.getResidenceRight().name(),
+                        cr.getValidFrom(),
+                        cr.getValidTo(),
+                        cr.getSourceTitle(),
+                        cr.getSourceReference(),
+                        cr.getSourceOrder() != null ? cr.getSourceOrder().getId() : null,
+                        cr.getNotes()
+                ))
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<S8aContactRestrictionResponse> getContactRestrictionHistory(Long s8aCaseId, Long recordId) {
+        S8aCase c = loadCaseScoped(s8aCaseId, true);
+
+        S8aContactRestriction start = contactRepo.findByIdAndS8aCaseId(recordId, c.getId())
+                .orElseThrow(() -> DomainException.notFound(ErrorCode.NOT_FOUND, "ContactRestriction not found"));
+
+        List<S8aContactRestriction> chain = buildRestrictionChainBackwards(c.getId(), start);
+        java.util.Collections.reverse(chain); // älteste -> neueste
+
+        return chain.stream()
+                .map(r -> new S8aContactRestrictionResponse(
+                        r.getId(),
+                        r.getChildPerson().getId(),
+                        r.getOtherPerson().getId(),
+                        r.getRestrictionType().name(),
+                        r.getReason(),
+                        r.getValidFrom(),
+                        r.getValidTo(),
+                        r.getSourceTitle(),
+                        r.getSourceReference(),
+                        r.getSourceOrder() != null ? r.getSourceOrder().getId() : null
                 ))
                 .toList();
     }
@@ -343,6 +411,11 @@ public class S8aPeopleService {
         S8aCustodyRecord original = custodyRepo.findByIdAndS8aCaseId(originalId, c.getId())
                 .orElseThrow(() -> DomainException.notFound(ErrorCode.NOT_FOUND, "CustodyRecord not found"));
 
+        // Nur HEAD darf korrigiert werden (sonst Forks)
+        if (!custodyRepo.findAllByS8aCaseIdAndSupersedesIdOrderByCreatedAtAsc(c.getId(), original.getId()).isEmpty()) {
+            throw DomainException.conflict(ErrorCode.CONFLICT, "Only HEAD records can be corrected (record already superseded)");
+        }
+
         S8aCustodyType ct;
         try { ct = S8aCustodyType.valueOf(req.custodyType().trim()); }
         catch (Exception e) { throw DomainException.badRequest(ErrorCode.VALIDATION_FAILED, "Unknown custodyType: " + req.custodyType()); }
@@ -387,7 +460,6 @@ public class S8aPeopleService {
         User actor = userRepo.findById(SecurityUtils.currentUserId())
                 .orElseThrow(() -> DomainException.notFound(ErrorCode.USER_NOT_FOUND, "User not found"));
 
-        // Sichtbar im Vorgang
         S8aEvent ev = new S8aEvent();
         ev.setS8aCase(c);
         ev.setType(S8aEventType.PEOPLE_RECORD_CORRECTED);
@@ -397,7 +469,6 @@ public class S8aPeopleService {
         ev.setCreatedBy(actor);
         eventRepo.save(ev);
 
-        // Audit
         audit.log(
                 AuditEventAction.S8A_PEOPLE_RECORD_CORRECTED,
                 "S8aCustodyRecord",
@@ -405,66 +476,6 @@ public class S8aPeopleService {
                 c.getEinrichtung().getId(),
                 "Corrected custody record originalId=" + original.getId() + " reason=" + req.correctionReason().trim()
         );
-    }
-    @Transactional(readOnly = true)
-    public List<S8aCustodyRecordResponse> listCustodyRecords(Long s8aCaseId, Long childPersonId, boolean includeHistory) {
-        S8aCase c = loadCaseScoped(s8aCaseId, true);
-
-        List<S8aCustodyRecord> records = (childPersonId == null)
-                ? custodyRepo.findAllByS8aCaseIdOrderByCreatedAtAsc(c.getId())
-                : custodyRepo.findAllByS8aCaseIdAndChildPersonIdOrderByCreatedAtAsc(c.getId(), childPersonId);
-
-        List<S8aCustodyRecord> visible = includeHistory
-                ? records
-                : headsOnly(records,
-                S8aCustodyRecord::getId,
-                S8aCustodyRecord::getSupersedesId);
-
-        return visible.stream()
-                .map(cr -> new S8aCustodyRecordResponse(
-                        cr.getId(),
-                        cr.getChildPerson().getId(),
-                        cr.getRightHolderPerson().getId(),
-                        cr.getCustodyType().name(),
-                        cr.getResidenceRight().name(),
-                        cr.getValidFrom(),
-                        cr.getValidTo(),
-                        cr.getSourceTitle(),
-                        cr.getSourceReference(),
-                        cr.getSourceOrder() != null ? cr.getSourceOrder().getId() : null,
-                        cr.getNotes()
-                ))
-                .toList();
-    }
-
-    @Transactional(readOnly = true)
-    public List<S8aContactRestrictionResponse> listContactRestrictions(Long s8aCaseId, Long childPersonId, boolean includeHistory) {
-        S8aCase c = loadCaseScoped(s8aCaseId, true);
-
-        List<S8aContactRestriction> records = (childPersonId == null)
-                ? contactRepo.findAllByS8aCaseIdOrderByCreatedAtAsc(c.getId())
-                : contactRepo.findAllByS8aCaseIdAndChildPersonIdOrderByCreatedAtAsc(c.getId(), childPersonId);
-
-        List<S8aContactRestriction> visible = includeHistory
-                ? records
-                : headsOnly(records,
-                S8aContactRestriction::getId,
-                S8aContactRestriction::getSupersedesId);
-
-        return visible.stream()
-                .map(r -> new S8aContactRestrictionResponse(
-                        r.getId(),
-                        r.getChildPerson().getId(),
-                        r.getOtherPerson().getId(),
-                        r.getRestrictionType().name(),
-                        r.getReason(),
-                        r.getValidFrom(),
-                        r.getValidTo(),
-                        r.getSourceTitle(),
-                        r.getSourceReference(),
-                        r.getSourceOrder() != null ? r.getSourceOrder().getId() : null
-                ))
-                .toList();
     }
 
     @Transactional
@@ -478,6 +489,11 @@ public class S8aPeopleService {
 
         S8aContactRestriction original = contactRepo.findByIdAndS8aCaseId(originalId, c.getId())
                 .orElseThrow(() -> DomainException.notFound(ErrorCode.NOT_FOUND, "ContactRestriction not found"));
+
+        // Nur HEAD darf korrigiert werden (sonst Forks)
+        if (!contactRepo.findAllByS8aCaseIdAndSupersedesIdOrderByCreatedAtAsc(c.getId(), original.getId()).isEmpty()) {
+            throw DomainException.conflict(ErrorCode.CONFLICT, "Only HEAD records can be corrected (record already superseded)");
+        }
 
         S8aContactRestrictionType rt;
         try { rt = S8aContactRestrictionType.valueOf(req.restrictionType().trim()); }
@@ -534,6 +550,69 @@ public class S8aPeopleService {
                 c.getEinrichtung().getId(),
                 "Corrected contact restriction originalId=" + original.getId() + " reason=" + req.correctionReason().trim()
         );
+    }
+
+    // ---------- generic heads-only helper (avoids type-erasure clashes) ----------
+
+    private <T> List<T> headsOnly(List<T> records,
+                                  java.util.function.Function<T, Long> idExtractor,
+                                  java.util.function.Function<T, Long> supersedesExtractor) {
+
+        if (records == null || records.isEmpty()) return List.of();
+
+        java.util.Set<Long> supersededIds = new java.util.HashSet<>();
+        for (T r : records) {
+            Long sid = supersedesExtractor.apply(r);
+            if (sid != null) supersededIds.add(sid);
+        }
+
+        return records.stream()
+                .filter(r -> !supersededIds.contains(idExtractor.apply(r)))
+                .toList();
+    }
+
+    // ---------- history helpers (fixed: lambda capture with effectively-final var) ----------
+
+    private List<S8aCustodyRecord> buildCustodyChainBackwards(Long caseId, S8aCustodyRecord start) {
+        java.util.ArrayList<S8aCustodyRecord> chain = new java.util.ArrayList<>();
+        chain.add(start);
+
+        Long prevId = start.getSupersedesId();
+        while (prevId != null) {
+            final Long currentId = prevId;
+
+            S8aCustodyRecord prev = custodyRepo.findByIdAndS8aCaseId(currentId, caseId)
+                    .orElseThrow(() -> DomainException.notFound(
+                            ErrorCode.NOT_FOUND,
+                            "Broken custody history chain at id=" + currentId
+                    ));
+
+            chain.add(prev);
+            prevId = prev.getSupersedesId();
+        }
+
+        return chain;
+    }
+
+    private List<S8aContactRestriction> buildRestrictionChainBackwards(Long caseId, S8aContactRestriction start) {
+        java.util.ArrayList<S8aContactRestriction> chain = new java.util.ArrayList<>();
+        chain.add(start);
+
+        Long prevId = start.getSupersedesId();
+        while (prevId != null) {
+            final Long currentId = prevId;
+
+            S8aContactRestriction prev = contactRepo.findByIdAndS8aCaseId(currentId, caseId)
+                    .orElseThrow(() -> DomainException.notFound(
+                            ErrorCode.NOT_FOUND,
+                            "Broken restriction history chain at id=" + currentId
+                    ));
+
+            chain.add(prev);
+            prevId = prev.getSupersedesId();
+        }
+
+        return chain;
     }
 
     // ---------- overlap checks (unbounded ranges supported) ----------
@@ -597,24 +676,6 @@ public class S8aPeopleService {
 
     // ---------- helpers ----------
 
-    private <T> List<T> headsOnly(List<T> records,
-                                  java.util.function.Function<T, Long> idExtractor,
-                                  java.util.function.Function<T, Long> supersedesExtractor) {
-
-        if (records == null || records.isEmpty()) return List.of();
-
-        java.util.Set<Long> supersededIds = new java.util.HashSet<>();
-
-        for (T r : records) {
-            Long supersedesId = supersedesExtractor.apply(r);
-            if (supersedesId != null) supersededIds.add(supersedesId);
-        }
-
-        return records.stream()
-                .filter(r -> !supersededIds.contains(idExtractor.apply(r)))
-                .toList();
-    }
-
     private void ensureCaseWritable(S8aCase c) {
         if (c.getStatus() == S8aStatus.ABGESCHLOSSEN) {
             throw DomainException.forbidden(ErrorCode.ACCESS_DENIED, "S8a case is closed (read-only).");
@@ -622,11 +683,6 @@ public class S8aPeopleService {
     }
 
     private S8aCase loadCaseScoped(Long s8aCaseId, boolean allowReadOnlyRole) {
-        return getS8aCase(s8aCaseId, allowReadOnlyRole, access, caseRepo);
-    }
-
-    @NonNull
-    static S8aCase getS8aCase(Long s8aCaseId, boolean allowReadOnlyRole, AccessControlService access, S8aCaseRepository caseRepo) {
         if (allowReadOnlyRole) {
             access.requireAny(Role.LESEN, Role.FACHKRAFT, Role.TEAMLEITUNG, Role.EINRICHTUNG_ADMIN, Role.TRAEGER_ADMIN);
         } else {
@@ -646,5 +702,4 @@ public class S8aPeopleService {
         );
         return c;
     }
-
 }

@@ -6,55 +6,222 @@ import org.thomcgn.backend.auth.model.Role;
 import org.thomcgn.backend.auth.service.AccessControlService;
 import org.thomcgn.backend.common.errors.DomainException;
 import org.thomcgn.backend.common.errors.ErrorCode;
-import org.thomcgn.backend.people.dto.CreateKindRequest;
-import org.thomcgn.backend.people.dto.KindResponse;
-import org.thomcgn.backend.people.model.Gender;
-import org.thomcgn.backend.people.model.Kind;
+import org.thomcgn.backend.common.security.SecurityUtils;
+import org.thomcgn.backend.people.dto.*;
+import org.thomcgn.backend.people.model.*;
+import org.thomcgn.backend.people.repo.BezugspersonRepository;
+import org.thomcgn.backend.people.repo.KindBezugspersonRepository;
 import org.thomcgn.backend.people.repo.KindRepository;
+
+import java.time.LocalDate;
+import java.util.List;
 
 @Service
 public class KindService {
 
-    private final KindRepository repo;
+    private final KindRepository kindRepo;
+    private final BezugspersonRepository bezugRepo;
+    private final KindBezugspersonRepository linkRepo;
+
+    private final BezugspersonService bezugspersonService;
     private final AccessControlService access;
 
-    public KindService(KindRepository repo, AccessControlService access) {
-        this.repo = repo;
+    public KindService(
+            KindRepository kindRepo,
+            BezugspersonRepository bezugRepo,
+            KindBezugspersonRepository linkRepo,
+            BezugspersonService bezugspersonService,
+            AccessControlService access
+    ) {
+        this.kindRepo = kindRepo;
+        this.bezugRepo = bezugRepo;
+        this.linkRepo = linkRepo;
+        this.bezugspersonService = bezugspersonService;
         this.access = access;
     }
+
+    // =====================================================
+    // Kind
+    // =====================================================
 
     @Transactional
     public KindResponse create(CreateKindRequest req) {
         access.requireAny(Role.FACHKRAFT, Role.TEAMLEITUNG, Role.EINRICHTUNG_ADMIN, Role.TRAEGER_ADMIN);
 
+        if (req == null) {
+            throw DomainException.badRequest(ErrorCode.VALIDATION_FAILED, "request required");
+        }
+
         Kind k = new Kind();
+
+        // Option A Owner-Felder
+        k.setTraegerId(SecurityUtils.currentTraegerIdRequired());
+        Long ownerEinrichtung = access.activeEinrichtungId();
+        if (ownerEinrichtung == null) {
+            throw DomainException.conflict(ErrorCode.CONFLICT, "No active Einrichtung in context.");
+        }
+        k.setOwnerEinrichtungOrgUnitId(ownerEinrichtung);
+
+        // Fachfelder (Record-Accessors!)
         k.setVorname(req.vorname());
         k.setNachname(req.nachname());
         k.setGeburtsdatum(req.geburtsdatum());
+        k.setGender(req.gender() != null ? req.gender() : Gender.UNBEKANNT);
 
-        Gender g = Gender.UNBEKANNT;
-        if (req.gender() != null && !req.gender().isBlank()) {
-            try { g = Gender.valueOf(req.gender().trim()); }
-            catch (Exception e) { throw DomainException.badRequest(ErrorCode.VALIDATION_FAILED, "Unknown gender: " + req.gender()); }
-        }
-        k.setGender(g);
-
+        // kind-spezifisch (falls in CreateKindRequest vorhanden)
+        // Wenn deine CreateKindRequest diese Felder NICHT hat, diese 3 Zeilen löschen.
         k.setFoerderbedarf(req.foerderbedarf());
         k.setFoerderbedarfDetails(req.foerderbedarfDetails());
         k.setGesundheitsHinweise(req.gesundheitsHinweise());
 
-        Kind saved = repo.save(k);
+        access.requireAccessToEinrichtungObject(
+                k.getTraegerId(),
+                k.getOwnerEinrichtungOrgUnitId(),
+                Role.FACHKRAFT, Role.TEAMLEITUNG, Role.EINRICHTUNG_ADMIN, Role.TRAEGER_ADMIN
+        );
+
+        Kind saved = kindRepo.save(k);
         return toDto(saved);
+    }
+
+    @Transactional
+    public CreateKindResponse createComplete(CreateKindCompleteRequest req) {
+        access.requireAny(Role.FACHKRAFT, Role.TEAMLEITUNG, Role.EINRICHTUNG_ADMIN, Role.TRAEGER_ADMIN);
+
+        if (req == null || req.kind() == null) {
+            throw DomainException.badRequest(ErrorCode.VALIDATION_FAILED, "kind required");
+        }
+        if (req.bezugspersonen() == null || req.bezugspersonen().isEmpty()) {
+            throw DomainException.badRequest(ErrorCode.VALIDATION_FAILED, "Mindestens eine Bezugsperson ist erforderlich");
+        }
+
+        KindResponse created = create(req.kind());
+        Long kindId = created.id();
+
+        for (AddKindBezugspersonRequest bpReq : req.bezugspersonen()) {
+            addBezugsperson(kindId, bpReq);
+        }
+
+        return new CreateKindResponse(kindId);
     }
 
     @Transactional(readOnly = true)
     public KindResponse get(Long id) {
         access.requireAny(Role.LESEN, Role.FACHKRAFT, Role.TEAMLEITUNG, Role.EINRICHTUNG_ADMIN, Role.TRAEGER_ADMIN);
 
-        Kind k = repo.findById(id)
+        Kind k = kindRepo.findById(id)
                 .orElseThrow(() -> DomainException.notFound(ErrorCode.NOT_FOUND, "Kind not found"));
+
+        access.requireAccessToEinrichtungObject(
+                k.getTraegerId(),
+                k.getOwnerEinrichtungOrgUnitId(),
+                Role.LESEN, Role.FACHKRAFT, Role.TEAMLEITUNG, Role.EINRICHTUNG_ADMIN, Role.TRAEGER_ADMIN
+        );
+
         return toDto(k);
     }
+
+    // =====================================================
+    // Bezugsperson-Beziehungen
+    // =====================================================
+
+    @Transactional(readOnly = true)
+    public List<KindBezugspersonResponse> listBezugspersonen(Long kindId, boolean includeInactive) {
+        access.requireAny(Role.LESEN, Role.FACHKRAFT, Role.TEAMLEITUNG, Role.EINRICHTUNG_ADMIN, Role.TRAEGER_ADMIN);
+
+        // optional: Kind laden für objektbasierte Prüfung
+        Kind k = kindRepo.findById(kindId)
+                .orElseThrow(() -> DomainException.notFound(ErrorCode.NOT_FOUND, "Kind not found"));
+        access.requireAccessToEinrichtungObject(
+                k.getTraegerId(),
+                k.getOwnerEinrichtungOrgUnitId(),
+                Role.LESEN, Role.FACHKRAFT, Role.TEAMLEITUNG, Role.EINRICHTUNG_ADMIN, Role.TRAEGER_ADMIN
+        );
+
+        List<KindBezugsperson> links = includeInactive
+                ? linkRepo.findByKindId(kindId)
+                : linkRepo.findActiveByKindId(kindId, LocalDate.now());
+
+        return links.stream().map(this::toLinkDto).toList();
+    }
+
+    @Transactional
+    public KindBezugspersonResponse addBezugsperson(Long kindId, AddKindBezugspersonRequest req) {
+        access.requireAny(Role.FACHKRAFT, Role.TEAMLEITUNG, Role.EINRICHTUNG_ADMIN, Role.TRAEGER_ADMIN);
+
+        if (req == null) {
+            throw DomainException.badRequest(ErrorCode.VALIDATION_FAILED, "request required");
+        }
+
+        Kind kind = kindRepo.findById(kindId)
+                .orElseThrow(() -> DomainException.notFound(ErrorCode.NOT_FOUND, "Kind not found"));
+
+        access.requireAccessToEinrichtungObject(
+                kind.getTraegerId(),
+                kind.getOwnerEinrichtungOrgUnitId(),
+                Role.FACHKRAFT, Role.TEAMLEITUNG, Role.EINRICHTUNG_ADMIN, Role.TRAEGER_ADMIN
+        );
+
+        boolean hasExisting = req.existingBezugspersonId() != null;
+        boolean hasCreate = req.create() != null;
+        if (hasExisting == hasCreate) {
+            throw DomainException.badRequest(ErrorCode.VALIDATION_FAILED, "entweder existingBezugspersonId oder create");
+        }
+        if (req.beziehung() == null) {
+            throw DomainException.badRequest(ErrorCode.VALIDATION_FAILED, "beziehung required");
+        }
+
+        Bezugsperson bp = hasExisting
+                ? bezugRepo.findById(req.existingBezugspersonId())
+                .orElseThrow(() -> DomainException.notFound(ErrorCode.NOT_FOUND, "Bezugsperson not found"))
+                : bezugspersonService.createEntity(req.create());
+
+        KindBezugsperson link = new KindBezugsperson();
+        link.setKind(kind);
+        link.setBezugsperson(bp);
+        link.setBeziehung(req.beziehung());
+
+        link.setSorgerecht(req.sorgerecht() != null ? req.sorgerecht() : SorgerechtTyp.UNGEKLAERT);
+        link.setValidFrom(req.validFrom() != null ? req.validFrom() : LocalDate.now());
+        link.setValidTo(null);
+
+        link.setHauptkontakt(Boolean.TRUE.equals(req.hauptkontakt()));
+        link.setLebtImHaushalt(Boolean.TRUE.equals(req.lebtImHaushalt()));
+        link.setEnabled(true);
+
+        return toLinkDto(linkRepo.save(link));
+    }
+
+    @Transactional
+    public KindBezugspersonResponse endBezugspersonLink(Long kindId, Long linkId, EndKindBezugspersonRequest req) {
+        access.requireAny(Role.FACHKRAFT, Role.TEAMLEITUNG, Role.EINRICHTUNG_ADMIN, Role.TRAEGER_ADMIN);
+
+        KindBezugsperson link = linkRepo.findByIdAndKindId(linkId, kindId)
+                .orElseThrow(() -> DomainException.notFound(ErrorCode.NOT_FOUND, "Link not found"));
+
+        Kind kind = link.getKind();
+        access.requireAccessToEinrichtungObject(
+                kind.getTraegerId(),
+                kind.getOwnerEinrichtungOrgUnitId(),
+                Role.FACHKRAFT, Role.TEAMLEITUNG, Role.EINRICHTUNG_ADMIN, Role.TRAEGER_ADMIN
+        );
+
+        if (req == null || req.validTo() == null) {
+            throw DomainException.badRequest(ErrorCode.VALIDATION_FAILED, "validTo required");
+        }
+        if (req.validTo().isBefore(link.getValidFrom())) {
+            throw DomainException.badRequest(ErrorCode.VALIDATION_FAILED, "validTo darf nicht vor validFrom liegen");
+        }
+
+        link.setValidTo(req.validTo());
+        link.setEnabled(false);
+
+        return toLinkDto(linkRepo.save(link));
+    }
+
+    // =====================================================
+    // Mapping
+    // =====================================================
 
     private KindResponse toDto(Kind k) {
         return new KindResponse(
@@ -62,10 +229,28 @@ public class KindService {
                 k.getVorname(),
                 k.getNachname(),
                 k.getGeburtsdatum(),
-                k.getGender() != null ? k.getGender().name() : Gender.UNBEKANNT.name(),
+                k.getGender() != null ? k.getGender() : Gender.UNBEKANNT,
                 k.isFoerderbedarf(),
                 k.getFoerderbedarfDetails(),
                 k.getGesundheitsHinweise()
+        );
+    }
+
+    private KindBezugspersonResponse toLinkDto(KindBezugsperson l) {
+        String name = l.getBezugsperson() != null ? l.getBezugsperson().getDisplayName() : "-";
+        Long bpId = l.getBezugsperson() != null ? l.getBezugsperson().getId() : null;
+
+        return new KindBezugspersonResponse(
+                l.getId(),
+                bpId,
+                name,
+                l.getBeziehung(),
+                l.getSorgerecht(),
+                l.getValidFrom(),
+                l.getValidTo(),
+                l.isHauptkontakt(),
+                l.isLebtImHaushalt(),
+                l.isEnabled()
         );
     }
 }

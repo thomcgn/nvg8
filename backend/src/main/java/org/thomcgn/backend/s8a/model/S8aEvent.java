@@ -27,8 +27,8 @@ public class S8aEvent extends AuditableEntity {
     private S8aEventType type;
 
     // Optional: strukturierte Daten als JSON (Postgres JSONB später)
-    @Lob
-    @Column(name="payload_json")
+
+    @Column(name="payload_json", columnDefinition = "text")
     private String payloadJson;
 
     @Column(length = 2000)

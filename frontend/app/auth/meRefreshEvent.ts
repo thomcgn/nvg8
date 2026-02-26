@@ -1,1 +1,0 @@
-export const ME_REFRESH_EVENT = "me:refresh";

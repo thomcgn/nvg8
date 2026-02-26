@@ -25,8 +25,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-import static org.thomcgn.backend.s8a.service.S8aPeopleService.getS8aCase;
-
 /**
  * §8a Assessment (Schutzkonzept) – versioniert + Beteiligte als Participants.
  *
@@ -233,7 +231,25 @@ public class S8aAssessmentService {
     }
 
     private S8aCase loadCaseScoped(Long s8aCaseId, boolean allowReadOnlyRole) {
-        return getS8aCase(s8aCaseId, allowReadOnlyRole, access, caseRepo);
+        if (allowReadOnlyRole) {
+            access.requireAny(Role.LESEN, Role.FACHKRAFT, Role.TEAMLEITUNG, Role.EINRICHTUNG_ADMIN, Role.TRAEGER_ADMIN);
+        } else {
+            access.requireAny(Role.FACHKRAFT, Role.TEAMLEITUNG, Role.EINRICHTUNG_ADMIN, Role.TRAEGER_ADMIN);
+        }
+
+        Long tid = SecurityUtils.currentTraegerIdRequired();
+        Long oid = SecurityUtils.currentOrgUnitIdRequired();
+
+        S8aCase c = caseRepo.findByIdWithRefsScoped(s8aCaseId, tid, oid)
+                .orElseThrow(() -> DomainException.notFound(ErrorCode.NOT_FOUND, "S8a case not found"));
+
+        access.requireAccessToEinrichtungObject(
+                c.getTraeger().getId(),
+                c.getEinrichtung().getId(),
+                Role.LESEN, Role.FACHKRAFT, Role.TEAMLEITUNG, Role.EINRICHTUNG_ADMIN, Role.TRAEGER_ADMIN
+        );
+
+        return c;
     }
 
     private S8aAssessmentResponse map(S8aAssessment a) {

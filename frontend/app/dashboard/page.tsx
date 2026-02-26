@@ -1,182 +1,228 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
+import { AlertTriangle, CheckCircle2, FileText, ShieldAlert, TrendingUp } from "lucide-react";
+import { AuthGate } from "@/components/AuthGate";
+import { Topbar } from "@/components/layout/Topbar";
+import { Card, CardContent, CardHeader } from "@/components/ui/Card";
+import { Badge } from "@/components/ui/Badge";
+import { apiFetch } from "@/lib/api";
+import type { FalleroeffnungListResponse, FalleroeffnungListItem } from "@/lib/types";
 
-import StatCard from "./components/StatCard";
-import CaseTable from "./components/CaseTable";
-import CaseWizard from "../cases/components/CaseWizard";
-
-import { FaUsers, FaFolderOpen, FaExclamationTriangle } from "react-icons/fa";
-import type { Case, CaseStatus, KindSummary } from "@/lib/types";
-
-type DashboardStatsResponse = {
-    meineOffenenFaelle: number;
-    akutGefaehrdet: number;
-    abgeschlossen30Tage: number;
-};
-
-type MyFallResponse = {
-    id: number;
-    status: CaseStatus | null;
-    updatedAt: string | null;
-    kind: {
-        id: number;
-        vorname: string;
-        nachname: string;
-        geburtsdatum: string | null;
-    } | null;
-};
-
-function calcAgeYears(geburtsdatum: string | null): number {
-    if (!geburtsdatum) return 0;
-    const d = new Date(geburtsdatum);
-    if (Number.isNaN(d.getTime())) return 0;
-
-    const now = new Date();
-    let age = now.getFullYear() - d.getFullYear();
-    const m = now.getMonth() - d.getMonth();
-    if (m < 0 || (m === 0 && now.getDate() < d.getDate())) age--;
-    return Math.max(age, 0);
+function toneForStatus(status: string): "success" | "warning" | "danger" | "info" | "neutral" {
+  const s = (status || "").toLowerCase();
+  if (s.includes("hoch") || s.includes("krit") || s.includes("risiko")) return "danger";
+  if (s.includes("warn") || s.includes("prüf") || s.includes("review")) return "warning";
+  if (s.includes("abgesch") || s.includes("done") || s.includes("geschlossen")) return "success";
+  if (s.includes("offen") || s.includes("neu")) return "info";
+  return "neutral";
 }
 
-function formatLastActivity(updatedAt: string | null): string {
-    if (!updatedAt) return "—";
-    const d = new Date(updatedAt);
-    if (Number.isNaN(d.getTime())) return "—";
-    return d.toLocaleDateString("de-DE");
+const MOCK: FalleroeffnungListItem[] = [
+  { id: 101, aktenzeichen: "KID-2026-001", status: "OFFEN", kindName: "M. (7)", createdAt: "2026-02-12" },
+  { id: 102, aktenzeichen: "KID-2026-002", status: "WARNUNG", kindName: "L. (12)", createdAt: "2026-02-13" },
+  { id: 103, aktenzeichen: "KID-2026-003", status: "RISIKO_HOCH", kindName: "S. (4)", createdAt: "2026-02-15" },
+  { id: 104, aktenzeichen: "KID-2026-004", status: "ABGESCHLOSSEN", kindName: "A. (9)", createdAt: "2026-02-18" },
+];
+
+function filterItems(list: FalleroeffnungListItem[], q: string) {
+  const qq = q.trim().toLowerCase();
+  if (!qq) return list;
+  return list.filter((i) => {
+    const hay = `${i.aktenzeichen ?? ""} ${i.kindName ?? ""} ${i.status ?? ""}`.toLowerCase();
+    return hay.includes(qq);
+  });
 }
 
-async function readBodySafe(res: Response): Promise<string> {
-    try {
-        return await res.text();
-    } catch {
-        return "";
+export default function DashboardHome() {
+  const [q, setQ] = useState("");
+  const [items, setItems] = useState<FalleroeffnungListItem[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [useMock, setUseMock] = useState(false);
+
+  async function load(currentQ: string) {
+    setLoading(true);
+
+    const forceMock = process.env.NEXT_PUBLIC_FORCE_MOCK === "1";
+    if (forceMock || useMock) {
+      setItems(filterItems(MOCK, currentQ));
+      setLoading(false);
+      return;
     }
-}
 
-export default function DashboardPage() {
-    const router = useRouter();
-    const searchParams = useSearchParams();
+    try {
+      const res = await apiFetch<FalleroeffnungListResponse>(
+          `/falloeffnungen?q=${encodeURIComponent(currentQ)}&size=8`,
+          { method: "GET" }
+      );
+      setItems(res.items || []);
+    } catch {
+      setUseMock(true);
+      setItems(filterItems(MOCK, currentQ));
+    } finally {
+      setLoading(false);
+    }
+  }
 
-    const [showWizard, setShowWizard] = useState(false);
+  useEffect(() => {
+    load("");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    const t = setTimeout(() => load(q), 250);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [q, useMock]);
 
-    const [stats, setStats] = useState<DashboardStatsResponse>({
-        meineOffenenFaelle: 0,
-        akutGefaehrdet: 0,
-        abgeschlossen30Tage: 0,
-    });
+  const stats = useMemo(() => {
+    const total = items.length;
+    const high = items.filter((i) => toneForStatus(i.status) === "danger").length;
+    const warn = items.filter((i) => toneForStatus(i.status) === "warning").length;
+    const done = items.filter((i) => toneForStatus(i.status) === "success").length;
+    return { total, high, warn, done };
+  }, [items]);
 
-    const [kinderGesamt, setKinderGesamt] = useState<number>(0);
-    const [cases, setCases] = useState<Case[]>([]);
+  return (
+      <AuthGate>
+        <div className="min-h-screen bg-brand-bg overflow-x-hidden">
+          <Topbar title="Übersicht" onSearch={(val) => setQ(val)} />
 
-    useEffect(() => {
-        if (searchParams.get("wizard") === "1") {
-            setShowWizard(true);
+          <div className="mx-auto w-full max-w-6xl space-y-4 px-4 pb-8 pt-4 sm:space-y-6 sm:px-6 md:px-8">
+            {useMock ? (
+                <div className="rounded-2xl border border-brand-warning/25 bg-brand-warning/10 p-4 text-sm text-brand-text">
+                  Backend nicht erreichbar/unauthorisiert – zeige Mock-Daten (Suche läuft lokal).
+                </div>
+            ) : null}
 
-            // ✅ URL bereinigen ohne Next-Navigation/Remount
-            if (typeof window !== "undefined") {
-                window.history.replaceState(null, "", "/dashboard");
-            }
-        }
-    }, [searchParams]);
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <Card>
+                <CardHeader className="flex items-center justify-between">
+                  <div className="text-sm font-semibold text-brand-text2">Offene Fälle</div>
+                  <FileText className="h-4 w-4 text-brand-blue shrink-0" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-3xl font-extrabold text-brand-navy">{stats.total}</div>
+                  <div className="mt-1 text-xs text-brand-text2">inkl. Suche/Filter</div>
+                </CardContent>
+              </Card>
 
-    const fetchAll = async (): Promise<void> => {
-        setLoading(true);
-        setError(null);
+              <Card>
+                <CardHeader className="flex items-center justify-between">
+                  <div className="text-sm font-semibold text-brand-text2">Risiko hoch</div>
+                  <ShieldAlert className="h-4 w-4 text-brand-danger shrink-0" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-3xl font-extrabold text-brand-navy">{stats.high}</div>
+                  <div className="mt-1 text-xs text-brand-text2">Priorität: sofort</div>
+                </CardContent>
+              </Card>
 
-        try {
-            const [statsRes, mineRes, kinderRes] = await Promise.all([
-                fetch("/api/cases/stats", { credentials: "include", cache: "no-store" }),
-                fetch("/api/cases/mine", { credentials: "include", cache: "no-store" }),
-                fetch("/api/cases/kinder", { credentials: "include", cache: "no-store" }),
-            ]);
+              <Card>
+                <CardHeader className="flex items-center justify-between">
+                  <div className="text-sm font-semibold text-brand-text2">Warnungen</div>
+                  <AlertTriangle className="h-4 w-4 text-brand-warning shrink-0" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-3xl font-extrabold text-brand-navy">{stats.warn}</div>
+                  <div className="mt-1 text-xs text-brand-text2">prüfen & dokumentieren</div>
+                </CardContent>
+              </Card>
 
-            if (!statsRes.ok) throw new Error(`GET /api/cases/stats failed: ${statsRes.status} ${await readBodySafe(statsRes)}`);
-            if (!mineRes.ok) throw new Error(`GET /api/cases/mine failed: ${mineRes.status} ${await readBodySafe(mineRes)}`);
-            if (!kinderRes.ok) throw new Error(`GET /api/cases/kinder failed: ${kinderRes.status} ${await readBodySafe(kinderRes)}`);
+              <Card>
+                <CardHeader className="flex items-center justify-between">
+                  <div className="text-sm font-semibold text-brand-text2">Abgeschlossen</div>
+                  <CheckCircle2 className="h-4 w-4 text-brand-success shrink-0" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-3xl font-extrabold text-brand-navy">{stats.done}</div>
+                  <div className="mt-1 text-xs text-brand-text2">auditierbar</div>
+                </CardContent>
+              </Card>
+            </div>
 
-            const statsJson: DashboardStatsResponse = await statsRes.json();
-            const mineJson: MyFallResponse[] = await mineRes.json();
-            const kinderJson: KindSummary[] = await kinderRes.json();
+            <Card>
+              <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                <div className="min-w-0">
+                  <div className="text-sm font-semibold text-brand-text">Aktuelle Fälle</div>
+                  <div className="mt-1 text-xs text-brand-text2">
+                    Kurzliste aus <code className="rounded bg-brand-bg px-1">/falloeffnungen</code>
+                  </div>
+                </div>
+                <div className="text-xs text-brand-text2">{loading ? "lädt…" : `${items.length} Einträge`}</div>
+              </CardHeader>
 
-            setStats(statsJson);
-            setKinderGesamt(kinderJson.length);
+              <CardContent>
+                {/* ✅ IMPORTANT: contain horizontal scroll here, not on body */}
+                <div className="w-full max-w-full overflow-x-auto rounded-xl">
+                  <table className="min-w-max w-full text-left text-sm">
+                    <thead className="text-xs font-semibold text-brand-text2">
+                    <tr className="border-b border-brand-border">
+                      <th className="py-2 pr-4 whitespace-nowrap">Aktenzeichen</th>
+                      <th className="py-2 pr-4 whitespace-nowrap">Kind</th>
+                      <th className="py-2 pr-4 whitespace-nowrap">Status</th>
+                      <th className="py-2 pr-0 whitespace-nowrap">Erstellt</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    {items.map((i) => (
+                        <tr key={i.id} className="border-b border-brand-border/70 last:border-0">
+                          <td className="py-3 pr-4 font-semibold text-brand-blue whitespace-nowrap">
+                            {i.aktenzeichen || `#${i.id}`}
+                          </td>
+                          <td className="py-3 pr-4 text-brand-text whitespace-nowrap">{i.kindName || "—"}</td>
+                          <td className="py-3 pr-4">
+                            <Badge tone={toneForStatus(i.status)}>{i.status}</Badge>
+                          </td>
+                          <td className="py-3 pr-0 text-brand-text2 whitespace-nowrap">{i.createdAt || "—"}</td>
+                        </tr>
+                    ))}
+                    {!items.length ? (
+                        <tr>
+                          <td className="py-6 text-center text-brand-text2" colSpan={4}>
+                            Keine Daten.
+                          </td>
+                        </tr>
+                    ) : null}
+                    </tbody>
+                  </table>
+                </div>
 
-            const mapped: Case[] = mineJson.map((f) => {
-                const kind = f.kind;
-                const childName = kind ? `${kind.vorname} ${kind.nachname}`.trim() : `Fall #${f.id}`;
+                <div className="mt-3 text-xs text-brand-text2 sm:hidden">
+                  Tipp: Tabelle kann horizontal gescrollt werden.
+                </div>
+              </CardContent>
+            </Card>
 
-                return {
-                    id: f.id,
-                    kindId: kind?.id,
-                    childName,
-                    age: calcAgeYears(kind?.geburtsdatum ?? null),
-                    status: f.status ?? "ENTWURF",
-                    lastActivity: formatLastActivity(f.updatedAt),
-                };
-            });
-
-            setCases(mapped);
-        } catch (e) {
-            setError(e instanceof Error ? e.message : "Dashboard konnte nicht geladen werden.");
-            setCases([]);
-            setStats({ meineOffenenFaelle: 0, akutGefaehrdet: 0, abgeschlossen30Tage: 0 });
-            setKinderGesamt(0);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    useEffect(() => {
-        void fetchAll();
-    }, []);
-
-    const onCancelWizard = () => {
-        setShowWizard(false);
-        void fetchAll();
-    };
-
-    const onClickCase = (c: Case) => {
-        if (!c.kindId) {
-            alert("Dieser Fall hat kein Kind zugeordnet (kindId fehlt).");
-            return;
-        }
-        router.push(`/dashboard/cases/${c.id}/checklists?kindId=${c.kindId}`);
-    };
-
-    return (
-        <div className="space-y-6">
-            {showWizard ? (
-                <CaseWizard onCancel={onCancelWizard} />
-            ) : (
-                <>
-                    <section className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 lg:gap-6">
-                        <StatCard title="Meine offenen Fälle" value={loading ? "…" : String(stats.meineOffenenFaelle)} icon={<FaFolderOpen />} />
-                        <StatCard title="Akut gefährdet" value={loading ? "…" : String(stats.akutGefaehrdet)} icon={<FaExclamationTriangle />} />
-                        <StatCard title="Abgeschlossen (30 Tage)" value={loading ? "…" : String(stats.abgeschlossen30Tage)} />
-                        <StatCard title="Kinder gesamt" value={loading ? "…" : String(kinderGesamt)} icon={<FaUsers />} />
-                    </section>
-
-                    <section className="space-y-4">
-                        <h3 className="text-lg font-semibold">Meine Fälle</h3>
-
-                        {error ? (
-                            <div className="rounded-md border p-4 text-sm">
-                                <div className="font-medium">Fehler</div>
-                                <div className="text-muted-foreground">{error}</div>
-                            </div>
-                        ) : loading ? (
-                            <div className="rounded-md border p-4 text-sm text-muted-foreground">Lade Fälle…</div>
-                        ) : (
-                            <CaseTable cases={cases} onRowClick={onClickCase} />
-                        )}
-                    </section>
-                </>
-            )}
+            <Card>
+              <CardHeader className="flex items-center justify-between">
+                <div className="text-sm font-semibold text-brand-text">§8a Prozess (Prototype)</div>
+                <TrendingUp className="h-4 w-4 text-brand-teal shrink-0" />
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+                  {["Kind & Fall", "Dossier", "Assessment", "Maßnahmen", "Weitergabe", "Audit"].map((step, idx) => (
+                      <div
+                          key={step}
+                          className={
+                              "rounded-2xl border border-brand-border bg-white p-3 " +
+                              (idx === 2 ? "ring-2 ring-brand-teal/25" : "")
+                          }
+                      >
+                        <div className="text-xs font-semibold text-brand-text2">Step {idx + 1}</div>
+                        <div className="mt-1 text-sm font-extrabold text-brand-navy whitespace-normal break-words">
+                          {step}
+                        </div>
+                        <div className="mt-1 text-xs text-brand-text2 whitespace-normal break-words">
+                          Status: {idx < 2 ? "ok" : idx === 2 ? "in Arbeit" : "wartet"}
+                        </div>
+                      </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
         </div>
-    );
+      </AuthGate>
+  );
 }

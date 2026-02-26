@@ -28,8 +28,8 @@ public class CaseTransferPackage extends AuditableEntity {
     private Instant expiresAt;
 
     // Snapshot (JSON) – später ggf. als JSONB in Postgres
-    @Lob
-    @Column(name="payload_json", nullable = false)
+
+    @Column(name="payload_json", nullable = false, columnDefinition = "text")
     private String payloadJson;
 
     // Zugriff per Magic-Link: token wird NICHT gespeichert, nur Hash
