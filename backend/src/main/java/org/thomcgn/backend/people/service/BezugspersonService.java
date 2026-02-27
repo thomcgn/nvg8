@@ -1,5 +1,7 @@
 package org.thomcgn.backend.people.service;
 
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.thomcgn.backend.auth.model.Role;
@@ -7,11 +9,12 @@ import org.thomcgn.backend.auth.service.AccessControlService;
 import org.thomcgn.backend.common.errors.DomainException;
 import org.thomcgn.backend.common.errors.ErrorCode;
 import org.thomcgn.backend.common.security.SecurityUtils;
-import org.thomcgn.backend.people.dto.CreateBezugspersonRequest;
-import org.thomcgn.backend.people.dto.BezugspersonResponse;   // <- MUSS es geben, sonst siehe Hinweis unten
+import org.thomcgn.backend.people.dto.*;
 import org.thomcgn.backend.people.model.Bezugsperson;
 import org.thomcgn.backend.people.model.Gender;
 import org.thomcgn.backend.people.repo.BezugspersonRepository;
+
+import java.util.List;
 
 @Service
 public class BezugspersonService {
@@ -24,18 +27,12 @@ public class BezugspersonService {
         this.access = access;
     }
 
-    /**
-     * Für Controller/REST: gibt DTO zurück.
-     */
     @Transactional
     public BezugspersonResponse create(CreateBezugspersonRequest req) {
         Bezugsperson bp = createEntity(req);
         return toDto(bp);
     }
 
-    /**
-     * Für interne Nutzung (z.B. KindService Link-Erstellung): gibt ENTITY zurück.
-     */
     @Transactional
     public Bezugsperson createEntity(CreateBezugspersonRequest req) {
         access.requireAny(Role.FACHKRAFT, Role.TEAMLEITUNG, Role.EINRICHTUNG_ADMIN, Role.TRAEGER_ADMIN);
@@ -46,7 +43,6 @@ public class BezugspersonService {
 
         Bezugsperson bp = new Bezugsperson();
 
-        // Option A (Owner-Metadaten)
         bp.setTraegerId(SecurityUtils.currentTraegerIdRequired());
 
         Long ownerEinrichtungId = access.activeEinrichtungId();
@@ -55,23 +51,19 @@ public class BezugspersonService {
         }
         bp.setOwnerEinrichtungOrgUnitId(ownerEinrichtungId);
 
-        // Personendaten
         bp.setVorname(req.vorname());
         bp.setNachname(req.nachname());
         bp.setGeburtsdatum(req.geburtsdatum());
         bp.setGender(req.gender() != null ? req.gender() : Gender.UNBEKANNT);
 
-        // Kontakt
         bp.setTelefon(req.telefon());
         bp.setKontaktEmail(req.kontaktEmail());
 
-        // Adresse
         bp.setStrasse(req.strasse());
         bp.setHausnummer(req.hausnummer());
         bp.setPlz(req.plz());
         bp.setOrt(req.ort());
 
-        // Objektbasierter Check (Optional, aber konsistent zu Option A)
         access.requireAccessToEinrichtungObject(
                 bp.getTraegerId(),
                 bp.getOwnerEinrichtungOrgUnitId(),
@@ -79,6 +71,34 @@ public class BezugspersonService {
         );
 
         return repo.save(bp);
+    }
+
+    @Transactional(readOnly = true)
+    public BezugspersonSearchResponse search(String q, int size) {
+        access.requireAny(Role.LESEN, Role.FACHKRAFT, Role.TEAMLEITUNG, Role.EINRICHTUNG_ADMIN, Role.TRAEGER_ADMIN);
+
+        Long traegerId = SecurityUtils.currentTraegerIdRequired();
+        Long einrichtungId = access.activeEinrichtungId();
+        if (einrichtungId == null) {
+            throw DomainException.conflict(ErrorCode.CONFLICT, "No active Einrichtung in context.");
+        }
+
+        int safeSize = Math.min(50, Math.max(1, size));
+        Pageable pageable = PageRequest.of(0, safeSize);
+
+        List<Bezugsperson> res = repo.search(traegerId, einrichtungId, q, pageable);
+
+        return new BezugspersonSearchResponse(
+                res.stream()
+                        .map(bp -> new BezugspersonListItem(
+                                bp.getId(),
+                                bp.getDisplayName(),
+                                bp.getGeburtsdatum(),
+                                bp.getTelefon(),
+                                bp.getKontaktEmail()
+                        ))
+                        .toList()
+        );
     }
 
     private BezugspersonResponse toDto(Bezugsperson bp) {

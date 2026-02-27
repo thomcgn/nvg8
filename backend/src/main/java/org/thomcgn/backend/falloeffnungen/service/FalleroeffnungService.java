@@ -17,6 +17,12 @@ import org.thomcgn.backend.falloeffnungen.dto.*;
 import org.thomcgn.backend.falloeffnungen.model.*;
 import org.thomcgn.backend.falloeffnungen.repo.FalleroeffnungNotizRepository;
 import org.thomcgn.backend.falloeffnungen.repo.FalleroeffnungRepository;
+import org.thomcgn.backend.falloeffnungen.risk.AnlassCatalog;
+import org.thomcgn.backend.falloeffnungen.risk.model.FalleroeffnungAnlass;
+import org.thomcgn.backend.falloeffnungen.risk.model.FalleroeffnungNotizTag;
+import org.thomcgn.backend.falloeffnungen.risk.repo.FalleroeffnungAnlassRepository;
+import org.thomcgn.backend.falloeffnungen.risk.repo.FalleroeffnungNotizTagRepository;
+import org.thomcgn.backend.falloeffnungen.risk.service.FallRiskService;
 import org.thomcgn.backend.orgunits.model.OrgUnit;
 import org.thomcgn.backend.orgunits.repo.OrgUnitRepository;
 import org.thomcgn.backend.people.model.Kind;
@@ -25,6 +31,8 @@ import org.thomcgn.backend.tenants.model.Traeger;
 import org.thomcgn.backend.tenants.repo.TraegerRepository;
 import org.thomcgn.backend.users.model.User;
 import org.thomcgn.backend.users.repo.UserRepository;
+import org.thomcgn.backend.falloeffnungen.dto.CreateFalleroeffnungRequest;
+import org.thomcgn.backend.falloeffnungen.dto.FalleroeffnungResponse;
 
 import java.time.Instant;
 import java.util.List;
@@ -44,6 +52,10 @@ public class FalleroeffnungService {
     private final AuditService audit;
     private final org.thomcgn.backend.aktenzeichen.service.AktennummerService aktennummerService;
 
+    private final FalleroeffnungAnlassRepository anlassRepo;
+    private final FalleroeffnungNotizTagRepository tagRepo;
+    private final FallRiskService riskService;
+
     public FalleroeffnungService(
             FalleroeffnungRepository repo,
             FalleroeffnungNotizRepository notizRepo,
@@ -54,7 +66,10 @@ public class FalleroeffnungService {
             UserRepository userRepo,
             AccessControlService access,
             AuditService audit,
-            org.thomcgn.backend.aktenzeichen.service.AktennummerService aktennummerService
+            org.thomcgn.backend.aktenzeichen.service.AktennummerService aktennummerService,
+            FalleroeffnungAnlassRepository anlassRepo,
+            FalleroeffnungNotizTagRepository tagRepo,
+            FallRiskService riskService
     ) {
         this.repo = repo;
         this.notizRepo = notizRepo;
@@ -66,6 +81,9 @@ public class FalleroeffnungService {
         this.access = access;
         this.audit = audit;
         this.aktennummerService = aktennummerService;
+        this.anlassRepo = anlassRepo;
+        this.tagRepo = tagRepo;
+        this.riskService = riskService;
     }
 
     // =========================================================
@@ -139,6 +157,21 @@ public class FalleroeffnungService {
 
         Falleroeffnung saved = repo.save(f);
 
+        // Anlässe initial speichern (optional)
+        if (req.anlassCodes() != null && !req.anlassCodes().isEmpty()) {
+            for (String code : req.anlassCodes()) {
+                if (code == null || code.isBlank()) continue;
+                String c = code.trim();
+                if (!AnlassCatalog.isAllowed(c)) {
+                    throw DomainException.badRequest(ErrorCode.VALIDATION_FAILED, "Unknown Anlass code: " + c);
+                }
+                FalleroeffnungAnlass a = new FalleroeffnungAnlass();
+                a.setFalleroeffnung(saved);
+                a.setCode(c);
+                anlassRepo.save(a);
+            }
+        }
+
         audit.log(
                 AuditEventAction.FALL_CREATED,
                 "Falleroeffnung",
@@ -147,7 +180,13 @@ public class FalleroeffnungService {
                 "Falleröffnung created: " + saved.getTitel()
         );
 
-        return toResponse(saved, List.of());
+        // Latest risk (optional)
+        var latestRisk = riskService.latest(saved.getId());
+
+        List<FalleroeffnungNotizResponse> notizen = List.of();
+        List<String> anlaesse = anlassRepo.findCodesByFallId(saved.getId());
+
+        return toResponse(saved, anlaesse, latestRisk, notizen);
     }
 
     // =========================================================
@@ -171,16 +210,36 @@ public class FalleroeffnungService {
         List<FalleroeffnungNotizResponse> notizen = notizRepo
                 .findAllByFalleroeffnungIdScopedOrderByCreatedAtAsc(id, tid, oid)
                 .stream()
-                .map(n -> new FalleroeffnungNotizResponse(
-                        n.getId(),
-                        n.getTyp(),
-                        n.getText(),
-                        n.getCreatedBy().getDisplayName(),
-                        n.getCreatedAt()
-                ))
+                .map(n -> {
+                    var tags = tagRepo.findAllByNotizId(n.getId());
+                    var anlassCodes = tags.stream()
+                            .map(FalleroeffnungNotizTag::getAnlassCode)
+                            .filter(c -> c != null && !c.isBlank())
+                            .map(String::trim)
+                            .distinct()
+                            .toList();
+                    var indicatorLinks = tags.stream()
+                            .filter(t -> t.getIndicatorId() != null && !t.getIndicatorId().isBlank())
+                            .filter(t -> t.getSeverity() != null)
+                            .map(t -> new FalleroeffnungNotizResponse.IndicatorLink(t.getIndicatorId().trim(), Math.max(0, Math.min(3, t.getSeverity()))))
+                            .toList();
+
+                    return new FalleroeffnungNotizResponse(
+                            n.getId(),
+                            n.getTyp(),
+                            n.getText(),
+                            n.getCreatedBy().getDisplayName(),
+                            n.getCreatedAt(),
+                            anlassCodes,
+                            indicatorLinks
+                    );
+                })
                 .toList();
 
-        return toResponse(f, notizen);
+        List<String> fallAnlaesse = anlassRepo.findCodesByFallId(id);
+        var latestRisk = riskService.latest(id);
+
+        return toResponse(f, fallAnlaesse, latestRisk, notizen);
     }
 
     // =========================================================
@@ -272,6 +331,37 @@ public class FalleroeffnungService {
 
         FalleroeffnungNotiz saved = notizRepo.save(n);
 
+        // --- Tags speichern (Anlass + 0..n Indikator/Severity) ---
+        if (req.anlassCodes() != null) {
+            for (String code : req.anlassCodes()) {
+                if (code == null || code.isBlank()) continue;
+                String c = code.trim();
+                if (!AnlassCatalog.isAllowed(c)) {
+                    throw DomainException.badRequest(ErrorCode.VALIDATION_FAILED, "Unknown Anlass code: " + c);
+                }
+                FalleroeffnungNotizTag t = new FalleroeffnungNotizTag();
+                t.setNotiz(saved);
+                t.setAnlassCode(c);
+                tagRepo.save(t);
+            }
+        }
+
+        if (req.indicatorLinks() != null) {
+            for (AddNotizRequest.IndicatorLink link : req.indicatorLinks()) {
+                if (link == null) continue;
+                if (link.indicatorId() == null || link.indicatorId().isBlank()) continue;
+
+                Integer sev = link.severity();
+                int s = sev == null ? 0 : Math.max(0, Math.min(3, sev));
+
+                FalleroeffnungNotizTag t = new FalleroeffnungNotizTag();
+                t.setNotiz(saved);
+                t.setIndicatorId(link.indicatorId().trim());
+                t.setSeverity(s);
+                tagRepo.save(t);
+            }
+        }
+
         audit.log(
                 AuditEventAction.FALL_NOTE_ADDED,
                 "Falleroeffnung",
@@ -280,12 +370,35 @@ public class FalleroeffnungService {
                 "Note added" + (req.typ() != null ? " (" + req.typ() + ")" : "") + " visibility=" + vis
         );
 
+        // Optional: neu bewerten und Snapshot speichern (UX)
+        try {
+            riskService.recomputeAndSnapshot(f.getId());
+        } catch (Exception ignored) {
+            // Bewertung ist Assistenz; Notiz speichern ist wichtiger.
+        }
+
+        // Response inkl. Tags (für UI sofort)
+        var tags = tagRepo.findAllByNotizId(saved.getId());
+        var anlassCodes = tags.stream()
+                .map(FalleroeffnungNotizTag::getAnlassCode)
+                .filter(c -> c != null && !c.isBlank())
+                .map(String::trim)
+                .distinct()
+                .toList();
+        var indicatorLinks = tags.stream()
+                .filter(t -> t.getIndicatorId() != null && !t.getIndicatorId().isBlank())
+                .filter(t -> t.getSeverity() != null)
+                .map(t -> new FalleroeffnungNotizResponse.IndicatorLink(t.getIndicatorId().trim(), Math.max(0, Math.min(3, t.getSeverity()))))
+                .toList();
+
         return new FalleroeffnungNotizResponse(
                 saved.getId(),
                 saved.getTyp(),
                 saved.getText(),
                 author.getDisplayName(),
-                saved.getCreatedAt()
+                saved.getCreatedAt(),
+                anlassCodes,
+                indicatorLinks
         );
     }
 
@@ -334,7 +447,12 @@ public class FalleroeffnungService {
         return get(id);
     }
 
-    private FalleroeffnungResponse toResponse(Falleroeffnung f, List<FalleroeffnungNotizResponse> notizen) {
+    private FalleroeffnungResponse toResponse(
+            Falleroeffnung f,
+            List<String> anlassCodes,
+            org.thomcgn.backend.falloeffnungen.risk.dto.RiskSnapshotResponse latestRisk,
+            List<FalleroeffnungNotizResponse> notizen
+    ) {
         var k = f.getDossier().getKind();
         String kindName = ((k.getVorname() != null ? k.getVorname() : "") + " " + (k.getNachname() != null ? k.getNachname() : "")).trim();
         if (kindName.isBlank()) kindName = "-";
@@ -352,6 +470,8 @@ public class FalleroeffnungService {
                 f.getEinrichtungOrgUnit().getId(),
                 f.getTeamOrgUnit() != null ? f.getTeamOrgUnit().getId() : null,
                 f.getCreatedBy().getDisplayName(),
+                anlassCodes != null ? anlassCodes : List.of(),
+                latestRisk,
                 notizen
         );
     }

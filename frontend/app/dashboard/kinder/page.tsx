@@ -69,7 +69,6 @@ export default function KinderPage() {
                         <CardHeader className="flex items-center justify-between">
                             <div>
                                 <div className="text-sm font-semibold text-brand-text">Liste</div>
-                                <div className="mt-1 text-xs text-brand-text2">Abruf aus <code className="rounded bg-brand-bg px-1">GET /kinder</code></div>
                             </div>
                             <div className="text-xs text-brand-text2">{loading ? "lädt…" : `${data?.total ?? 0} Treffer`}</div>
                         </CardHeader>
@@ -82,7 +81,7 @@ export default function KinderPage() {
                                         href={`/dashboard/kinder/${k.id}`}
                                         className="block rounded-2xl border border-brand-border bg-white p-3 hover:bg-brand-bg"
                                     >
-                                        <div className="text-sm font-semibold text-brand-blue break-words whitespace-normal">
+                                        <div className="text-sm font-semibold text-brand-blue wrap-break-word whitespace-normal">
                                             {k.displayName || `Kind #${k.id}`}
                                         </div>
                                         <div className="mt-1 text-xs text-brand-text2">

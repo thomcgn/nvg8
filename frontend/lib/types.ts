@@ -174,8 +174,34 @@ export type AddKindBezugspersonRequest = {
   lebtImHaushalt?: boolean | null;
 };
 
-// ===== AKTEN / FALLOEFFNUNGEN =====
+export type BezugspersonListItem = {
+  id: number;
+  displayName: string;
+  geburtsdatum: string | null;
+  telefon: string | null;
+  kontaktEmail: string | null;
+};
 
+export type BezugspersonSearchResponse = {
+  items: BezugspersonListItem[];
+};
+
+export type CreateKindCompleteRequest = {
+  kind: {
+    vorname: string;
+    nachname: string;
+    geburtsdatum: string | null;
+    gender: Gender;
+    foerderbedarf: boolean;
+    foerderbedarfDetails: string | null;
+    gesundheitsHinweise: string | null;
+  };
+  bezugspersonen: AddKindBezugspersonRequest[];
+};
+
+export type CreateKindResponse = {
+  kindId: number;
+};
 export type CreateFalleroeffnungRequest = {
   kindId: number;
   einrichtungOrgUnitId: number;
@@ -188,8 +214,6 @@ export type FalleroeffnungResponse = {
   id: number;
   aktenzeichen: string;
   status: string;
-  titel: string | null;
-  kurzbeschreibung: string | null;
-  kindId: number;
+  kindName?: string | null;
   createdAt?: string | null;
 };

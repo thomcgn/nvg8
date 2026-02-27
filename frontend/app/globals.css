@@ -1,8 +1,16 @@
 @import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
 
+@custom-variant dark (&:is(.dark *));
+
+/* ------------------------------------------------------------
+   Brand System (Source of Truth)
+------------------------------------------------------------ */
 @theme {
   --color-brand-navy: #0A1F2F;
   --color-brand-blue: #0D3B66;
+
   --color-brand-teal: #0FA3B1;
   --color-brand-tealHover: #1BC6D4;
 
@@ -17,20 +25,158 @@
   --color-brand-warning: #F9A825;
   --color-brand-danger: #C62828;
   --color-brand-info: #1565C0;
+
+  /* Optional: Brand Dark */
+  --color-brand-bg-dark: #0B1220;
+  --color-brand-surface-dark: #0F1B2D;
+  --color-brand-border-dark: rgba(255, 255, 255, 0.12);
+  --color-brand-text-dark: rgba(255, 255, 255, 0.92);
+  --color-brand-text2-dark: rgba(255, 255, 255, 0.70);
 }
 
+/* ------------------------------------------------------------
+   shadcn token layer (semantic tokens)
+   Keep these because some shadcn libs reference them.
+------------------------------------------------------------ */
 :root {
   color-scheme: light;
+  --radius: 0.625rem;
+
+  --background: var(--color-brand-bg);
+  --foreground: var(--color-brand-text);
+
+  --card: var(--color-brand-surface);
+  --card-foreground: var(--color-brand-text);
+
+  --popover: var(--color-brand-surface);
+  --popover-foreground: var(--color-brand-text);
+
+  /* Primary = Teal */
+  --primary: var(--color-brand-teal);
+  --primary-foreground: #ffffff;
+  --primary-hover: var(--color-brand-tealHover);
+
+  --secondary: var(--color-brand-surface);
+  --secondary-foreground: var(--color-brand-text);
+
+  --muted: color-mix(in srgb, var(--color-brand-bg) 80%, white 20%);
+  --muted-foreground: var(--color-brand-text2);
+
+  --accent: color-mix(in srgb, var(--color-brand-teal) 12%, var(--color-brand-surface) 88%);
+  --accent-foreground: var(--color-brand-text);
+
+  --destructive: var(--color-brand-danger);
+  --destructive-foreground: #ffffff;
+
+  --border: var(--color-brand-border);
+  --input: var(--color-brand-border);
+  --ring: var(--color-brand-teal);
+
+  --sidebar: var(--color-brand-surface);
+  --sidebar-foreground: var(--color-brand-text);
+  --sidebar-primary: var(--color-brand-blue);
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: color-mix(in srgb, var(--color-brand-blue) 10%, var(--color-brand-surface) 90%);
+  --sidebar-accent-foreground: var(--color-brand-text);
+  --sidebar-border: var(--color-brand-border);
+  --sidebar-ring: var(--color-brand-teal);
 }
 
+.dark {
+  color-scheme: dark;
+
+  --background: var(--color-brand-bg-dark);
+  --foreground: var(--color-brand-text-dark);
+
+  --card: var(--color-brand-surface-dark);
+  --card-foreground: var(--color-brand-text-dark);
+
+  --popover: var(--color-brand-surface-dark);
+  --popover-foreground: var(--color-brand-text-dark);
+
+  --border: var(--color-brand-border-dark);
+  --input: var(--color-brand-border-dark);
+  --ring: var(--color-brand-teal);
+
+  --secondary: var(--color-brand-surface-dark);
+  --secondary-foreground: var(--color-brand-text-dark);
+
+  --muted: color-mix(in srgb, var(--color-brand-bg-dark) 70%, black 30%);
+  --muted-foreground: var(--color-brand-text2-dark);
+
+  --accent: color-mix(in srgb, var(--color-brand-teal) 18%, var(--color-brand-surface-dark) 82%);
+  --accent-foreground: var(--color-brand-text-dark);
+
+  --primary: var(--color-brand-teal);
+  --primary-foreground: #ffffff;
+  --primary-hover: var(--color-brand-tealHover);
+
+  --destructive: var(--color-brand-danger);
+  --destructive-foreground: #ffffff;
+
+  --sidebar: var(--color-brand-surface-dark);
+  --sidebar-foreground: var(--color-brand-text-dark);
+  --sidebar-border: var(--color-brand-border-dark);
+}
+
+/* ------------------------------------------------------------
+   Tailwind v4 color tokens (THIS is what enables bg-background, border-border, ring-ring, etc.)
+   Tailwind utilities like bg-background look for --color-background.
+------------------------------------------------------------ */
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --radius-3xl: calc(var(--radius) + 12px);
+  --radius-4xl: calc(var(--radius) + 16px);
+
+  /* ✅ Tailwind v4 color keys */
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+}
+
+/* ------------------------------------------------------------
+   Base
+------------------------------------------------------------ */
 html,
 body {
   height: 100%;
-}
-
-body {
-  background: var(--color-brand-bg);
-  color: var(--color-brand-text);
 }
 
 * {
@@ -39,4 +185,14 @@ body {
 
 ::selection {
   background: rgba(15, 163, 177, 0.25);
+}
+
+/* ✅ IMPORTANT:
+   Do NOT @apply border-border in Tailwind v4 unless the token exists.
+   Now it exists via --color-border. But using plain CSS here is also fine.
+*/
+@layer base {
+  body {
+    @apply bg-background text-foreground;
+  }
 }

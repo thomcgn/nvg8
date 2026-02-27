@@ -3,7 +3,8 @@ package org.thomcgn.backend.people.controller;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import org.thomcgn.backend.people.dto.BezugspersonResponse;    // <- muss existieren
+import org.thomcgn.backend.people.dto.BezugspersonResponse;
+import org.thomcgn.backend.people.dto.BezugspersonSearchResponse;
 import org.thomcgn.backend.people.dto.CreateBezugspersonRequest;
 import org.thomcgn.backend.people.service.BezugspersonService;
 
@@ -15,6 +16,14 @@ public class BezugspersonController {
 
     public BezugspersonController(BezugspersonService service) {
         this.service = service;
+    }
+
+    @GetMapping
+    public ResponseEntity<BezugspersonSearchResponse> search(
+            @RequestParam(required = false, defaultValue = "") String q,
+            @RequestParam(required = false, defaultValue = "10") int size
+    ) {
+        return ResponseEntity.ok(service.search(q, size));
     }
 
     @PostMapping

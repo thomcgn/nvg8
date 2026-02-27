@@ -1,5 +1,7 @@
 package org.thomcgn.backend.falloeffnungen.dto;
 
+import org.thomcgn.backend.falloeffnungen.risk.dto.RiskSnapshotResponse;
+
 import java.util.List;
 
 public record FalleroeffnungResponse(
@@ -15,5 +17,7 @@ public record FalleroeffnungResponse(
         Long einrichtungOrgUnitId,
         Long teamOrgUnitId,
         String createdByDisplayName,
+        List<String> anlassCodes,
+        RiskSnapshotResponse latestRisk,
         List<FalleroeffnungNotizResponse> notizen
 ) {}

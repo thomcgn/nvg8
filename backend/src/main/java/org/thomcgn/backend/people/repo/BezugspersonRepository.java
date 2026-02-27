@@ -12,12 +12,21 @@ public interface BezugspersonRepository extends JpaRepository<Bezugsperson, Long
 
     @Query("""
         select b from Bezugsperson b
-        where (:q is null or :q = '' 
+        where b.traegerId = :traegerId
+          and b.ownerEinrichtungOrgUnitId = :einrichtungId
+          and (
+              :q is null or :q = ''
               or lower(b.vorname) like lower(concat('%', :q, '%'))
               or lower(b.nachname) like lower(concat('%', :q, '%'))
               or lower(coalesce(b.kontaktEmail,'')) like lower(concat('%', :q, '%'))
-              or lower(coalesce(b.telefon,'')) like lower(concat('%', :q, '%')))
+              or lower(coalesce(b.telefon,'')) like lower(concat('%', :q, '%'))
+          )
         order by b.nachname asc, b.vorname asc, b.id asc
     """)
-    List<Bezugsperson> search(@Param("q") String q, Pageable pageable);
+    List<Bezugsperson> search(
+            @Param("traegerId") Long traegerId,
+            @Param("einrichtungId") Long einrichtungId,
+            @Param("q") String q,
+            Pageable pageable
+    );
 }

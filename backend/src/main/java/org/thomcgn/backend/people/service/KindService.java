@@ -10,6 +10,12 @@ import org.thomcgn.backend.auth.service.AccessControlService;
 import org.thomcgn.backend.common.errors.DomainException;
 import org.thomcgn.backend.common.errors.ErrorCode;
 import org.thomcgn.backend.common.security.SecurityUtils;
+import org.thomcgn.backend.falloeffnungen.dto.AddNotizRequest;
+import org.thomcgn.backend.falloeffnungen.dto.CreateFalleroeffnungRequest;
+import org.thomcgn.backend.falloeffnungen.dto.FalleroeffnungResponse;
+import org.thomcgn.backend.falloeffnungen.model.Falleroeffnung;
+import org.thomcgn.backend.falloeffnungen.repo.FalleroeffnungRepository;
+import org.thomcgn.backend.falloeffnungen.service.FalleroeffnungService;
 import org.thomcgn.backend.people.dto.*;
 import org.thomcgn.backend.people.model.*;
 import org.thomcgn.backend.people.repo.BezugspersonRepository;
@@ -29,18 +35,25 @@ public class KindService {
     private final BezugspersonService bezugspersonService;
     private final AccessControlService access;
 
+    private final FalleroeffnungRepository fallRepo;
+    private final FalleroeffnungService fallService;
+
     public KindService(
             KindRepository kindRepo,
             BezugspersonRepository bezugRepo,
             KindBezugspersonRepository linkRepo,
             BezugspersonService bezugspersonService,
-            AccessControlService access
+            AccessControlService access,
+            FalleroeffnungRepository fallRepo,
+            FalleroeffnungService fallService
     ) {
         this.kindRepo = kindRepo;
         this.bezugRepo = bezugRepo;
         this.linkRepo = linkRepo;
         this.bezugspersonService = bezugspersonService;
         this.access = access;
+        this.fallRepo = fallRepo;
+        this.fallService = fallService;
     }
 
     // =====================================================
@@ -57,7 +70,7 @@ public class KindService {
 
         Kind k = new Kind();
 
-        // Owner-Felder
+        // Scope/Owner
         k.setTraegerId(SecurityUtils.currentTraegerIdRequired());
         Long ownerEinrichtung = access.activeEinrichtungId();
         if (ownerEinrichtung == null) {
@@ -71,7 +84,7 @@ public class KindService {
         k.setGeburtsdatum(req.geburtsdatum());
         k.setGender(req.gender() != null ? req.gender() : Gender.UNBEKANNT);
 
-        // kind-spezifisch (falls CreateKindRequest diese Felder hat)
+        // optional (falls in CreateKindRequest vorhanden)
         k.setFoerderbedarf(req.foerderbedarf());
         k.setFoerderbedarfDetails(req.foerderbedarfDetails());
         k.setGesundheitsHinweise(req.gesundheitsHinweise());
@@ -121,36 +134,6 @@ public class KindService {
         );
 
         return toDto(k);
-    }
-
-    @Transactional(readOnly = true)
-    public KindSearchResponse search(String q, int page, int size) {
-        Long traegerId = SecurityUtils.currentTraegerIdRequired();
-        Long einrichtungId = access.activeEinrichtungId();
-        if (einrichtungId == null) {
-            throw DomainException.conflict(ErrorCode.CONFLICT, "No active Einrichtung in context.");
-        }
-
-        int safePage = Math.max(0, page);
-        int safeSize = Math.min(100, Math.max(1, size));
-        Pageable pageable = PageRequest.of(safePage, safeSize);
-
-        Page<Kind> res = kindRepo.search(traegerId, einrichtungId, q, pageable);
-
-        return new KindSearchResponse(
-                res.getContent().stream()
-                        .map(k -> new KindListItem(
-                                k.getId(),
-                                k.getDisplayName(),
-                                k.getGeburtsdatum(),
-                                k.getGender(),
-                                k.isFoerderbedarf()
-                        ))
-                        .toList(),
-                res.getTotalElements(),
-                safePage,
-                safeSize
-        );
     }
 
     // =====================================================
@@ -224,6 +207,10 @@ public class KindService {
         return toLinkDto(linkRepo.save(link));
     }
 
+    /**
+     * Link beenden (kein Delete) und IMMER in die Akte schreiben.
+     * Falls keine Akte existiert, wird eine automatisch angelegt.
+     */
     @Transactional
     public KindBezugspersonResponse endBezugspersonLink(Long kindId, Long linkId, EndKindBezugspersonRequest req) {
         access.requireAny(Role.FACHKRAFT, Role.TEAMLEITUNG, Role.EINRICHTUNG_ADMIN, Role.TRAEGER_ADMIN);
@@ -232,6 +219,7 @@ public class KindService {
                 .orElseThrow(() -> DomainException.notFound(ErrorCode.NOT_FOUND, "Link not found"));
 
         Kind kind = link.getKind();
+
         access.requireAccessToEinrichtungObject(
                 kind.getTraegerId(),
                 kind.getOwnerEinrichtungOrgUnitId(),
@@ -248,7 +236,105 @@ public class KindService {
         link.setValidTo(req.validTo());
         link.setEnabled(false);
 
-        return toLinkDto(linkRepo.save(link));
+        KindBezugsperson saved = linkRepo.save(link);
+
+        // Akte sicherstellen + Notiz schreiben (immer)
+        Falleroeffnung fall = ensureFallExistsForKind(kind, saved);
+
+        String noteText = buildAkteMessage(kind, saved);
+
+        AddNotizRequest noteReq = new AddNotizRequest(
+                "KIND_BEZUGSPERSON_LINK_ENDED",
+                noteText,   // @NotBlank
+                "INTERN",
+                null,
+                null
+        );
+
+        fallService.addNotiz(fall.getId(), noteReq);
+
+        return toLinkDto(saved);
+    }
+
+    // =====================================================
+    // Search
+    // =====================================================
+
+    @Transactional(readOnly = true)
+    public KindSearchResponse search(String q, int page, int size) {
+        Long traegerId = SecurityUtils.currentTraegerIdRequired();
+        Long einrichtungId = access.activeEinrichtungId();
+        if (einrichtungId == null) {
+            throw DomainException.conflict(ErrorCode.CONFLICT, "No active Einrichtung in context.");
+        }
+
+        int safePage = Math.max(0, page);
+        int safeSize = Math.min(100, Math.max(1, size));
+        Pageable pageable = PageRequest.of(safePage, safeSize);
+
+        Page<Kind> res = kindRepo.search(traegerId, einrichtungId, q, pageable);
+
+        return new KindSearchResponse(
+                res.getContent().stream()
+                        .map(k -> new KindListItem(
+                                k.getId(),
+                                k.getDisplayName(),
+                                k.getGeburtsdatum(),
+                                k.getGender(),
+                                k.isFoerderbedarf()
+                        ))
+                        .toList(),
+                res.getTotalElements(),
+                safePage,
+                safeSize
+        );
+    }
+
+    // =====================================================
+    // Internals
+    // =====================================================
+
+    private Falleroeffnung ensureFallExistsForKind(Kind kind, KindBezugsperson link) {
+        Long traegerId = kind.getTraegerId();
+        Long einrichtungId = kind.getOwnerEinrichtungOrgUnitId();
+
+        Falleroeffnung existing = fallRepo
+                .findLatestByKindIdScoped(traegerId, einrichtungId, kind.getId(), PageRequest.of(0, 1))
+                .stream()
+                .findFirst()
+                .orElse(null);
+
+        if (existing != null) return existing;
+
+        String titel = "Automatisch angelegte Akte (Bezugsperson-Änderung)";
+        String kurz = buildAkteMessage(kind, link);
+
+        // ✅ CreateFalleroeffnungRequest erwartet 6 Parameter (inkl. anlassCodes)
+        CreateFalleroeffnungRequest createReq = new CreateFalleroeffnungRequest(
+                kind.getId(),
+                einrichtungId,
+                null,   // teamOrgUnitId
+                titel,
+                kurz,
+                null    // anlassCodes
+        );
+
+        FalleroeffnungResponse created = fallService.create(createReq);
+
+        return fallRepo.findById(created.id())
+                .orElseThrow(() -> DomainException.conflict(ErrorCode.CONFLICT, "Auto-created Falleroeffnung not found"));
+    }
+
+    private String buildAkteMessage(Kind kind, KindBezugsperson link) {
+        String kindName = kind.getDisplayName();
+        String bpName = link.getBezugsperson() != null ? link.getBezugsperson().getDisplayName() : "-";
+        String beziehung = link.getBeziehung() != null ? link.getBeziehung().name() : "-";
+        String validTo = link.getValidTo() != null ? link.getValidTo().toString() : "-";
+
+        return "Bezugsperson-Verknüpfung beendet"
+                + " | Kind: " + kindName
+                + " | Bezugsperson: " + bpName + " (" + beziehung + ")"
+                + " | gültig bis: " + validTo;
     }
 
     // =====================================================
