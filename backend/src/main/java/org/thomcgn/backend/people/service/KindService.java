@@ -1,5 +1,8 @@
 package org.thomcgn.backend.people.service;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.thomcgn.backend.auth.model.Role;
@@ -54,7 +57,7 @@ public class KindService {
 
         Kind k = new Kind();
 
-        // Option A Owner-Felder
+        // Owner-Felder
         k.setTraegerId(SecurityUtils.currentTraegerIdRequired());
         Long ownerEinrichtung = access.activeEinrichtungId();
         if (ownerEinrichtung == null) {
@@ -62,14 +65,13 @@ public class KindService {
         }
         k.setOwnerEinrichtungOrgUnitId(ownerEinrichtung);
 
-        // Fachfelder (Record-Accessors!)
+        // Fachfelder
         k.setVorname(req.vorname());
         k.setNachname(req.nachname());
         k.setGeburtsdatum(req.geburtsdatum());
         k.setGender(req.gender() != null ? req.gender() : Gender.UNBEKANNT);
 
-        // kind-spezifisch (falls in CreateKindRequest vorhanden)
-        // Wenn deine CreateKindRequest diese Felder NICHT hat, diese 3 Zeilen löschen.
+        // kind-spezifisch (falls CreateKindRequest diese Felder hat)
         k.setFoerderbedarf(req.foerderbedarf());
         k.setFoerderbedarfDetails(req.foerderbedarfDetails());
         k.setGesundheitsHinweise(req.gesundheitsHinweise());
@@ -121,6 +123,36 @@ public class KindService {
         return toDto(k);
     }
 
+    @Transactional(readOnly = true)
+    public KindSearchResponse search(String q, int page, int size) {
+        Long traegerId = SecurityUtils.currentTraegerIdRequired();
+        Long einrichtungId = access.activeEinrichtungId();
+        if (einrichtungId == null) {
+            throw DomainException.conflict(ErrorCode.CONFLICT, "No active Einrichtung in context.");
+        }
+
+        int safePage = Math.max(0, page);
+        int safeSize = Math.min(100, Math.max(1, size));
+        Pageable pageable = PageRequest.of(safePage, safeSize);
+
+        Page<Kind> res = kindRepo.search(traegerId, einrichtungId, q, pageable);
+
+        return new KindSearchResponse(
+                res.getContent().stream()
+                        .map(k -> new KindListItem(
+                                k.getId(),
+                                k.getDisplayName(),
+                                k.getGeburtsdatum(),
+                                k.getGender(),
+                                k.isFoerderbedarf()
+                        ))
+                        .toList(),
+                res.getTotalElements(),
+                safePage,
+                safeSize
+        );
+    }
+
     // =====================================================
     // Bezugsperson-Beziehungen
     // =====================================================
@@ -129,9 +161,9 @@ public class KindService {
     public List<KindBezugspersonResponse> listBezugspersonen(Long kindId, boolean includeInactive) {
         access.requireAny(Role.LESEN, Role.FACHKRAFT, Role.TEAMLEITUNG, Role.EINRICHTUNG_ADMIN, Role.TRAEGER_ADMIN);
 
-        // optional: Kind laden für objektbasierte Prüfung
         Kind k = kindRepo.findById(kindId)
                 .orElseThrow(() -> DomainException.notFound(ErrorCode.NOT_FOUND, "Kind not found"));
+
         access.requireAccessToEinrichtungObject(
                 k.getTraegerId(),
                 k.getOwnerEinrichtungOrgUnitId(),

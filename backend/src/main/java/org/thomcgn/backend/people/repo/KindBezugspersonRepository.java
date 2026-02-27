@@ -50,4 +50,15 @@ public interface KindBezugspersonRepository extends JpaRepository<KindBezugspers
      * Eine konkrete Beziehung innerhalb eines Kindes laden.
      */
     Optional<KindBezugsperson> findByIdAndKindId(Long id, Long kindId);
+
+    @Query("""
+        select kb
+        from KindBezugsperson kb
+        join fetch kb.bezugsperson bp
+        where kb.kind.id = :kindId
+        order by kb.hauptkontakt desc nulls last, bp.nachname asc, bp.vorname asc, bp.id asc
+    """)
+    List<KindBezugsperson> findAllForKind(@Param("kindId") Long kindId);
+
+    boolean existsByKindIdAndBezugspersonId(Long kindId, Long bezugspersonId);
 }

@@ -68,3 +68,128 @@ export type FalleroeffnungListResponse = {
   page: number;
   size: number;
 };
+
+export type KindBezugspersonDto = {
+  linkId: number;
+  bezugspersonId: number;
+  displayName: string;
+  geburtsdatum: string | null;
+  gender: string | null;
+  telefon: string | null;
+  kontaktEmail: string | null;
+  beziehung: string;
+  sorgerecht: string | null;
+  hauptkontakt: boolean | null;
+  lebtImHaushalt: boolean | null;
+};
+
+export type AddBezugspersonToKindRequest = {
+  existingBezugspersonId?: number | null;
+  create?: {
+    vorname: string;
+    nachname: string;
+    geburtsdatum?: string | null;
+    gender: string;
+    telefon?: string | null;
+    kontaktEmail?: string | null;
+    strasse?: string | null;
+    hausnummer?: string | null;
+    plz?: string | null;
+    ort?: string | null;
+  } | null;
+  beziehung: string;
+  sorgerecht?: string | null;
+  hauptkontakt?: boolean | null;
+  lebtImHaushalt?: boolean | null;
+};
+
+// ===== PEOPLE / KINDER =====
+
+export type Gender = "UNBEKANNT" | "MAENNLICH" | "WEIBLICH" | "DIVERS";
+
+export type BezugspersonBeziehung =
+    | "MUTTER"
+    | "VATER"
+    | "SORGEBERECHTIGT"
+    | "PFLEGEMUTTER"
+    | "PFLEGEVATER"
+    | "STIEFMUTTER"
+    | "STIEFVATER"
+    | "GROSSMUTTER"
+    | "GROSSVATER"
+    | "SONSTIGE";
+
+export type SorgerechtTyp =
+    | "ALLEIN"
+    | "GEMEINSAM"
+    | "KEIN"
+    | "AMTSPFLEGSCHAFT"
+    | "VORMUNDSCHAFT"
+    | "UNGEKLAERT";
+
+export type KindResponse = {
+  id: number;
+  vorname: string;
+  nachname: string;
+  geburtsdatum: string | null;
+  gender: Gender | null;
+  foerderbedarf: boolean;
+  foerderbedarfDetails: string | null;
+  gesundheitsHinweise: string | null;
+};
+
+export type KindBezugspersonResponse = {
+  linkId: number;
+  bezugspersonId: number;
+  bezugspersonName: string;
+  beziehung: BezugspersonBeziehung;
+  sorgerecht: SorgerechtTyp | null;
+  validFrom: string | null;
+  validTo: string | null;
+  hauptkontakt: boolean;
+  lebtImHaushalt: boolean;
+  enabled: boolean;
+};
+
+export type CreateBezugspersonRequest = {
+  vorname: string;
+  nachname: string;
+  geburtsdatum?: string | null;
+  gender?: Gender | null;
+  telefon?: string | null;
+  kontaktEmail?: string | null;
+  strasse?: string | null;
+  hausnummer?: string | null;
+  plz?: string | null;
+  ort?: string | null;
+};
+
+export type AddKindBezugspersonRequest = {
+  existingBezugspersonId?: number | null;
+  create?: CreateBezugspersonRequest | null;
+  beziehung: BezugspersonBeziehung;
+  sorgerecht?: SorgerechtTyp | null;
+  validFrom?: string | null; // ISO date: "2026-02-27"
+  hauptkontakt?: boolean | null;
+  lebtImHaushalt?: boolean | null;
+};
+
+// ===== AKTEN / FALLOEFFNUNGEN =====
+
+export type CreateFalleroeffnungRequest = {
+  kindId: number;
+  einrichtungOrgUnitId: number;
+  teamOrgUnitId?: number | null;
+  titel?: string | null;
+  kurzbeschreibung?: string | null;
+};
+
+export type FalleroeffnungResponse = {
+  id: number;
+  aktenzeichen: string;
+  status: string;
+  titel: string | null;
+  kurzbeschreibung: string | null;
+  kindId: number;
+  createdAt?: string | null;
+};

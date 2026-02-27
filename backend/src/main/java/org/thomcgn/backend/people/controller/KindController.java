@@ -6,6 +6,8 @@ import org.springframework.web.bind.annotation.*;
 import org.thomcgn.backend.people.dto.*;
 import org.thomcgn.backend.people.service.KindService;
 
+import java.util.List;
+
 @RestController
 @RequestMapping("/kinder")
 public class KindController {
@@ -16,13 +18,17 @@ public class KindController {
         this.service = service;
     }
 
+    // =====================================================
+    // Kind
+    // =====================================================
+
     @PostMapping
     public ResponseEntity<KindResponse> create(@Valid @RequestBody CreateKindRequest req) {
         return ResponseEntity.ok(service.create(req));
     }
 
     @PostMapping("/complete")
-    public ResponseEntity<CreateKindResponse> createComplete(@RequestBody CreateKindCompleteRequest req) {
+    public ResponseEntity<CreateKindResponse> createComplete(@Valid @RequestBody CreateKindCompleteRequest req) {
         return ResponseEntity.ok(service.createComplete(req));
     }
 
@@ -31,10 +37,31 @@ public class KindController {
         return ResponseEntity.ok(service.get(id));
     }
 
+    @GetMapping
+    public ResponseEntity<KindSearchResponse> search(
+            @RequestParam(required = false, defaultValue = "") String q,
+            @RequestParam(required = false, defaultValue = "0") int page,
+            @RequestParam(required = false, defaultValue = "20") int size
+    ) {
+        return ResponseEntity.ok(service.search(q, page, size));
+    }
+
+    // =====================================================
+    // Bezugspersonen Links
+    // =====================================================
+
+    @GetMapping("/{id}/bezugspersonen")
+    public ResponseEntity<List<KindBezugspersonResponse>> listBezugspersonen(
+            @PathVariable Long id,
+            @RequestParam(required = false, defaultValue = "false") boolean includeInactive
+    ) {
+        return ResponseEntity.ok(service.listBezugspersonen(id, includeInactive));
+    }
+
     @PostMapping("/{id}/bezugspersonen")
     public ResponseEntity<KindBezugspersonResponse> addBezugsperson(
             @PathVariable Long id,
-            @RequestBody AddKindBezugspersonRequest req
+            @Valid @RequestBody AddKindBezugspersonRequest req
     ) {
         return ResponseEntity.ok(service.addBezugsperson(id, req));
     }
@@ -43,13 +70,8 @@ public class KindController {
     public ResponseEntity<KindBezugspersonResponse> endBezugspersonLink(
             @PathVariable Long id,
             @PathVariable Long linkId,
-            @RequestBody EndKindBezugspersonRequest req
+            @Valid @RequestBody EndKindBezugspersonRequest req
     ) {
         return ResponseEntity.ok(service.endBezugspersonLink(id, linkId, req));
-    }
-
-    @GetMapping("/{id}/bezugspersonen")
-    public ResponseEntity<java.util.List<KindBezugspersonResponse>> listActive(@PathVariable Long id) {
-        return ResponseEntity.ok(service.listBezugspersonen(id, false));
     }
 }
