@@ -9,6 +9,11 @@ public record KindBezugspersonResponse(
         Long linkId,
         Long bezugspersonId,
         String bezugspersonName,
+        // ✅ Adresse
+        String strasse,
+        String hausnummer,
+        String plz,
+        String ort,
         BezugspersonBeziehung beziehung,
         SorgerechtTyp sorgerecht,
         LocalDate validFrom,

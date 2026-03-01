@@ -7,6 +7,16 @@ import { Topbar } from "@/components/layout/Topbar";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+    Select,
+    SelectTrigger,
+    SelectValue,
+    SelectContent,
+    SelectItem,
+} from "@/components/ui/select";
 import { apiFetch } from "@/lib/api";
 
 type Gender = "MAENNLICH" | "WEIBLICH" | "DIVERS" | "UNBEKANNT";
@@ -21,7 +31,13 @@ type Beziehung =
     | "GROSSMUTTER"
     | "GROSSVATER"
     | "SONSTIGE";
-type Sorgerecht = "ALLEIN" | "GEMEINSAM" | "KEIN" | "AMTSPFLEGSCHAFT" | "VORMUNDSCHAFT" | "UNGEKLAERT";
+type Sorgerecht =
+    | "ALLEIN"
+    | "GEMEINSAM"
+    | "KEIN"
+    | "AMTSPFLEGSCHAFT"
+    | "VORMUNDSCHAFT"
+    | "UNGEKLAERT";
 
 type CreateKindCompleteRequest = {
     kind: {
@@ -32,6 +48,12 @@ type CreateKindCompleteRequest = {
         foerderbedarf: boolean;
         foerderbedarfDetails: string | null;
         gesundheitsHinweise: string | null;
+
+        // ✅ Adresse Kind
+        strasse: string | null;
+        hausnummer: string | null;
+        plz: string | null;
+        ort: string | null;
     };
     bezugspersonen: Array<{
         existingBezugspersonId: number | null;
@@ -89,12 +111,33 @@ const SORGERECHT_OPTIONS: Array<{ value: Sorgerecht; label: string }> = [
 function StepPill({ active, label }: { active: boolean; label: string }) {
     return (
         <div
-            className={
-                "rounded-full px-3 py-1 text-xs font-semibold border " +
-                (active ? "bg-brand-teal/12 border-brand-teal/25 text-brand-blue" : "bg-white border-brand-border text-brand-text2")
-            }
+            className={[
+                "rounded-full px-3 py-1 text-xs font-semibold border",
+                active
+                    ? "bg-accent text-accent-foreground border-border"
+                    : "bg-background text-muted-foreground border-border",
+            ].join(" ")}
         >
             {label}
+        </div>
+    );
+}
+
+function Field({
+                   label,
+                   htmlFor,
+                   children,
+               }: {
+    label: string;
+    htmlFor?: string;
+    children: React.ReactNode;
+}) {
+    return (
+        <div className="space-y-1">
+            <Label htmlFor={htmlFor} className="text-xs text-muted-foreground">
+                {label}
+            </Label>
+            {children}
         </div>
     );
 }
@@ -110,6 +153,12 @@ export default function KindWizardPage() {
     const [kNachname, setKNachname] = useState("");
     const [kGeb, setKGeb] = useState<string>("");
     const [kGender, setKGender] = useState<Gender>("UNBEKANNT");
+
+    // ✅ Adresse Kind
+    const [kStr, setKStr] = useState("");
+    const [kHnr, setKHnr] = useState("");
+    const [kPlz, setKPlz] = useState("");
+    const [kOrt, setKOrt] = useState("");
 
     const [foerderbedarf, setFoerderbedarf] = useState(false);
     const [foerderbedarfDetails, setFoerderbedarfDetails] = useState("");
@@ -131,8 +180,23 @@ export default function KindWizardPage() {
     const [bpHaupt, setBpHaupt] = useState(true);
     const [bpHaushalt, setBpHaushalt] = useState(true);
 
-    const canNext1 = useMemo(() => kVorname.trim().length > 0 && kNachname.trim().length > 0, [kVorname, kNachname]);
-    const canNext3 = useMemo(() => bpVorname.trim().length > 0 && bpNachname.trim().length > 0, [bpVorname, bpNachname]);
+    // ✅ Step 1 jetzt inkl. Adresse Pflicht? -> du wolltest "braucht die gleichen Adressfelder"
+    // Ich mache sie hier als Pflicht (wie Vorname/Nachname). Wenn optional: entferne die Adresschecks.
+    const canNext1 = useMemo(
+        () =>
+            kVorname.trim().length > 0 &&
+            kNachname.trim().length > 0 &&
+            kStr.trim().length > 0 &&
+            kHnr.trim().length > 0 &&
+            kPlz.trim().length > 0 &&
+            kOrt.trim().length > 0,
+        [kVorname, kNachname, kStr, kHnr, kPlz, kOrt]
+    );
+
+    const canNext3 = useMemo(
+        () => bpVorname.trim().length > 0 && bpNachname.trim().length > 0,
+        [bpVorname, bpNachname]
+    );
 
     async function submit() {
         setErr(null);
@@ -145,8 +209,16 @@ export default function KindWizardPage() {
                     geburtsdatum: kGeb ? kGeb : null,
                     gender: kGender,
                     foerderbedarf,
-                    foerderbedarfDetails: foerderbedarf ? (foerderbedarfDetails.trim() || null) : null,
+                    foerderbedarfDetails: foerderbedarf
+                        ? foerderbedarfDetails.trim() || null
+                        : null,
                     gesundheitsHinweise: gesundheit.trim() || null,
+
+                    // ✅ Adresse Kind
+                    strasse: kStr.trim() || null,
+                    hausnummer: kHnr.trim() || null,
+                    plz: kPlz.trim() || null,
+                    ort: kOrt.trim() || null,
                 },
                 bezugspersonen: [
                     {
@@ -187,12 +259,12 @@ export default function KindWizardPage() {
 
     return (
         <AuthGate>
-            <div className="min-h-screen bg-brand-bg overflow-x-hidden">
+            <div className="min-h-screen bg-background overflow-x-hidden">
                 <Topbar title="Kind anlegen" />
 
                 <div className="mx-auto w-full max-w-3xl px-4 pb-10 pt-4 sm:px-6 md:px-8">
                     {err ? (
-                        <div className="mb-4 rounded-2xl border border-brand-danger/20 bg-brand-danger/10 p-3 text-sm text-brand-danger">
+                        <div className="mb-4 rounded-2xl border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive">
                             {err}
                         </div>
                     ) : null}
@@ -207,47 +279,118 @@ export default function KindWizardPage() {
                     {step === 1 ? (
                         <Card>
                             <CardHeader>
-                                <div className="text-sm font-semibold text-brand-text">Basisdaten Kind</div>
-                                <div className="mt-1 text-xs text-brand-text2">Vorname/Nachname sind Pflicht.</div>
-                            </CardHeader>
-                            <CardContent className="space-y-3">
-                                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                                    <Input label="Vorname *" value={kVorname} onChange={(e) => setKVorname(e.target.value)} />
-                                    <Input label="Nachname *" value={kNachname} onChange={(e) => setKNachname(e.target.value)} />
+                                <div className="text-sm font-semibold">Kind: Basisdaten</div>
+                                <div className="mt-1 text-xs text-muted-foreground">
+                                    Vorname/Nachname und Adresse sind Pflicht.
                                 </div>
+                            </CardHeader>
 
-                                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                                    <div>
-                                        <div className="mb-1 text-xs font-semibold text-brand-text2">Geburtsdatum</div>
-                                        <input
-                                            type="date"
-                                            value={kGeb}
-                                            onChange={(e) => setKGeb(e.target.value)}
-                                            className="h-10 w-full rounded-xl border border-brand-border bg-white px-3 text-sm outline-none focus:border-brand-teal focus:ring-2 focus:ring-brand-teal/25"
-                                        />
+                            <CardContent className="space-y-6">
+                                {/* Basis */}
+                                <div className="space-y-3">
+                                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                                        <Field label="Vorname *" htmlFor="k-vorname">
+                                            <Input
+                                                id="k-vorname"
+                                                value={kVorname}
+                                                onChange={(e) => setKVorname(e.target.value)}
+                                            />
+                                        </Field>
+
+                                        <Field label="Nachname *" htmlFor="k-nachname">
+                                            <Input
+                                                id="k-nachname"
+                                                value={kNachname}
+                                                onChange={(e) => setKNachname(e.target.value)}
+                                            />
+                                        </Field>
                                     </div>
 
-                                    <div>
-                                        <div className="mb-1 text-xs font-semibold text-brand-text2">Geschlecht</div>
-                                        <select
-                                            value={kGender}
-                                            onChange={(e) => setKGender(e.target.value as Gender)}
-                                            className="h-10 w-full rounded-xl border border-brand-border bg-white px-3 text-sm outline-none focus:border-brand-teal focus:ring-2 focus:ring-brand-teal/25"
-                                        >
-                                            {GENDER_OPTIONS.map((o) => (
-                                                <option key={o.value} value={o.value}>
-                                                    {o.label}
-                                                </option>
-                                            ))}
-                                        </select>
+                                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                                        <Field label="Geburtsdatum" htmlFor="k-geb">
+                                            <Input
+                                                id="k-geb"
+                                                type="date"
+                                                value={kGeb}
+                                                onChange={(e) => setKGeb(e.target.value)}
+                                            />
+                                        </Field>
+
+                                        <Field label="Geschlecht">
+                                            <Select
+                                                value={kGender}
+                                                onValueChange={(v) => setKGender(v as Gender)}
+                                            >
+                                                <SelectTrigger>
+                                                    <SelectValue placeholder="Bitte wählen" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    {GENDER_OPTIONS.map((o) => (
+                                                        <SelectItem key={o.value} value={o.value}>
+                                                            {o.label}
+                                                        </SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                        </Field>
+                                    </div>
+                                </div>
+
+                                {/* Adresse */}
+                                <div className="space-y-3">
+                                    <div className="text-xs font-semibold text-muted-foreground">
+                                        Adresse
+                                    </div>
+
+                                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                                        <Field label="Straße *" htmlFor="k-str">
+                                            <Input
+                                                id="k-str"
+                                                value={kStr}
+                                                onChange={(e) => setKStr(e.target.value)}
+                                            />
+                                        </Field>
+
+                                        <Field label="Hausnr. *" htmlFor="k-hnr">
+                                            <Input
+                                                id="k-hnr"
+                                                value={kHnr}
+                                                onChange={(e) => setKHnr(e.target.value)}
+                                            />
+                                        </Field>
+                                    </div>
+
+                                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                                        <Field label="PLZ *" htmlFor="k-plz">
+                                            <Input
+                                                id="k-plz"
+                                                value={kPlz}
+                                                onChange={(e) => setKPlz(e.target.value)}
+                                            />
+                                        </Field>
+
+                                        <Field label="Ort *" htmlFor="k-ort">
+                                            <Input
+                                                id="k-ort"
+                                                value={kOrt}
+                                                onChange={(e) => setKOrt(e.target.value)}
+                                            />
+                                        </Field>
                                     </div>
                                 </div>
 
                                 <div className="flex items-center justify-between pt-2">
-                                    <Button variant="secondary" onClick={() => router.push("/dashboard/kinder")} disabled={loading}>
+                                    <Button
+                                        variant="secondary"
+                                        onClick={() => router.push("/dashboard/kinder")}
+                                        disabled={loading}
+                                    >
                                         Abbrechen
                                     </Button>
-                                    <Button onClick={() => setStep(2)} disabled={!canNext1 || loading}>
+                                    <Button
+                                        onClick={() => setStep(2)}
+                                        disabled={!canNext1 || loading}
+                                    >
                                         Weiter
                                     </Button>
                                 </div>
@@ -259,44 +402,58 @@ export default function KindWizardPage() {
                     {step === 2 ? (
                         <Card>
                             <CardHeader>
-                                <div className="text-sm font-semibold text-brand-text">Hinweise</div>
-                                <div className="mt-1 text-xs text-brand-text2">Optional, aber hilfreich.</div>
+                                <div className="text-sm font-semibold">Hinweise</div>
+                                <div className="mt-1 text-xs text-muted-foreground">
+                                    Optional, aber hilfreich.
+                                </div>
                             </CardHeader>
+
                             <CardContent className="space-y-3">
-                                <label className="flex items-center gap-2 text-sm text-brand-text">
-                                    <input
-                                        type="checkbox"
+                                <div className="flex items-center gap-2">
+                                    <Checkbox
+                                        id="foerderbedarf"
                                         checked={foerderbedarf}
-                                        onChange={(e) => setFoerderbedarf(e.target.checked)}
-                                        className="h-4 w-4"
+                                        onCheckedChange={(v) => setFoerderbedarf(Boolean(v))}
                                     />
-                                    Förderbedarf vorhanden
-                                </label>
-
-                                {foerderbedarf ? (
-                                    <div>
-                                        <div className="mb-1 text-xs font-semibold text-brand-text2">Förderbedarf Details</div>
-                                        <textarea
-                                            value={foerderbedarfDetails}
-                                            onChange={(e) => setFoerderbedarfDetails(e.target.value)}
-                                            className="min-h-[96px] w-full rounded-xl border border-brand-border bg-white p-3 text-sm outline-none focus:border-brand-teal focus:ring-2 focus:ring-brand-teal/25"
-                                            placeholder="z.B. Logopädie, Motorik, Sprache…"
-                                        />
-                                    </div>
-                                ) : null}
-
-                                <div>
-                                    <div className="mb-1 text-xs font-semibold text-brand-text2">Gesundheits-/Entwicklungshinweise</div>
-                                    <textarea
-                                        value={gesundheit}
-                                        onChange={(e) => setGesundheit(e.target.value)}
-                                        className="min-h-[96px] w-full rounded-xl border border-brand-border bg-white p-3 text-sm outline-none focus:border-brand-teal focus:ring-2 focus:ring-brand-teal/25"
-                                        placeholder="Optional…"
-                                    />
+                                    <Label htmlFor="foerderbedarf" className="text-sm">
+                                        Förderbedarf vorhanden
+                                    </Label>
                                 </div>
 
+                                {foerderbedarf ? (
+                                    <Field
+                                        label="Förderbedarf Details"
+                                        htmlFor="foerderbedarfDetails"
+                                    >
+                                        <Textarea
+                                            id="foerderbedarfDetails"
+                                            value={foerderbedarfDetails}
+                                            onChange={(e) => setFoerderbedarfDetails(e.target.value)}
+                                            className="min-h-[96px]"
+                                            placeholder="z.B. Logopädie, Motorik, Sprache…"
+                                        />
+                                    </Field>
+                                ) : null}
+
+                                <Field
+                                    label="Gesundheits-/Entwicklungshinweise"
+                                    htmlFor="gesundheit"
+                                >
+                                    <Textarea
+                                        id="gesundheit"
+                                        value={gesundheit}
+                                        onChange={(e) => setGesundheit(e.target.value)}
+                                        className="min-h-[96px]"
+                                        placeholder="Optional…"
+                                    />
+                                </Field>
+
                                 <div className="flex items-center justify-between pt-2">
-                                    <Button variant="secondary" onClick={() => setStep(1)} disabled={loading}>
+                                    <Button
+                                        variant="secondary"
+                                        onClick={() => setStep(1)}
+                                        disabled={loading}
+                                    >
                                         Zurück
                                     </Button>
                                     <Button onClick={() => setStep(3)} disabled={loading}>
@@ -311,102 +468,184 @@ export default function KindWizardPage() {
                     {step === 3 ? (
                         <Card>
                             <CardHeader>
-                                <div className="text-sm font-semibold text-brand-text">Bezugsperson (mind. 1)</div>
-                                <div className="mt-1 text-xs text-brand-text2">Wird zusammen mit dem Kind gespeichert.</div>
+                                <div className="text-sm font-semibold">
+                                    Bezugsperson (mind. 1)
+                                </div>
+                                <div className="mt-1 text-xs text-muted-foreground">
+                                    Wird zusammen mit dem Kind gespeichert.
+                                </div>
                             </CardHeader>
+
                             <CardContent className="space-y-3">
                                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                                    <div>
-                                        <div className="mb-1 text-xs font-semibold text-brand-text2">Beziehung</div>
-                                        <select
+                                    <Field label="Beziehung">
+                                        <Select
                                             value={bpBeziehung}
-                                            onChange={(e) => setBpBeziehung(e.target.value as Beziehung)}
-                                            className="h-10 w-full rounded-xl border border-brand-border bg-white px-3 text-sm outline-none focus:border-brand-teal focus:ring-2 focus:ring-brand-teal/25"
+                                            onValueChange={(v) => setBpBeziehung(v as Beziehung)}
                                         >
-                                            {BEZIEHUNG_OPTIONS.map((o) => (
-                                                <option key={o.value} value={o.value}>
-                                                    {o.label}
-                                                </option>
-                                            ))}
-                                        </select>
-                                    </div>
+                                            <SelectTrigger>
+                                                <SelectValue placeholder="Bitte wählen" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {BEZIEHUNG_OPTIONS.map((o) => (
+                                                    <SelectItem key={o.value} value={o.value}>
+                                                        {o.label}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    </Field>
 
-                                    <div>
-                                        <div className="mb-1 text-xs font-semibold text-brand-text2">Sorgerecht</div>
-                                        <select
+                                    <Field label="Sorgerecht">
+                                        <Select
                                             value={bpSorgerecht}
-                                            onChange={(e) => setBpSorgerecht(e.target.value as Sorgerecht)}
-                                            className="h-10 w-full rounded-xl border border-brand-border bg-white px-3 text-sm outline-none focus:border-brand-teal focus:ring-2 focus:ring-brand-teal/25"
+                                            onValueChange={(v) => setBpSorgerecht(v as Sorgerecht)}
                                         >
-                                            {SORGERECHT_OPTIONS.map((o) => (
-                                                <option key={o.value} value={o.value}>
-                                                    {o.label}
-                                                </option>
-                                            ))}
-                                        </select>
-                                    </div>
+                                            <SelectTrigger>
+                                                <SelectValue placeholder="Bitte wählen" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {SORGERECHT_OPTIONS.map((o) => (
+                                                    <SelectItem key={o.value} value={o.value}>
+                                                        {o.label}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    </Field>
                                 </div>
 
                                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                                    <Input label="Vorname *" value={bpVorname} onChange={(e) => setBpVorname(e.target.value)} />
-                                    <Input label="Nachname *" value={bpNachname} onChange={(e) => setBpNachname(e.target.value)} />
+                                    <Field label="Vorname *" htmlFor="bp-vorname">
+                                        <Input
+                                            id="bp-vorname"
+                                            value={bpVorname}
+                                            onChange={(e) => setBpVorname(e.target.value)}
+                                        />
+                                    </Field>
+
+                                    <Field label="Nachname *" htmlFor="bp-nachname">
+                                        <Input
+                                            id="bp-nachname"
+                                            value={bpNachname}
+                                            onChange={(e) => setBpNachname(e.target.value)}
+                                        />
+                                    </Field>
                                 </div>
 
                                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                                    <div>
-                                        <div className="mb-1 text-xs font-semibold text-brand-text2">Geburtsdatum</div>
-                                        <input
+                                    <Field label="Geburtsdatum" htmlFor="bp-geb">
+                                        <Input
+                                            id="bp-geb"
                                             type="date"
                                             value={bpGeb}
                                             onChange={(e) => setBpGeb(e.target.value)}
-                                            className="h-10 w-full rounded-xl border border-brand-border bg-white px-3 text-sm outline-none focus:border-brand-teal focus:ring-2 focus:ring-brand-teal/25"
                                         />
-                                    </div>
+                                    </Field>
 
-                                    <div>
-                                        <div className="mb-1 text-xs font-semibold text-brand-text2">Geschlecht</div>
-                                        <select
+                                    <Field label="Geschlecht">
+                                        <Select
                                             value={bpGender}
-                                            onChange={(e) => setBpGender(e.target.value as Gender)}
-                                            className="h-10 w-full rounded-xl border border-brand-border bg-white px-3 text-sm outline-none focus:border-brand-teal focus:ring-2 focus:ring-brand-teal/25"
+                                            onValueChange={(v) => setBpGender(v as Gender)}
                                         >
-                                            {GENDER_OPTIONS.map((o) => (
-                                                <option key={o.value} value={o.value}>
-                                                    {o.label}
-                                                </option>
-                                            ))}
-                                        </select>
+                                            <SelectTrigger>
+                                                <SelectValue placeholder="Bitte wählen" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {GENDER_OPTIONS.map((o) => (
+                                                    <SelectItem key={o.value} value={o.value}>
+                                                        {o.label}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    </Field>
+                                </div>
+
+                                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                                    <Field label="Telefon" htmlFor="bp-telefon">
+                                        <Input
+                                            id="bp-telefon"
+                                            value={bpTelefon}
+                                            onChange={(e) => setBpTelefon(e.target.value)}
+                                        />
+                                    </Field>
+
+                                    <Field label="E-Mail" htmlFor="bp-email">
+                                        <Input
+                                            id="bp-email"
+                                            value={bpEmail}
+                                            onChange={(e) => setBpEmail(e.target.value)}
+                                        />
+                                    </Field>
+                                </div>
+
+                                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                                    <Field label="Straße" htmlFor="bp-str">
+                                        <Input
+                                            id="bp-str"
+                                            value={bpStr}
+                                            onChange={(e) => setBpStr(e.target.value)}
+                                        />
+                                    </Field>
+
+                                    <Field label="Hausnr." htmlFor="bp-hnr">
+                                        <Input
+                                            id="bp-hnr"
+                                            value={bpHnr}
+                                            onChange={(e) => setBpHnr(e.target.value)}
+                                        />
+                                    </Field>
+                                </div>
+
+                                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                                    <Field label="PLZ" htmlFor="bp-plz">
+                                        <Input
+                                            id="bp-plz"
+                                            value={bpPlz}
+                                            onChange={(e) => setBpPlz(e.target.value)}
+                                        />
+                                    </Field>
+
+                                    <Field label="Ort" htmlFor="bp-ort">
+                                        <Input
+                                            id="bp-ort"
+                                            value={bpOrt}
+                                            onChange={(e) => setBpOrt(e.target.value)}
+                                        />
+                                    </Field>
+                                </div>
+
+                                <div className="flex flex-wrap gap-6 pt-1">
+                                    <div className="flex items-center gap-2">
+                                        <Checkbox
+                                            id="bp-haupt"
+                                            checked={bpHaupt}
+                                            onCheckedChange={(v) => setBpHaupt(Boolean(v))}
+                                        />
+                                        <Label htmlFor="bp-haupt" className="text-sm">
+                                            Hauptkontakt
+                                        </Label>
                                     </div>
-                                </div>
 
-                                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                                    <Input label="Telefon" value={bpTelefon} onChange={(e) => setBpTelefon(e.target.value)} />
-                                    <Input label="E-Mail" value={bpEmail} onChange={(e) => setBpEmail(e.target.value)} />
-                                </div>
-
-                                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                                    <Input label="Straße" value={bpStr} onChange={(e) => setBpStr(e.target.value)} />
-                                    <Input label="Hausnr." value={bpHnr} onChange={(e) => setBpHnr(e.target.value)} />
-                                </div>
-
-                                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                                    <Input label="PLZ" value={bpPlz} onChange={(e) => setBpPlz(e.target.value)} />
-                                    <Input label="Ort" value={bpOrt} onChange={(e) => setBpOrt(e.target.value)} />
-                                </div>
-
-                                <div className="flex flex-wrap gap-4 pt-1 text-sm text-brand-text">
-                                    <label className="flex items-center gap-2">
-                                        <input type="checkbox" checked={bpHaupt} onChange={(e) => setBpHaupt(e.target.checked)} className="h-4 w-4" />
-                                        Hauptkontakt
-                                    </label>
-                                    <label className="flex items-center gap-2">
-                                        <input type="checkbox" checked={bpHaushalt} onChange={(e) => setBpHaushalt(e.target.checked)} className="h-4 w-4" />
-                                        lebt im Haushalt
-                                    </label>
+                                    <div className="flex items-center gap-2">
+                                        <Checkbox
+                                            id="bp-haushalt"
+                                            checked={bpHaushalt}
+                                            onCheckedChange={(v) => setBpHaushalt(Boolean(v))}
+                                        />
+                                        <Label htmlFor="bp-haushalt" className="text-sm">
+                                            lebt im Haushalt
+                                        </Label>
+                                    </div>
                                 </div>
 
                                 <div className="flex items-center justify-between pt-2">
-                                    <Button variant="secondary" onClick={() => setStep(2)} disabled={loading}>
+                                    <Button
+                                        variant="secondary"
+                                        onClick={() => setStep(2)}
+                                        disabled={loading}
+                                    >
                                         Zurück
                                     </Button>
                                     <Button onClick={submit} disabled={!canNext3 || loading}>

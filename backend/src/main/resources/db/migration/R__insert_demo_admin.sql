@@ -3,7 +3,7 @@
 -- =====================================================
 
 INSERT INTO traeger (id, name, slug, akten_prefix, enabled, kurzcode, created_at, updated_at)
-VALUES (1, 'Demo Träger', 'demo-traeger', 'DT', true, 'DEMO', now(), now());
+VALUES (1, 'KIDOC', 'demo-traeger', 'KID', true, 'DEMO', now(), now());
 
 
 -- =====================================================
@@ -12,11 +12,11 @@ VALUES (1, 'Demo Träger', 'demo-traeger', 'DT', true, 'DEMO', now(), now());
 
 -- Träger-OrgUnit
 INSERT INTO org_units (id, traeger_id, type, name, parent_id, enabled, created_at, updated_at)
-VALUES (1, 1, 'TRAEGER', 'Demo Träger', NULL, true, now(), now());
+VALUES (1, 1, 'TRAEGER', 'KIDOC', NULL, true, now(), now());
 
 -- Einrichtung-OrgUnit (wichtig: type = EINRICHTUNG)
 INSERT INTO org_units (id, traeger_id, type, name, parent_id, enabled, created_at, updated_at)
-VALUES (2, 1, 'EINRICHTUNG', 'Demo Einrichtung', 1, true, now(), now());
+VALUES (2, 1, 'EINRICHTUNG', 'Gesamtschule MS Mitte', 1, true, now(), now());
 
 
 -- =====================================================
@@ -44,8 +44,8 @@ VALUES (
            2,  -- ✅ Default OrgUnit auf EINRICHTUNG setzen
            now(),
            now(),
-           'Demo',
-           'Admin'
+           'D.',
+           'Emo'
        );
 
 
@@ -55,4 +55,4 @@ VALUES (
 
 INSERT INTO user_org_roles (user_id, org_unit_id, role, enabled, created_at, updated_at)
 VALUES
-    (1, 2, 'EINRICHTUNG_ADMIN', true, now(), now());
+    (1, 2, 'TRAEGER_ADMIN', true, now(), now());

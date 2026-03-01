@@ -13,7 +13,12 @@ public record KindResponse(
         Gender gender,
         boolean foerderbedarf,
         String foerderbedarfDetails,
-        String gesundheitsHinweise
+        String gesundheitsHinweise,
+        // ✅ Adresse
+        String strasse,
+        String hausnummer,
+        String plz,
+        String ort
 ) {
     private KindResponse toDto(Kind k) {
         return new KindResponse(
@@ -24,7 +29,11 @@ public record KindResponse(
                 k.getGender() == null ? Gender.UNBEKANNT : k.getGender(),
                 k.isFoerderbedarf(),
                 k.getFoerderbedarfDetails(),
-                k.getGesundheitsHinweise()
+                k.getGesundheitsHinweise(),
+                k.getStrasse(),
+                k.getHausnummer(),
+                k.getPlz(),
+                k.getOrt()
         );
     }
 }

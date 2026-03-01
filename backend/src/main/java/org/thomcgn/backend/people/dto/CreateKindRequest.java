@@ -11,5 +11,11 @@ public record CreateKindRequest(
         Gender gender,
         boolean foerderbedarf,
         String foerderbedarfDetails,
-        String gesundheitsHinweise
+        String gesundheitsHinweise,
+
+        // ✅ Adresse (wie Bezugsperson)
+        String strasse,
+        String hausnummer,
+        String plz,
+        String ort
 ) {}

@@ -10,6 +10,7 @@ import {
     XCircle,
     FilePlus2,
     CalendarDays,
+    MapPin,
 } from "lucide-react";
 
 import { AuthGate } from "@/components/AuthGate";
@@ -25,6 +26,22 @@ import {
     DialogFooter,
     DialogClose,
 } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+    Select,
+    SelectTrigger,
+    SelectValue,
+    SelectContent,
+    SelectItem,
+} from "@/components/ui/select";
+import {
+    Accordion,
+    AccordionContent,
+    AccordionItem,
+    AccordionTrigger,
+} from "@/components/ui/accordion";
 
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/lib/useAuth";
@@ -59,36 +76,6 @@ function safeIdFromParams(v: unknown): number | null {
     return null;
 }
 
-function toneForSorgerecht(s: string): "neutral" | "info" | "warning" | "danger" {
-    const x = (s || "").toLowerCase();
-    if (x.includes("entz")) return "danger";
-    if (x.includes("ungekl")) return "warning";
-    if (x.includes("allein")) return "info";
-    return "neutral";
-}
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-    return (
-        <div className="space-y-1">
-            <label className="text-xs font-semibold text-brand-text2">{label}</label>
-            {children}
-        </div>
-    );
-}
-
-function TextInput(props: React.InputHTMLAttributes<HTMLInputElement>) {
-    return (
-        <input
-            {...props}
-            className={
-                "h-10 w-full rounded-xl border border-brand-border bg-white px-3 text-sm outline-none " +
-                "focus:border-brand-teal focus:ring-2 focus:ring-brand-teal/25 " +
-                (props.className ?? "")
-            }
-        />
-    );
-}
-
 function errorMessage(e: unknown, fallback: string) {
     if (
         e &&
@@ -113,6 +100,312 @@ function getLinkId(l: unknown): number | null {
     return Number.isFinite(n) && n > 0 ? n : null;
 }
 
+// ---- Badge helpers ----
+
+type Tone = "neutral" | "info" | "warning" | "danger" | "success";
+
+function formatSorgerechtLabel(s: string | null | undefined): string {
+    if (!s) return "Ungeklärt";
+    const map: Record<string, string> = {
+        UNGEKLAERT: "Ungeklärt",
+        GEMEINSAM: "Gemeinsam",
+        ALLEIN: "Allein",
+        ENTZOGEN: "Entzogen",
+        KEIN: "Kein",
+        AMTSPFLEGSCHAFT: "Amtspflegschaft",
+        VORMUNDSCHAFT: "Vormundschaft",
+    };
+    return map[s] ?? s.charAt(0) + s.slice(1).toLowerCase();
+}
+
+function toneForSorgerecht(s: string | null | undefined): Tone {
+    switch (s) {
+        case "ENTZOGEN":
+            return "danger";
+        case "UNGEKLAERT":
+            return "warning";
+        case "ALLEIN":
+            return "info";
+        case "GEMEINSAM":
+            return "success";
+        default:
+            return "neutral";
+    }
+}
+
+function BadgeWithLabel({
+                            label,
+                            tone,
+                            children,
+                        }: {
+    label: string;
+    tone: Tone;
+    children: React.ReactNode;
+}) {
+    return (
+        <div className="flex flex-col gap-1">
+            <span className="text-[11px] font-medium text-muted-foreground">{label}</span>
+            <Badge tone={tone} className="w-fit">
+                {children}
+            </Badge>
+        </div>
+    );
+}
+
+// ---- Address helpers ----
+
+function formatAddress(parts: {
+    strasse?: string | null;
+    hausnummer?: string | null;
+    plz?: string | null;
+    ort?: string | null;
+}): string | null {
+    const street = [parts.strasse, parts.hausnummer].filter(Boolean).join(" ");
+    const city = [parts.plz, parts.ort].filter(Boolean).join(" ");
+    const full = [street, city].filter(Boolean).join(", ").trim();
+    return full.length ? full : null;
+}
+
+/**
+ * KindAddress: sehr robust gegen verschiedene Backend-Fieldnames.
+ * Falls du sicher weißt, dass es exakt strasse/hausnummer/plz/ort ist,
+ * kannst du die Extraktion unten vereinfachen.
+ */
+function getKindAddress(kind: KindResponse | null): string | null {
+    if (!kind) return null;
+    const k = kind as any;
+
+    // häufige Varianten:
+    const strasse =
+        k.strasse ??
+        k.street ??
+        k.adresseStrasse ??
+        k.addressStreet ??
+        k.address?.strasse ??
+        k.address?.street ??
+        null;
+
+    const hausnummer =
+        k.hausnummer ??
+        k.houseNumber ??
+        k.adresseHausnummer ??
+        k.addressHouseNumber ??
+        k.address?.hausnummer ??
+        k.address?.houseNumber ??
+        null;
+
+    const plz =
+        k.plz ??
+        k.postleitzahl ??
+        k.zip ??
+        k.addressZip ??
+        k.address?.plz ??
+        k.address?.zip ??
+        null;
+
+    const ort =
+        k.ort ??
+        k.city ??
+        k.addressCity ??
+        k.address?.ort ??
+        k.address?.city ??
+        null;
+
+    return formatAddress({ strasse, hausnummer, plz, ort });
+}
+
+function getBezugspersonAddress(l: KindBezugspersonResponse): string | null {
+    const anyL = l as any;
+
+    // 1) flach am Link
+    const direct = formatAddress({
+        strasse: anyL.strasse ?? anyL.street ?? null,
+        hausnummer: anyL.hausnummer ?? anyL.houseNumber ?? null,
+        plz: anyL.plz ?? anyL.postleitzahl ?? anyL.zip ?? null,
+        ort: anyL.ort ?? anyL.city ?? null,
+    });
+    if (direct) return direct;
+
+    // 2) nested (bezugsperson / person / bp)
+    const nested = anyL.bezugsperson ?? anyL.person ?? anyL.bp ?? null;
+    if (nested) {
+        const nestedAddr = formatAddress({
+            strasse: nested.strasse ?? nested.street ?? null,
+            hausnummer: nested.hausnummer ?? nested.houseNumber ?? null,
+            plz: nested.plz ?? nested.postleitzahl ?? nested.zip ?? null,
+            ort: nested.ort ?? nested.city ?? null,
+        });
+        if (nestedAddr) return nestedAddr;
+    }
+
+    // 3) spezielle Feldnamen
+    const specific = formatAddress({
+        strasse: anyL.bezugspersonStrasse ?? anyL.bpStrasse ?? null,
+        hausnummer: anyL.bezugspersonHausnummer ?? anyL.bpHausnummer ?? null,
+        plz: anyL.bezugspersonPlz ?? anyL.bpPlz ?? null,
+        ort: anyL.bezugspersonOrt ?? anyL.bpOrt ?? null,
+    });
+    return specific;
+}
+
+// ---- UI helpers ----
+
+function Field({
+                   label,
+                   htmlFor,
+                   children,
+               }: {
+    label: string;
+    htmlFor?: string;
+    children: React.ReactNode;
+}) {
+    return (
+        <div className="space-y-1">
+            <Label htmlFor={htmlFor} className="text-xs text-muted-foreground">
+                {label}
+            </Label>
+            {children}
+        </div>
+    );
+}
+
+// ---- Options (UI only) ----
+
+const BEZIEHUNG_OPTIONS: Array<{ value: string; label: string }> = [
+    { value: "MUTTER", label: "Mutter" },
+    { value: "VATER", label: "Vater" },
+    { value: "SORGEBERECHTIGT", label: "Sorgeberechtigt" },
+    { value: "PFLEGEMUTTER", label: "Pflegemutter" },
+    { value: "PFLEGEVATER", label: "Pflegevater" },
+    { value: "STIEFMUTTER", label: "Stiefmutter" },
+    { value: "STIEFVATER", label: "Stiefvater" },
+    { value: "GROSSMUTTER", label: "Großmutter" },
+    { value: "GROSSVATER", label: "Großvater" },
+    { value: "GESCHWISTER", label: "Geschwister" },
+    { value: "SONSTIGE", label: "Sonstige" },
+];
+
+const SORGERECHT_OPTIONS: Array<{ value: SorgerechtTyp; label: string }> = [
+    { value: "UNGEKLAERT", label: "Ungeklärt" },
+    { value: "GEMEINSAM", label: "Gemeinsam" },
+    { value: "ALLEIN", label: "Allein" },
+    { value: "ENTZOGEN", label: "Entzogen" },
+];
+
+const GENDER_OPTIONS: Array<{ value: string; label: string }> = [
+    { value: "UNBEKANNT", label: "Unbekannt" },
+    { value: "MAENNLICH", label: "Männlich" },
+    { value: "WEIBLICH", label: "Weiblich" },
+    { value: "DIVERS", label: "Divers" },
+];
+
+function BezugspersonCardBody({
+                                  l,
+                                  idx,
+                                  onTemplate,
+                                  onEnd,
+                                  setErr,
+                              }: {
+    l: KindBezugspersonResponse;
+    idx: number;
+    onTemplate: () => void;
+    onEnd: () => void;
+    setErr: (v: string) => void;
+}) {
+    const linkId = getLinkId(l);
+    const isEnabled = Boolean((l as any)?.enabled);
+    const isHaupt = Boolean((l as any)?.hauptkontakt);
+    const isHaushalt = Boolean((l as any)?.lebtImHaushalt);
+    const sorgerechtRaw = String((l as any)?.sorgerecht ?? "UNGEKLAERT");
+    const sorgerechtLabel = formatSorgerechtLabel((l as any)?.sorgerecht);
+    const addr = getBezugspersonAddress(l);
+
+    return (
+        <div className="rounded-2xl border border-border bg-card p-3">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                <div className="min-w-0">
+                    <div className="flex flex-col gap-2">
+                        <div className="text-sm font-extrabold break-words">
+                            {l.bezugspersonName || `Bezugsperson ${idx + 1}`}
+                        </div>
+
+                        <div className="flex flex-wrap items-start gap-4">
+                            <BadgeWithLabel label="Sorgerecht" tone={toneForSorgerecht(sorgerechtRaw)}>
+                                {sorgerechtLabel}
+                            </BadgeWithLabel>
+
+                            <BadgeWithLabel label="Status" tone={isEnabled ? "success" : "neutral"}>
+                                {isEnabled ? "Aktiv" : "Inaktiv"}
+                            </BadgeWithLabel>
+
+                            <BadgeWithLabel label="Kontakt" tone={isHaupt ? "info" : "neutral"}>
+                                {isHaupt ? "Hauptkontakt" : "—"}
+                            </BadgeWithLabel>
+
+                            <BadgeWithLabel label="Haushalt" tone={isHaushalt ? "success" : "neutral"}>
+                                {isHaushalt ? "Im Haushalt" : "—"}
+                            </BadgeWithLabel>
+                        </div>
+
+                        {addr ? (
+                            <div className="flex items-start gap-2 text-sm text-muted-foreground">
+                                <MapPin className="mt-0.5 h-4 w-4 shrink-0" />
+                                <span className="break-words">{addr}</span>
+                            </div>
+                        ) : (
+                            <div className="flex items-start gap-2 text-sm text-muted-foreground">
+                                <MapPin className="mt-0.5 h-4 w-4 shrink-0" />
+                                <span className="break-words">—</span>
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="mt-3 grid grid-cols-1 gap-2 text-xs text-muted-foreground sm:grid-cols-3">
+                        <div className="flex items-center gap-2">
+                            <Link2 className="h-3.5 w-3.5" />
+                            <span className="break-words">Beziehung: {l.beziehung || "—"}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <CalendarDays className="h-3.5 w-3.5" />
+                            <span className="break-words">
+                gültig: {l.validFrom || "—"} → {l.validTo || "offen"}
+              </span>
+                        </div>
+                        <div className="break-words">
+                            BP-ID: {l.bezugspersonId ?? "—"} · Link-ID: {linkId ?? "—"}
+                        </div>
+                    </div>
+                </div>
+
+                <div className="flex gap-2 sm:pt-1">
+                    <Button variant="secondary" size="sm" onClick={onTemplate} title="Als Vorlage übernehmen">
+                        <Plus className="h-4 w-4" />
+                    </Button>
+
+                    <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={() => {
+                            const lid = getLinkId(l);
+                            if (!lid) {
+                                setErr(
+                                    "Link-ID fehlt (Backend liefert kein id/linkId) – Beziehung kann nicht beendet werden."
+                                );
+                                return;
+                            }
+                            onEnd();
+                        }}
+                        disabled={!isEnabled}
+                        title="Beziehung beenden"
+                    >
+                        <XCircle className="h-4 w-4" />
+                    </Button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
 export default function KindDetailPage() {
     const router = useRouter();
     const params = useParams();
@@ -128,7 +421,6 @@ export default function KindDetailPage() {
     // --- Dialog: Add Bezugsperson ---
     const [addOpen, setAddOpen] = useState(false);
     const [addMode, setAddMode] = useState<"existing" | "create">("create");
-
     const [existingId, setExistingId] = useState<string>("");
 
     const [createBp, setCreateBp] = useState<CreateBezugspersonRequest>({
@@ -165,10 +457,13 @@ export default function KindDetailPage() {
         setErr(null);
 
         try {
-            const k = await apiFetch<KindResponse>(`/kinder/${kindId}`, { method: "GET" });
-            const bps = await apiFetch<KindBezugspersonResponse[]>(`/kinder/${kindId}/bezugspersonen`, {
+            const k = await apiFetch<KindResponse>(`/kinder/${kindId}`, {
                 method: "GET",
             });
+            const bps = await apiFetch<KindBezugspersonResponse[]>(
+                `/kinder/${kindId}/bezugspersonen`,
+                { method: "GET" }
+            );
 
             setKind(k);
             setLinks(Array.isArray(bps) ? bps : []);
@@ -271,11 +566,10 @@ export default function KindDetailPage() {
         const payload: EndKindBezugspersonRequest = { validTo };
 
         try {
-            // ✅ Netzwerk-Request muss hier sichtbar sein
-            await apiFetch<KindBezugspersonResponse>(`/kinder/${kindId}/bezugspersonen/${linkId}/end`, {
-                method: "PATCH",
-                body: payload,
-            });
+            await apiFetch<KindBezugspersonResponse>(
+                `/kinder/${kindId}/bezugspersonen/${linkId}/end`,
+                { method: "PATCH", body: payload }
+            );
 
             setEndOpen(false);
             setEndLinkId(null);
@@ -311,27 +605,37 @@ export default function KindDetailPage() {
                 body: req,
             });
 
-            // ✅ Dossier/Akte anlegen + Wizard direkt starten
-            router.push(`/dashboard/akten/${created.id}?autostart=erstmeldung`);
+            // ✅ direkt in den Wizard (Route existiert unter /dashboard/falloeffnungen/[fallId]/erstmeldung)
+            router.push(`/dashboard/falloeffnungen/${created.id}/erstmeldung`);
         } catch (e: unknown) {
             setErr(errorMessage(e, "Akte konnte nicht gestartet werden."));
         }
     }
 
+    const kindAddress = getKindAddress(kind);
+
     return (
         <AuthGate>
-            <div className="min-h-screen">
+            <div className="min-h-screen bg-background text-foreground">
                 <Topbar title="Kind" />
 
                 <div className="mx-auto max-w-6xl space-y-4 p-4 md:p-6">
                     <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                        <Button variant="secondary" onClick={() => router.back()} className="w-full sm:w-auto">
+                        <Button
+                            variant="secondary"
+                            onClick={() => router.back()}
+                            className="w-full sm:w-auto"
+                        >
                             <ArrowLeft className="h-4 w-4" />
                             Zurück
                         </Button>
 
                         <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
-                            <Button variant="secondary" onClick={() => setAddOpen(true)} className="w-full sm:w-auto">
+                            <Button
+                                variant="secondary"
+                                onClick={() => setAddOpen(true)}
+                                className="w-full sm:w-auto"
+                            >
                                 <UserPlus className="h-4 w-4" />
                                 Bezugsperson hinzufügen
                             </Button>
@@ -344,7 +648,7 @@ export default function KindDetailPage() {
                     </div>
 
                     {err ? (
-                        <div className="rounded-2xl border border-brand-danger/20 bg-brand-danger/10 p-4 text-sm text-brand-danger">
+                        <div className="rounded-2xl border border-destructive/20 bg-destructive/10 p-4 text-sm text-destructive">
                             {err}
                         </div>
                     ) : null}
@@ -352,52 +656,79 @@ export default function KindDetailPage() {
                     <Card>
                         <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                             <div className="min-w-0">
-                                <div className="text-sm font-semibold text-brand-text">Details</div>
-                                <div className="mt-1 text-xs text-brand-text2">Stammdaten & Kontext</div>
+                                <div className="text-sm font-semibold">Details</div>
+                                <div className="mt-1 text-xs text-muted-foreground">
+                                    Stammdaten & Kontext
+                                </div>
                             </div>
-                            <div className="text-xs text-brand-text2">{loading ? "lädt…" : kind ? `#${kind.id}` : "—"}</div>
+                            <div className="text-xs text-muted-foreground">
+                                {loading ? "lädt…" : kind ? `#${kind.id}` : "—"}
+                            </div>
                         </CardHeader>
 
                         <CardContent>
                             {loading ? (
-                                <div className="text-sm text-brand-text2">Lade…</div>
+                                <div className="text-sm text-muted-foreground">Lade…</div>
                             ) : !kind ? (
-                                <div className="text-sm text-brand-text2">Kein Kind geladen.</div>
+                                <div className="text-sm text-muted-foreground">Kein Kind geladen.</div>
                             ) : (
                                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                                    <div className="rounded-2xl border border-brand-border bg-white p-3">
-                                        <div className="text-xs font-semibold text-brand-text2">Name</div>
-                                        <div className="mt-1 text-sm font-extrabold text-brand-navy break-words">
+                                    <div className="rounded-2xl border border-border bg-card p-3">
+                                        <div className="text-xs font-semibold text-muted-foreground">Name</div>
+                                        <div className="mt-1 text-sm font-extrabold break-words">
                                             {kind.vorname} {kind.nachname}
                                         </div>
                                     </div>
 
-                                    <div className="rounded-2xl border border-brand-border bg-white p-3">
-                                        <div className="text-xs font-semibold text-brand-text2">Geburtsdatum</div>
-                                        <div className="mt-1 text-sm font-semibold text-brand-text break-words">
+                                    <div className="rounded-2xl border border-border bg-card p-3">
+                                        <div className="text-xs font-semibold text-muted-foreground">
+                                            Geburtsdatum
+                                        </div>
+                                        <div className="mt-1 text-sm font-semibold break-words">
                                             {kind.geburtsdatum || "—"}
                                         </div>
                                     </div>
 
-                                    <div className="rounded-2xl border border-brand-border bg-white p-3">
-                                        <div className="text-xs font-semibold text-brand-text2">Gender</div>
-                                        <div className="mt-1 text-sm font-semibold text-brand-text break-words">{kind.gender || "—"}</div>
+                                    <div className="rounded-2xl border border-border bg-card p-3">
+                                        <div className="text-xs font-semibold text-muted-foreground">Gender</div>
+                                        <div className="mt-1 text-sm font-semibold break-words">
+                                            {kind.gender || "—"}
+                                        </div>
                                     </div>
 
-                                    <div className="rounded-2xl border border-brand-border bg-white p-3">
-                                        <div className="text-xs font-semibold text-brand-text2">Förderbedarf</div>
-                                        <div className="mt-1 text-sm font-semibold text-brand-text">
+                                    <div className="rounded-2xl border border-border bg-card p-3">
+                                        <div className="text-xs font-semibold text-muted-foreground">
+                                            Förderbedarf
+                                        </div>
+                                        <div className="mt-1 text-sm font-semibold">
                                             {kind.foerderbedarf ? "Ja" : "Nein"}
                                         </div>
                                         {kind.foerderbedarfDetails ? (
-                                            <div className="mt-1 text-xs text-brand-text2 break-words">{kind.foerderbedarfDetails}</div>
+                                            <div className="mt-1 text-xs text-muted-foreground break-words">
+                                                {kind.foerderbedarfDetails}
+                                            </div>
                                         ) : null}
                                     </div>
 
+                                    {/* ✅ Kind-Adresse: immer sichtbar (wenn leer dann —) */}
+                                    <div className="sm:col-span-2 rounded-2xl border border-border bg-card p-3">
+                                        <div className="text-xs font-semibold text-muted-foreground">
+                                            Adresse
+                                        </div>
+                                        <div className="mt-1 flex items-start gap-2 text-sm text-muted-foreground">
+                                            <MapPin className="mt-0.5 h-4 w-4 shrink-0" />
+                                            <span className="break-words">{kindAddress ?? "—"}</span>
+                                        </div>
+                                    </div>
+
                                     {kind.gesundheitsHinweise ? (
-                                        <div className="sm:col-span-2 rounded-2xl border border-brand-border bg-white p-3">
-                                            <div className="text-xs font-semibold text-brand-text2">Gesundheitshinweise</div>
-                                            <div className="mt-1 text-sm text-brand-text break-words">{kind.gesundheitsHinweise}</div>
+                                        <div className="sm:col-span-2 rounded-2xl border border-border bg-card p-3">
+                                            <div className="text-xs font-semibold text-muted-foreground">
+                                                Gesundheitshinweise
+                                            </div>
+                                            <div className="mt-1 text-sm break-words">
+                                                {kind.gesundheitsHinweise}
+                                            </div>
                                         </div>
                                     ) : null}
                                 </div>
@@ -408,84 +739,93 @@ export default function KindDetailPage() {
                     <Card>
                         <CardHeader className="flex items-center justify-between">
                             <div>
-                                <div className="text-sm font-semibold text-brand-text">Bezugspersonen</div>
-                                <div className="mt-1 text-xs text-brand-text2">
-                                    Liste aus <code className="rounded bg-brand-bg px-1">/kinder/{kindId ?? "…"}/bezugspersonen</code>
-                                </div>
+                                <div className="text-sm font-semibold">Bezugspersonen</div>
                             </div>
-                            <div className="text-xs text-brand-text2">{loading ? "…" : `${links.length} Einträge`}</div>
+                            <div className="text-xs text-muted-foreground">
+                                {loading ? "…" : `${links.length} Einträge`}
+                            </div>
                         </CardHeader>
 
                         <CardContent>
                             {!links.length ? (
-                                <div className="rounded-2xl border border-brand-border bg-brand-bg p-4 text-sm text-brand-text2">
+                                <div className="rounded-2xl border border-border bg-muted p-4 text-sm text-muted-foreground">
                                     Noch keine Bezugspersonen verknüpft.
                                 </div>
+                            ) : links.length === 1 ? (
+                                <BezugspersonCardBody
+                                    l={links[0]}
+                                    idx={0}
+                                    setErr={(v) => setErr(v)}
+                                    onTemplate={() => {
+                                        const l = links[0];
+                                        setAddOpen(true);
+                                        setAddMode("existing");
+                                        setExistingId(l.bezugspersonId ? String(l.bezugspersonId) : "");
+                                        setBeziehung(l.beziehung || "SONSTIGE");
+                                        setSorgerecht((l.sorgerecht as SorgerechtTyp) || "UNGEKLAERT");
+                                        setHauptkontakt(Boolean(l.hauptkontakt));
+                                        setLebtImHaushalt(Boolean(l.lebtImHaushalt));
+                                    }}
+                                    onEnd={() => {
+                                        const lid = getLinkId(links[0]);
+                                        if (!lid) {
+                                            setErr(
+                                                "Link-ID fehlt (Backend liefert kein id/linkId) – Beziehung kann nicht beendet werden."
+                                            );
+                                            return;
+                                        }
+                                        openEnd(lid);
+                                    }}
+                                />
                             ) : (
-                                <div className="space-y-2">
+                                <Accordion type="multiple" className="w-full">
                                     {links.map((l, idx) => {
                                         const linkId = getLinkId(l);
                                         const key = linkId
                                             ? `link-${linkId}`
-                                            : `bp-${String((l as any)?.bezugspersonId ?? "na")}-${String((l as any)?.validFrom ?? "na")}-${idx}`;
+                                            : `bp-${String((l as any)?.bezugspersonId ?? "na")}-${String(
+                                                (l as any)?.validFrom ?? "na"
+                                            )}-${idx}`;
+
+                                        const title = l.bezugspersonName || `Bezugsperson ${idx + 1}`;
+                                        const sub = [
+                                            l.beziehung ? `Beziehung: ${l.beziehung}` : null,
+                                            (l as any)?.sorgerecht
+                                                ? `Sorgerecht: ${formatSorgerechtLabel((l as any)?.sorgerecht)}`
+                                                : null,
+                                        ]
+                                            .filter(Boolean)
+                                            .join(" · ");
 
                                         return (
-                                            <div key={key} className="rounded-2xl border border-brand-border bg-white p-3">
-                                                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                                                    <div className="min-w-0">
-                                                        <div className="flex flex-wrap items-center gap-2">
-                                                            <div className="text-sm font-extrabold text-brand-navy break-words">
-                                                                {l.bezugspersonName || "—"}
-                                                            </div>
-
-                                                            <Badge tone={toneForSorgerecht(String(l.sorgerecht))}>
-                                                                {String(l.sorgerecht || "UNGEKLAERT")}
-                                                            </Badge>
-
-                                                            {!l.enabled ? <Badge tone="neutral">inaktiv</Badge> : null}
-                                                            {l.hauptkontakt ? <Badge tone="info">Hauptkontakt</Badge> : null}
-                                                            {l.lebtImHaushalt ? <Badge tone="success">im Haushalt</Badge> : null}
+                                            <AccordionItem key={key} value={key} className="border-b-0">
+                                                <div className="rounded-2xl border border-border bg-card">
+                                                    <AccordionTrigger className="px-3 py-3 hover:no-underline">
+                                                        <div className="flex min-w-0 flex-col items-start text-left">
+                                                            <div className="truncate text-sm font-semibold">{title}</div>
+                                                            {sub ? (
+                                                                <div className="mt-0.5 text-xs text-muted-foreground line-clamp-1">
+                                                                    {sub}
+                                                                </div>
+                                                            ) : null}
                                                         </div>
+                                                    </AccordionTrigger>
 
-                                                        <div className="mt-2 grid grid-cols-1 gap-2 text-xs text-brand-text2 sm:grid-cols-3">
-                                                            <div className="flex items-center gap-2">
-                                                                <Link2 className="h-3.5 w-3.5" />
-                                                                <span className="break-words">Beziehung: {l.beziehung || "—"}</span>
-                                                            </div>
-                                                            <div className="flex items-center gap-2">
-                                                                <CalendarDays className="h-3.5 w-3.5" />
-                                                                <span className="break-words">
-                                  gültig: {l.validFrom || "—"} → {l.validTo || "offen"}
-                                </span>
-                                                            </div>
-                                                            <div className="break-words">
-                                                                BP-ID: {l.bezugspersonId ?? "—"} · Link-ID: {linkId ?? "—"}
-                                                            </div>
-                                                        </div>
-                                                    </div>
-
-                                                    <div className="flex gap-2 sm:pt-1">
-                                                        <Button
-                                                            variant="secondary"
-                                                            size="sm"
-                                                            onClick={() => {
+                                                    <AccordionContent className="px-3 pb-3">
+                                                        <BezugspersonCardBody
+                                                            l={l}
+                                                            idx={idx}
+                                                            setErr={(v) => setErr(v)}
+                                                            onTemplate={() => {
                                                                 setAddOpen(true);
                                                                 setAddMode("existing");
                                                                 setExistingId(l.bezugspersonId ? String(l.bezugspersonId) : "");
                                                                 setBeziehung(l.beziehung || "SONSTIGE");
-                                                                setSorgerecht(l.sorgerecht || "UNGEKLAERT");
+                                                                setSorgerecht((l.sorgerecht as SorgerechtTyp) || "UNGEKLAERT");
                                                                 setHauptkontakt(Boolean(l.hauptkontakt));
                                                                 setLebtImHaushalt(Boolean(l.lebtImHaushalt));
                                                             }}
-                                                            title="Als Vorlage übernehmen"
-                                                        >
-                                                            <Plus className="h-4 w-4" />
-                                                        </Button>
-
-                                                        <Button
-                                                            variant="destructive"
-                                                            size="sm"
-                                                            onClick={() => {
+                                                            onEnd={() => {
                                                                 const lid = getLinkId(l);
                                                                 if (!lid) {
                                                                     setErr(
@@ -495,17 +835,13 @@ export default function KindDetailPage() {
                                                                 }
                                                                 openEnd(lid);
                                                             }}
-                                                            disabled={!l.enabled}
-                                                            title="Beziehung beenden"
-                                                        >
-                                                            <XCircle className="h-4 w-4" />
-                                                        </Button>
-                                                    </div>
+                                                        />
+                                                    </AccordionContent>
                                                 </div>
-                                            </div>
+                                            </AccordionItem>
                                         );
                                     })}
-                                </div>
+                                </Accordion>
                             )}
                         </CardContent>
                     </Card>
@@ -519,8 +855,8 @@ export default function KindDetailPage() {
                         </ShadDialogHeader>
 
                         <div className="space-y-4">
-                            <div className="rounded-2xl border border-brand-border bg-brand-bg p-3">
-                                <div className="text-xs font-semibold text-brand-text2">Modus</div>
+                            <div className="rounded-2xl border border-border bg-muted p-3">
+                                <div className="text-xs font-semibold text-muted-foreground">Modus</div>
                                 <div className="mt-2 flex flex-col gap-2 sm:flex-row">
                                     <Button
                                         variant={addMode === "create" ? "default" : "secondary"}
@@ -540,68 +876,68 @@ export default function KindDetailPage() {
                                     </Button>
                                 </div>
 
-                                <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                                <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
                                     <Field label="Beziehung">
-                                        <select
-                                            value={beziehung}
-                                            onChange={(e) => setBeziehung(e.target.value)}
-                                            className="h-10 w-full rounded-xl border border-brand-border bg-white px-3 text-sm outline-none focus:border-brand-teal focus:ring-2 focus:ring-brand-teal/25"
-                                        >
-                                            {[
-                                                "MUTTER",
-                                                "VATER",
-                                                "STIEFELTERNTEIL",
-                                                "PFLEGEMUTTER",
-                                                "PFLEGEVATER",
-                                                "GROSSMUTTER",
-                                                "GROSSVATER",
-                                                "GESCHWISTER",
-                                                "SONSTIGE",
-                                            ].map((x) => (
-                                                <option key={x} value={x}>
-                                                    {x}
-                                                </option>
-                                            ))}
-                                        </select>
+                                        <Select value={beziehung} onValueChange={setBeziehung}>
+                                            <SelectTrigger>
+                                                <SelectValue placeholder="Bitte wählen" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {BEZIEHUNG_OPTIONS.map((o) => (
+                                                    <SelectItem key={o.value} value={o.value}>
+                                                        {o.label}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
                                     </Field>
 
                                     <Field label="Sorgerecht">
-                                        <select
+                                        <Select
                                             value={String(sorgerecht)}
-                                            onChange={(e) => setSorgerecht(e.target.value as SorgerechtTyp)}
-                                            className="h-10 w-full rounded-xl border border-brand-border bg-white px-3 text-sm outline-none focus:border-brand-teal focus:ring-2 focus:ring-brand-teal/25"
+                                            onValueChange={(v) => setSorgerecht(v as SorgerechtTyp)}
                                         >
-                                            {["UNGEKLAERT", "GEMEINSAM", "ALLEIN", "ENTZOGEN"].map((x) => (
-                                                <option key={x} value={x}>
-                                                    {x}
-                                                </option>
-                                            ))}
-                                        </select>
+                                            <SelectTrigger>
+                                                <SelectValue placeholder="Bitte wählen" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {SORGERECHT_OPTIONS.map((o) => (
+                                                    <SelectItem key={String(o.value)} value={String(o.value)}>
+                                                        {o.label}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
                                     </Field>
 
-                                    <label className="flex items-center gap-2 text-sm text-brand-text">
-                                        <input
-                                            type="checkbox"
+                                    <div className="flex items-center gap-2 pt-1">
+                                        <Checkbox
+                                            id="bp-hauptkontakt"
                                             checked={hauptkontakt}
-                                            onChange={(e) => setHauptkontakt(e.target.checked)}
+                                            onCheckedChange={(v) => setHauptkontakt(Boolean(v))}
                                         />
-                                        Hauptkontakt
-                                    </label>
+                                        <Label htmlFor="bp-hauptkontakt" className="text-sm">
+                                            Hauptkontakt
+                                        </Label>
+                                    </div>
 
-                                    <label className="flex items-center gap-2 text-sm text-brand-text">
-                                        <input
-                                            type="checkbox"
+                                    <div className="flex items-center gap-2 pt-1">
+                                        <Checkbox
+                                            id="bp-haushalt"
                                             checked={lebtImHaushalt}
-                                            onChange={(e) => setLebtImHaushalt(e.target.checked)}
+                                            onCheckedChange={(v) => setLebtImHaushalt(Boolean(v))}
                                         />
-                                        Lebt im Haushalt
-                                    </label>
+                                        <Label htmlFor="bp-haushalt" className="text-sm">
+                                            Lebt im Haushalt
+                                        </Label>
+                                    </div>
                                 </div>
                             </div>
 
                             {addMode === "existing" ? (
-                                <Field label="Bezugsperson-ID">
-                                    <TextInput
+                                <Field label="Bezugsperson-ID" htmlFor="existingId">
+                                    <Input
+                                        id="existingId"
                                         value={existingId}
                                         onChange={(e) => setExistingId(e.target.value)}
                                         placeholder="z.B. 12"
@@ -611,59 +947,142 @@ export default function KindDetailPage() {
                             ) : (
                                 <div className="space-y-3">
                                     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                                        <Field label="Vorname">
-                                            <TextInput
+                                        <Field label="Vorname" htmlFor="bp-vorname">
+                                            <Input
+                                                id="bp-vorname"
                                                 value={createBp.vorname ?? ""}
                                                 onChange={(e) => setCreateBp((p) => ({ ...p, vorname: e.target.value }))}
                                                 placeholder="Max"
                                             />
                                         </Field>
-                                        <Field label="Nachname">
-                                            <TextInput
+                                        <Field label="Nachname" htmlFor="bp-nachname">
+                                            <Input
+                                                id="bp-nachname"
                                                 value={createBp.nachname ?? ""}
-                                                onChange={(e) => setCreateBp((p) => ({ ...p, nachname: e.target.value }))}
+                                                onChange={(e) =>
+                                                    setCreateBp((p) => ({
+                                                        ...p,
+                                                        nachname: e.target.value,
+                                                    }))
+                                                }
                                                 placeholder="Mustermann"
                                             />
                                         </Field>
                                     </div>
 
                                     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                                        <Field label="Geburtsdatum (optional)">
-                                            <TextInput
+                                        <Field label="Geburtsdatum (optional)" htmlFor="bp-geb">
+                                            <Input
+                                                id="bp-geb"
+                                                type="date"
                                                 value={createBp.geburtsdatum ?? ""}
-                                                onChange={(e) => setCreateBp((p) => ({ ...p, geburtsdatum: e.target.value || null }))}
-                                                placeholder="YYYY-MM-DD"
+                                                onChange={(e) =>
+                                                    setCreateBp((p) => ({
+                                                        ...p,
+                                                        geburtsdatum: e.target.value || null,
+                                                    }))
+                                                }
                                             />
                                         </Field>
 
                                         <Field label="Gender (optional)">
-                                            <select
+                                            <Select
                                                 value={String(createBp.gender ?? "UNBEKANNT")}
-                                                onChange={(e) => setCreateBp((p) => ({ ...p, gender: e.target.value }))}
-                                                className="h-10 w-full rounded-xl border border-brand-border bg-white px-3 text-sm outline-none focus:border-brand-teal focus:ring-2 focus:ring-brand-teal/25"
+                                                onValueChange={(v) => setCreateBp((p) => ({ ...p, gender: v as any }))}
                                             >
-                                                {["UNBEKANNT", "MAENNLICH", "WEIBLICH", "DIVERS"].map((x) => (
-                                                    <option key={x} value={x}>
-                                                        {x}
-                                                    </option>
-                                                ))}
-                                            </select>
+                                                <SelectTrigger>
+                                                    <SelectValue placeholder="Bitte wählen" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    {GENDER_OPTIONS.map((o) => (
+                                                        <SelectItem key={o.value} value={o.value}>
+                                                            {o.label}
+                                                        </SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
                                         </Field>
                                     </div>
 
                                     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                                        <Field label="Telefon (optional)">
-                                            <TextInput
+                                        <Field label="Telefon (optional)" htmlFor="bp-telefon">
+                                            <Input
+                                                id="bp-telefon"
                                                 value={createBp.telefon ?? ""}
-                                                onChange={(e) => setCreateBp((p) => ({ ...p, telefon: e.target.value || null }))}
+                                                onChange={(e) =>
+                                                    setCreateBp((p) => ({
+                                                        ...p,
+                                                        telefon: e.target.value || null,
+                                                    }))
+                                                }
                                                 placeholder="+49 …"
                                             />
                                         </Field>
-                                        <Field label="E-Mail (optional)">
-                                            <TextInput
+                                        <Field label="E-Mail (optional)" htmlFor="bp-email">
+                                            <Input
+                                                id="bp-email"
                                                 value={createBp.kontaktEmail ?? ""}
-                                                onChange={(e) => setCreateBp((p) => ({ ...p, kontaktEmail: e.target.value || null }))}
+                                                onChange={(e) =>
+                                                    setCreateBp((p) => ({
+                                                        ...p,
+                                                        kontaktEmail: e.target.value || null,
+                                                    }))
+                                                }
                                                 placeholder="name@mail.de"
+                                            />
+                                        </Field>
+                                    </div>
+
+                                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                                        <Field label="Straße (optional)" htmlFor="bp-str">
+                                            <Input
+                                                id="bp-str"
+                                                value={createBp.strasse ?? ""}
+                                                onChange={(e) =>
+                                                    setCreateBp((p) => ({
+                                                        ...p,
+                                                        strasse: e.target.value || null,
+                                                    }))
+                                                }
+                                            />
+                                        </Field>
+                                        <Field label="Hausnr. (optional)" htmlFor="bp-hnr">
+                                            <Input
+                                                id="bp-hnr"
+                                                value={createBp.hausnummer ?? ""}
+                                                onChange={(e) =>
+                                                    setCreateBp((p) => ({
+                                                        ...p,
+                                                        hausnummer: e.target.value || null,
+                                                    }))
+                                                }
+                                            />
+                                        </Field>
+                                    </div>
+
+                                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                                        <Field label="PLZ (optional)" htmlFor="bp-plz">
+                                            <Input
+                                                id="bp-plz"
+                                                value={createBp.plz ?? ""}
+                                                onChange={(e) =>
+                                                    setCreateBp((p) => ({
+                                                        ...p,
+                                                        plz: e.target.value || null,
+                                                    }))
+                                                }
+                                            />
+                                        </Field>
+                                        <Field label="Ort (optional)" htmlFor="bp-ort">
+                                            <Input
+                                                id="bp-ort"
+                                                value={createBp.ort ?? ""}
+                                                onChange={(e) =>
+                                                    setCreateBp((p) => ({
+                                                        ...p,
+                                                        ort: e.target.value || null,
+                                                    }))
+                                                }
                                             />
                                         </Field>
                                     </div>
@@ -699,16 +1118,13 @@ export default function KindDetailPage() {
                         </ShadDialogHeader>
 
                         <div className="space-y-4">
-                            <div className="rounded-2xl border border-brand-warning/25 bg-brand-warning/10 p-3 text-sm text-brand-text">
-                                Du beendest den Link (validTo) – die Bezugsperson wird nicht gelöscht, nur die Verknüpfung wird inaktiv.
+                            <div className="rounded-2xl border border-border bg-muted p-3 text-sm">
+                                Du beendest den Link (gültig bis) – die Bezugsperson wird nicht gelöscht,
+                                nur die Verknüpfung wird inaktiv.
                             </div>
 
-                            <Field label="Gültig bis (validTo)">
-                                <TextInput
-                                    value={validTo}
-                                    onChange={(e) => setValidTo(e.target.value)}
-                                    placeholder="YYYY-MM-DD"
-                                />
+                            <Field label="Gültig bis (validTo)" htmlFor="validTo">
+                                <Input id="validTo" type="date" value={validTo} onChange={(e) => setValidTo(e.target.value)} />
                             </Field>
                         </div>
 

@@ -1,13 +1,34 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { AlertTriangle, CheckCircle2, FileText, ShieldAlert, TrendingUp } from "lucide-react";
+import { AlertTriangle, CheckCircle2, FileText, ShieldAlert, Siren } from "lucide-react";
+import { useRouter } from "next/navigation";
+
 import { AuthGate } from "@/components/AuthGate";
 import { Topbar } from "@/components/layout/Topbar";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { apiFetch } from "@/lib/api";
 import type { FalleroeffnungListResponse, FalleroeffnungListItem } from "@/lib/types";
+
+/**
+ * Backend-Felder für die Liste sind bei dir noch im Fluss.
+ * Darum lesen wir "Akut/Dringlichkeit" defensiv aus optionalen Feldern,
+ * ohne die Types kaputt zu machen.
+ */
+function getAkutFlag(i: FalleroeffnungListItem): boolean | null {
+  const any = i as any;
+  if (typeof any.akutGefahrImVerzug === "boolean") return any.akutGefahrImVerzug;
+  if (typeof any.akut === "boolean") return any.akut;
+  if (typeof any.isAkut === "boolean") return any.isAkut;
+  return null;
+}
+
+function getDringlichkeit(i: FalleroeffnungListItem): string | null {
+  const any = i as any;
+  const v = any.dringlichkeit ?? any.prioritaet ?? any.priority;
+  return typeof v === "string" ? v : null;
+}
 
 function toneForStatus(status: string): "success" | "warning" | "danger" | "info" | "neutral" {
   const s = (status || "").toLowerCase();
@@ -18,23 +39,37 @@ function toneForStatus(status: string): "success" | "warning" | "danger" | "info
   return "neutral";
 }
 
+function toneForDringlichkeit(d: string | null): "success" | "warning" | "danger" | "info" | "neutral" {
+  const s = (d || "").toLowerCase();
+  if (!s) return "neutral";
+  if (s.includes("hoch") || s.includes("sofort") || s.includes("krit")) return "danger";
+  if (s.includes("mittel") || s.includes("bald")) return "warning";
+  if (s.includes("nied")) return "info";
+  return "neutral";
+}
+
 const MOCK: FalleroeffnungListItem[] = [
-  { id: 101, aktenzeichen: "KID-2026-001", status: "OFFEN", kindName: "M. (7)", createdAt: "2026-02-12" },
-  { id: 102, aktenzeichen: "KID-2026-002", status: "WARNUNG", kindName: "L. (12)", createdAt: "2026-02-13" },
-  { id: 103, aktenzeichen: "KID-2026-003", status: "RISIKO_HOCH", kindName: "S. (4)", createdAt: "2026-02-15" },
-  { id: 104, aktenzeichen: "KID-2026-004", status: "ABGESCHLOSSEN", kindName: "A. (9)", createdAt: "2026-02-18" },
+  { id: 101, aktenzeichen: "KID-2026-001", status: "OFFEN", kindName: "M. (7)", createdAt: "2026-02-12" } as any,
+  { id: 102, aktenzeichen: "KID-2026-002", status: "WARNUNG", kindName: "L. (12)", createdAt: "2026-02-13" } as any,
+  { id: 103, aktenzeichen: "KID-2026-003", status: "RISIKO_HOCH", kindName: "S. (4)", createdAt: "2026-02-15" } as any,
+  { id: 104, aktenzeichen: "KID-2026-004", status: "ABGESCHLOSSEN", kindName: "A. (9)", createdAt: "2026-02-18" } as any,
 ];
 
 function filterItems(list: FalleroeffnungListItem[], q: string) {
   const qq = q.trim().toLowerCase();
   if (!qq) return list;
   return list.filter((i) => {
-    const hay = `${i.aktenzeichen ?? ""} ${i.kindName ?? ""} ${i.status ?? ""}`.toLowerCase();
+    const any = i as any;
+    const akut = typeof any.akutGefahrImVerzug === "boolean" ? String(any.akutGefahrImVerzug) : "";
+    const dring = typeof any.dringlichkeit === "string" ? any.dringlichkeit : "";
+    const hay = `${i.aktenzeichen ?? ""} ${i.kindName ?? ""} ${i.status ?? ""} ${akut} ${dring}`.toLowerCase();
     return hay.includes(qq);
   });
 }
 
 export default function DashboardHome() {
+  const router = useRouter();
+
   const [q, setQ] = useState("");
   const [items, setItems] = useState<FalleroeffnungListItem[]>([]);
   const [loading, setLoading] = useState(false);
@@ -51,10 +86,9 @@ export default function DashboardHome() {
     }
 
     try {
-      const res = await apiFetch<FalleroeffnungListResponse>(
-          `/falloeffnungen?q=${encodeURIComponent(currentQ)}&size=8`,
-          { method: "GET" }
-      );
+      const res = await apiFetch<FalleroeffnungListResponse>(`/falloeffnungen?q=${encodeURIComponent(currentQ)}&size=8`, {
+        method: "GET",
+      });
       setItems(res.items || []);
     } catch {
       setUseMock(true);
@@ -82,6 +116,10 @@ export default function DashboardHome() {
     const done = items.filter((i) => toneForStatus(i.status) === "success").length;
     return { total, high, warn, done };
   }, [items]);
+
+  function goToCase(i: FalleroeffnungListItem) {
+    router.push(`/dashboard/falloeffnungen/${i.id}`);
+  }
 
   return (
       <AuthGate>
@@ -153,7 +191,6 @@ export default function DashboardHome() {
               </CardHeader>
 
               <CardContent>
-                {/* ✅ IMPORTANT: contain horizontal scroll here, not on body */}
                 <div className="w-full max-w-full overflow-x-auto rounded-xl">
                   <table className="min-w-max w-full text-left text-sm">
                     <thead className="text-xs font-semibold text-brand-text2">
@@ -161,25 +198,64 @@ export default function DashboardHome() {
                       <th className="py-2 pr-4 whitespace-nowrap">Aktenzeichen</th>
                       <th className="py-2 pr-4 whitespace-nowrap">Kind</th>
                       <th className="py-2 pr-4 whitespace-nowrap">Status</th>
+                      <th className="py-2 pr-4 whitespace-nowrap">
+                        <span className="inline-flex items-center gap-1">
+                          <Siren className="h-3.5 w-3.5" />
+                          Akut
+                        </span>
+                      </th>
+                      <th className="py-2 pr-4 whitespace-nowrap">Dringlichkeit</th>
                       <th className="py-2 pr-0 whitespace-nowrap">Erstellt</th>
                     </tr>
                     </thead>
+
                     <tbody>
-                    {items.map((i) => (
-                        <tr key={i.id} className="border-b border-brand-border/70 last:border-0">
-                          <td className="py-3 pr-4 font-semibold text-brand-blue whitespace-nowrap">
-                            {i.aktenzeichen || `#${i.id}`}
-                          </td>
-                          <td className="py-3 pr-4 text-brand-text whitespace-nowrap">{i.kindName || "—"}</td>
-                          <td className="py-3 pr-4">
-                            <Badge tone={toneForStatus(i.status)}>{i.status}</Badge>
-                          </td>
-                          <td className="py-3 pr-0 text-brand-text2 whitespace-nowrap">{i.createdAt || "—"}</td>
-                        </tr>
-                    ))}
+                    {items.map((i) => {
+                      const akut = getAkutFlag(i);
+                      const dring = getDringlichkeit(i);
+
+                      return (
+                          <tr
+                              key={i.id}
+                              role="button"
+                              tabIndex={0}
+                              onClick={() => goToCase(i)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter" || e.key === " ") goToCase(i);
+                              }}
+                              className="border-b border-brand-border/70 last:border-0 cursor-pointer hover:bg-brand-bg/60 focus:outline-none focus:ring-2 focus:ring-brand-teal/25"
+                              aria-label={`Fall öffnen: ${i.aktenzeichen || `#${i.id}`}`}
+                          >
+                            <td className="py-3 pr-4 font-semibold text-brand-blue whitespace-nowrap">
+                              {i.aktenzeichen || `#${i.id}`}
+                            </td>
+                            <td className="py-3 pr-4 text-brand-text whitespace-nowrap">{i.kindName || "—"}</td>
+                            <td className="py-3 pr-4">
+                              <Badge tone={toneForStatus(i.status)}>{i.status}</Badge>
+                            </td>
+
+                            <td className="py-3 pr-4 whitespace-nowrap">
+                              {akut === true ? (
+                                  <Badge tone="danger">AKUT</Badge>
+                              ) : akut === false ? (
+                                  <Badge tone="neutral">nein</Badge>
+                              ) : (
+                                  <span className="text-brand-text2">—</span>
+                              )}
+                            </td>
+
+                            <td className="py-3 pr-4 whitespace-nowrap">
+                              {dring ? <Badge tone={toneForDringlichkeit(dring)}>{dring}</Badge> : <span className="text-brand-text2">—</span>}
+                            </td>
+
+                            <td className="py-3 pr-0 text-brand-text2 whitespace-nowrap">{i.createdAt || "—"}</td>
+                          </tr>
+                      );
+                    })}
+
                     {!items.length ? (
                         <tr>
-                          <td className="py-6 text-center text-brand-text2" colSpan={4}>
+                          <td className="py-6 text-center text-brand-text2" colSpan={6}>
                             Keine Daten.
                           </td>
                         </tr>
@@ -188,39 +264,19 @@ export default function DashboardHome() {
                   </table>
                 </div>
 
-                <div className="mt-3 text-xs text-brand-text2 sm:hidden">
-                  Tipp: Tabelle kann horizontal gescrollt werden.
-                </div>
+                <div className="mt-3 text-xs text-brand-text2 sm:hidden">Tipp: Tabelle kann horizontal gescrollt werden.</div>
+
+                {useMock ? (
+                    <div className="mt-3 text-xs text-brand-text2">
+                      Hinweis: In Mock-Daten sind <code className="rounded bg-brand-bg px-1">Akut</code> /{" "}
+                      <code className="rounded bg-brand-bg px-1">Dringlichkeit</code> nicht hinterlegt – im Backend-Response erscheinen sie, sobald du sie
+                      in <code className="rounded bg-brand-bg px-1">/falloeffnungen</code> mitsendest.
+                    </div>
+                ) : null}
               </CardContent>
             </Card>
 
-            <Card>
-              <CardHeader className="flex items-center justify-between">
-                <div className="text-sm font-semibold text-brand-text">§8a Prozess (Prototype)</div>
-                <TrendingUp className="h-4 w-4 text-brand-teal shrink-0" />
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-                  {["Kind & Fall", "Dossier", "Assessment", "Maßnahmen", "Weitergabe", "Audit"].map((step, idx) => (
-                      <div
-                          key={step}
-                          className={
-                              "rounded-2xl border border-brand-border bg-white p-3 " +
-                              (idx === 2 ? "ring-2 ring-brand-teal/25" : "")
-                          }
-                      >
-                        <div className="text-xs font-semibold text-brand-text2">Step {idx + 1}</div>
-                        <div className="mt-1 text-sm font-extrabold text-brand-navy whitespace-normal break-words">
-                          {step}
-                        </div>
-                        <div className="mt-1 text-xs text-brand-text2 whitespace-normal break-words">
-                          Status: {idx < 2 ? "ok" : idx === 2 ? "in Arbeit" : "wartet"}
-                        </div>
-                      </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
+            {/* §8a Prozess (Prototype) wurde entfernt */}
           </div>
         </div>
       </AuthGate>

@@ -9,13 +9,10 @@ import org.thomcgn.backend.falloeffnungen.model.FalleroeffnungStatus;
 
 import java.util.Optional;
 import java.util.Set;
+import java.util.List;
 
 public interface FalleroeffnungRepository extends JpaRepository<Falleroeffnung, Long> {
 
-    /**
-     * UNSCOPED: Nur für interne Admin/Debug Zwecke nutzen.
-     * Wenn ihr das nicht braucht: löschen, um Leaks zu verhindern.
-     */
     @Deprecated(forRemoval = true)
     @Query("""
       select f from Falleroeffnung f
@@ -81,5 +78,19 @@ public interface FalleroeffnungRepository extends JpaRepository<Falleroeffnung, 
             @Param("einrichtungId") Long einrichtungId,
             @Param("kindId") Long kindId,
             Pageable pageable
+    );
+
+    // ✅ NEW: Fälle pro Akte/Dossier (scoped by allowed einrichtungen)
+    @Query("""
+      select f from Falleroeffnung f
+      where f.traeger.id = :traegerId
+        and f.dossier.id = :dossierId
+        and f.einrichtungOrgUnit.id in :einrichtungIds
+      order by f.createdAt desc
+    """)
+    List<Falleroeffnung> listByDossierScoped(
+            @Param("traegerId") Long traegerId,
+            @Param("dossierId") Long dossierId,
+            @Param("einrichtungIds") Set<Long> einrichtungIds
     );
 }

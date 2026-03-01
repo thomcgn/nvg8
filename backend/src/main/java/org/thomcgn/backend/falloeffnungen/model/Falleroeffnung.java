@@ -24,12 +24,10 @@ public class Falleroeffnung extends AuditableEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    // Akte
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "dossier_id", nullable = false)
     private KindDossier dossier;
 
-    // Scope (redundant – für schnelle Filter & Berechtigungen)
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "traeger_id", nullable = false)
     private Traeger traeger;
@@ -65,6 +63,12 @@ public class Falleroeffnung extends AuditableEntity {
     private Instant closedAt;
 
     public Long getId() { return id; }
+
+    @Column(name = "fall_no", nullable = false)
+    private Integer fallNo;
+
+    public Integer getFallNo() { return fallNo; }
+    public void setFallNo(Integer fallNo) { this.fallNo = fallNo; }
 
     public KindDossier getDossier() { return dossier; }
     public void setDossier(KindDossier dossier) { this.dossier = dossier; }

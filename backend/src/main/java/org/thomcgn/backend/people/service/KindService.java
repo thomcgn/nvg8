@@ -84,10 +84,16 @@ public class KindService {
         k.setGeburtsdatum(req.geburtsdatum());
         k.setGender(req.gender() != null ? req.gender() : Gender.UNBEKANNT);
 
-        // optional (falls in CreateKindRequest vorhanden)
+        // Kind-spezifisch
         k.setFoerderbedarf(req.foerderbedarf());
         k.setFoerderbedarfDetails(req.foerderbedarfDetails());
         k.setGesundheitsHinweise(req.gesundheitsHinweise());
+
+        // ✅ Adresse (NEU)
+        k.setStrasse(req.strasse());
+        k.setHausnummer(req.hausnummer());
+        k.setPlz(req.plz());
+        k.setOrt(req.ort());
 
         access.requireAccessToEinrichtungObject(
                 k.getTraegerId(),
@@ -350,18 +356,38 @@ public class KindService {
                 k.getGender() != null ? k.getGender() : Gender.UNBEKANNT,
                 k.isFoerderbedarf(),
                 k.getFoerderbedarfDetails(),
-                k.getGesundheitsHinweise()
+                k.getGesundheitsHinweise(),
+
+                // ✅ Adresse (NEU)
+                k.getStrasse(),
+                k.getHausnummer(),
+                k.getPlz(),
+                k.getOrt()
         );
     }
 
     private KindBezugspersonResponse toLinkDto(KindBezugsperson l) {
-        String name = l.getBezugsperson() != null ? l.getBezugsperson().getDisplayName() : "-";
-        Long bpId = l.getBezugsperson() != null ? l.getBezugsperson().getId() : null;
+        Bezugsperson bp = l.getBezugsperson();
+
+        String name = bp != null ? bp.getDisplayName() : "-";
+        Long bpId = bp != null ? bp.getId() : null;
+
+        String strasse = bp != null ? bp.getStrasse() : null;
+        String hausnummer = bp != null ? bp.getHausnummer() : null;
+        String plz = bp != null ? bp.getPlz() : null;
+        String ort = bp != null ? bp.getOrt() : null;
 
         return new KindBezugspersonResponse(
                 l.getId(),
                 bpId,
                 name,
+
+                // ✅ Adresse der Bezugsperson (NEU)
+                strasse,
+                hausnummer,
+                plz,
+                ort,
+
                 l.getBeziehung(),
                 l.getSorgerecht(),
                 l.getValidFrom(),

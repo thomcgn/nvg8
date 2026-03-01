@@ -8,6 +8,7 @@ import org.thomcgn.backend.common.errors.ErrorCode;
 
 import java.util.Collections;
 import java.util.List;
+import java.util.Set;
 
 public final class SecurityUtils {
 
@@ -64,6 +65,15 @@ public final class SecurityUtils {
         Long oid = currentOrgUnitIdOptional();
         if (oid == null) throw DomainException.forbidden(ErrorCode.ACCESS_DENIED, "No active org unit in context");
         return oid;
+    }
+
+    /**
+     * ✅ Minimal-scope helper:
+     * Solange das JWT keine Liste "allowed orgUnits" enthält, scopen wir auf die aktive OrgUnit im Kontext.
+     * Später kannst du hier problemlos auf ein Claim-basiertes Set upgraden.
+     */
+    public static Set<Long> currentOrgUnitIdsScoped() {
+        return Set.of(currentOrgUnitIdRequired());
     }
 
     // ---------- Roles ----------
