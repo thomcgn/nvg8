@@ -38,6 +38,18 @@ public class ErstmeldungController {
         return ResponseEntity.ok(service.createNewVersion(fallId));
     }
 
+    /**
+     * Clone current Erstmeldung into a new version (and make it current).
+     * If request body is omitted, defaults() are used.
+     */
+    @PostMapping("/clone-current")
+    public ResponseEntity<ErstmeldungResponse> cloneCurrent(
+            @PathVariable Long fallId,
+            @RequestBody(required = false) ErstmeldungCloneRequest req
+    ) {
+        return ResponseEntity.ok(service.cloneFromCurrent(fallId, req));
+    }
+
     @PutMapping("/{erstmeldungId}/draft")
     public ResponseEntity<ErstmeldungResponse> saveDraft(
             @PathVariable Long fallId,

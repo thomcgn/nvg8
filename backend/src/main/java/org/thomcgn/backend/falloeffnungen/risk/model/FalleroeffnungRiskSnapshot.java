@@ -1,6 +1,7 @@
 package org.thomcgn.backend.falloeffnungen.risk.model;
 
 import jakarta.persistence.*;
+import jakarta.validation.constraints.NotNull;
 import org.thomcgn.backend.common.persistence.AuditableEntity;
 import org.thomcgn.backend.falloeffnungen.model.Falleroeffnung;
 
@@ -30,13 +31,16 @@ public class FalleroeffnungRiskSnapshot extends AuditableEntity {
     @Column(name = "config_version", nullable = false, length = 40)
     private String configVersion;
 
-    @Column(name = "raw_score", nullable = false)
-    private double rawScore;
+    @NotNull // if DB is NOT NULL
+    @Column(name = "raw_score", precision = 19, scale = 6, nullable = false) // adjust p/s to your SQL
+    private BigDecimal rawScore;
 
-    @Column(name = "protective_reduction", nullable = false)
-    private double protectiveReduction;
+    @NotNull
+    @Column(name = "protective_reduction", precision = 19, scale = 6) // example
+    private BigDecimal protectiveReduction;
 
-    @Column(name = "final_score", precision = 10, scale = 4) // scale nach Bedarf
+    @NotNull
+    @Column(name = "final_score", precision = 10, scale = 4, nullable = false) // scale nach Bedarf
     private BigDecimal finalScore;
 
     @Column(name = "traffic_light", nullable = false, length = 10)
@@ -62,11 +66,11 @@ public class FalleroeffnungRiskSnapshot extends AuditableEntity {
     public String getConfigVersion() { return configVersion; }
     public void setConfigVersion(String configVersion) { this.configVersion = configVersion; }
 
-    public double getRawScore() { return rawScore; }
-    public void setRawScore(double rawScore) { this.rawScore = rawScore; }
+    public BigDecimal getRawScore() { return rawScore; }
+    public void setRawScore(BigDecimal rawScore) { this.rawScore = rawScore; }
 
-    public double getProtectiveReduction() { return protectiveReduction; }
-    public void setProtectiveReduction(double protectiveReduction) { this.protectiveReduction = protectiveReduction; }
+    public BigDecimal getProtectiveReduction() { return protectiveReduction; }
+    public void setProtectiveReduction(BigDecimal protectiveReduction) { this.protectiveReduction = protectiveReduction; }
 
     public BigDecimal getFinalScore() { return finalScore; }
     public void setFinalScore(BigDecimal finalScore) { this.finalScore = finalScore; }

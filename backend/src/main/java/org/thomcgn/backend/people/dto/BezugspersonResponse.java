@@ -1,7 +1,9 @@
+// backend/src/main/java/org/thomcgn/backend/people/dto/BezugspersonResponse.java
 package org.thomcgn.backend.people.dto;
 
-import org.thomcgn.backend.people.model.Gender;
 import org.thomcgn.backend.people.model.BezugspersonBeziehung;
+import org.thomcgn.backend.people.model.Gender;
+
 import java.time.LocalDate;
 
 public record BezugspersonResponse(

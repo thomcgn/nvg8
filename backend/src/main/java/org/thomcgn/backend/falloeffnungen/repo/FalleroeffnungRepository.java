@@ -52,7 +52,11 @@ public interface FalleroeffnungRepository extends JpaRepository<Falleroeffnung, 
       where f.traeger.id = :traegerId
         and f.einrichtungOrgUnit.id in :einrichtungIds
         and (:status is null or f.status = :status)
-        and (:q is null or lower(f.titel) like lower(concat('%', :q, '%')) or lower(f.aktenzeichen) like lower(concat('%', :q, '%')))
+        and (
+             nullif(trim(:q), '') is null
+             or lower(f.titel) like lower(concat('%', :q, '%'))
+             or lower(f.aktenzeichen) like lower(concat('%', :q, '%'))
+        )
       order by f.createdAt desc
     """)
     Page<Falleroeffnung> searchScoped(
@@ -64,18 +68,18 @@ public interface FalleroeffnungRepository extends JpaRepository<Falleroeffnung, 
     );
 
     @Query("""
-  select f from Falleroeffnung f
-  join f.dossier d
-  join d.kind k
-  where f.traeger.id = :traegerId
-    and f.einrichtungOrgUnit.id = :einrichtungId
-    and k.id = :kindId
-  order by f.createdAt desc
-""")
-    org.springframework.data.domain.Page<Falleroeffnung> findLatestByKindIdScoped(
-            @org.springframework.data.repository.query.Param("traegerId") Long traegerId,
-            @org.springframework.data.repository.query.Param("einrichtungId") Long einrichtungId,
-            @org.springframework.data.repository.query.Param("kindId") Long kindId,
-            org.springframework.data.domain.Pageable pageable
+      select f from Falleroeffnung f
+      join f.dossier d
+      join d.kind k
+      where f.traeger.id = :traegerId
+        and f.einrichtungOrgUnit.id = :einrichtungId
+        and k.id = :kindId
+      order by f.createdAt desc
+    """)
+    Page<Falleroeffnung> findLatestByKindIdScoped(
+            @Param("traegerId") Long traegerId,
+            @Param("einrichtungId") Long einrichtungId,
+            @Param("kindId") Long kindId,
+            Pageable pageable
     );
 }

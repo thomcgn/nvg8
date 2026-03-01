@@ -4,9 +4,9 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AuthGate } from "@/components/AuthGate";
 import { Topbar } from "@/components/layout/Topbar";
-import { Card, CardContent, CardHeader } from "@/components/ui/Card";
-import { Button } from "@/components/ui/Button";
-import { Input } from "@/components/ui/Input";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { apiFetch } from "@/lib/api";
 
 type Gender = "MAENNLICH" | "WEIBLICH" | "DIVERS" | "UNBEKANNT";

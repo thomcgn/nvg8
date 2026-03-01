@@ -2,7 +2,7 @@
 
 import { AuthGate } from "@/components/AuthGate";
 import { Topbar } from "@/components/layout/Topbar";
-import { Card, CardContent, CardHeader } from "@/components/ui/Card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 
 export default function TeamNeuPage() {
     return (

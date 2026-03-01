@@ -1,6 +1,8 @@
 package org.thomcgn.backend.people.dto;
 
+import org.thomcgn.backend.people.model.BezugspersonBeziehung;
 import org.thomcgn.backend.people.model.Gender;
+
 import java.time.LocalDate;
 
 public record CreateBezugspersonRequest(
@@ -13,5 +15,6 @@ public record CreateBezugspersonRequest(
         String strasse,
         String hausnummer,
         String plz,
-        String ort
+        String ort,
+        BezugspersonBeziehung beziehung
 ) {}

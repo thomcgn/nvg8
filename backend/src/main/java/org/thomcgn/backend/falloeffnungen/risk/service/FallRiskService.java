@@ -18,6 +18,7 @@ import org.thomcgn.backend.falloeffnungen.risk.repo.FalleroeffnungNotizTagReposi
 import org.thomcgn.backend.falloeffnungen.risk.repo.FalleroeffnungRiskSnapshotRepository;
 import org.thomcgn.backend.falloeffnungen.risk.repo.TraegerRiskMatrixConfigRepository;
 
+import java.math.BigDecimal;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -77,9 +78,9 @@ public class FallRiskService {
         s.setFalleroeffnung(f);
         s.setConfig(cfg);
         s.setConfigVersion(cfg != null ? cfg.getVersion() : parsed.meta.version);
-        s.setRawScore(round1(eval.rawScore));
-        s.setProtectiveReduction(round1(eval.protectiveReduction));
-        s.setFinalScore(round1(eval.finalScore));
+        s.setRawScore(BigDecimal.valueOf(round1(eval.rawScore)));
+        s.setProtectiveReduction(BigDecimal.valueOf(round1(eval.protectiveReduction)));
+        s.setFinalScore(BigDecimal.valueOf(round1(eval.finalScore)));
         s.setTrafficLight(eval.trafficLight);
 
         try {
@@ -213,7 +214,7 @@ public class FallRiskService {
         double finalScore = Math.max(0.0, round1(raw - reduction));
 
         // Determine traffic light
-        String traffic = "GRUEN";
+        String traffic;
         List<String> rationale = new ArrayList<>();
 
         if (!hardHits.isEmpty()) {

@@ -4,8 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import { AlertTriangle, CheckCircle2, FileText, ShieldAlert, TrendingUp } from "lucide-react";
 import { AuthGate } from "@/components/AuthGate";
 import { Topbar } from "@/components/layout/Topbar";
-import { Card, CardContent, CardHeader } from "@/components/ui/Card";
-import { Badge } from "@/components/ui/Badge";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { apiFetch } from "@/lib/api";
 import type { FalleroeffnungListResponse, FalleroeffnungListItem } from "@/lib/types";
 

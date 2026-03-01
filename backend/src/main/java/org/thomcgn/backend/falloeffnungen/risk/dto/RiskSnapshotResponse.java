@@ -8,8 +8,8 @@ public record RiskSnapshotResponse(
         Long falloeffnungId,
         Long configId,
         String configVersion,
-        double rawScore,
-        double protectiveReduction,
+        BigDecimal rawScore,
+        BigDecimal protectiveReduction,
         BigDecimal finalScore,
         String trafficLight,       // GRUEN|GELB|ROT
         String rationaleJson,      // JSON-String (Frontend kann darstellen)

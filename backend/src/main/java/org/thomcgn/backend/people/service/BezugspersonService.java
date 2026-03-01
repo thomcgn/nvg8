@@ -1,5 +1,6 @@
 package org.thomcgn.backend.people.service;
 
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -9,12 +10,13 @@ import org.thomcgn.backend.auth.service.AccessControlService;
 import org.thomcgn.backend.common.errors.DomainException;
 import org.thomcgn.backend.common.errors.ErrorCode;
 import org.thomcgn.backend.common.security.SecurityUtils;
-import org.thomcgn.backend.people.dto.*;
+import org.thomcgn.backend.people.dto.BezugspersonListItem;
+import org.thomcgn.backend.people.dto.BezugspersonResponse;
+import org.thomcgn.backend.people.dto.BezugspersonSearchResponse;
+import org.thomcgn.backend.people.dto.CreateBezugspersonRequest;
 import org.thomcgn.backend.people.model.Bezugsperson;
 import org.thomcgn.backend.people.model.Gender;
 import org.thomcgn.backend.people.repo.BezugspersonRepository;
-
-import java.util.List;
 
 @Service
 public class BezugspersonService {
@@ -27,93 +29,119 @@ public class BezugspersonService {
         this.access = access;
     }
 
-    @Transactional
-    public BezugspersonResponse create(CreateBezugspersonRequest req) {
-        Bezugsperson bp = createEntity(req);
-        return toDto(bp);
-    }
-
+    // ---------------------------------------------------------
+    // CREATE (Entity) – wird von KindService genutzt
+    // ---------------------------------------------------------
     @Transactional
     public Bezugsperson createEntity(CreateBezugspersonRequest req) {
         access.requireAny(Role.FACHKRAFT, Role.TEAMLEITUNG, Role.EINRICHTUNG_ADMIN, Role.TRAEGER_ADMIN);
 
         if (req == null) {
-            throw DomainException.badRequest(ErrorCode.VALIDATION_FAILED, "create request required");
+            throw DomainException.badRequest(ErrorCode.VALIDATION_FAILED, "request required");
         }
 
-        Bezugsperson bp = new Bezugsperson();
+        Bezugsperson b = new Bezugsperson();
+        b.setTraegerId(SecurityUtils.currentTraegerIdRequired());
 
-        bp.setTraegerId(SecurityUtils.currentTraegerIdRequired());
-
-        Long ownerEinrichtungId = access.activeEinrichtungId();
-        if (ownerEinrichtungId == null) {
+        Long ownerEinrichtung = access.activeEinrichtungId();
+        if (ownerEinrichtung == null) {
             throw DomainException.conflict(ErrorCode.CONFLICT, "No active Einrichtung in context.");
         }
-        bp.setOwnerEinrichtungOrgUnitId(ownerEinrichtungId);
+        b.setOwnerEinrichtungOrgUnitId(ownerEinrichtung);
 
-        bp.setVorname(req.vorname());
-        bp.setNachname(req.nachname());
-        bp.setGeburtsdatum(req.geburtsdatum());
-        bp.setGender(req.gender() != null ? req.gender() : Gender.UNBEKANNT);
+        b.setVorname(req.vorname());
+        b.setNachname(req.nachname());
+        b.setGeburtsdatum(req.geburtsdatum());
+        b.setGender(req.gender() != null ? req.gender() : Gender.UNBEKANNT);
 
-        bp.setTelefon(req.telefon());
-        bp.setKontaktEmail(req.kontaktEmail());
+        b.setTelefon(req.telefon());
+        b.setKontaktEmail(req.kontaktEmail());
 
-        bp.setStrasse(req.strasse());
-        bp.setHausnummer(req.hausnummer());
-        bp.setPlz(req.plz());
-        bp.setOrt(req.ort());
+        b.setStrasse(req.strasse());
+        b.setHausnummer(req.hausnummer());
+        b.setPlz(req.plz());
+        b.setOrt(req.ort());
 
-        access.requireAccessToEinrichtungObject(
-                bp.getTraegerId(),
-                bp.getOwnerEinrichtungOrgUnitId(),
-                Role.FACHKRAFT, Role.TEAMLEITUNG, Role.EINRICHTUNG_ADMIN, Role.TRAEGER_ADMIN
-        );
-
-        return repo.save(bp);
+        return repo.save(b);
     }
 
+    // ---------------------------------------------------------
+    // SEARCH (für Wizard Step "bestehende Bezugspersonen anhängen")
+    // Default: pro Träger (alle)
+    // Optional: per Einrichtung, falls du das willst (query param)
+    // ---------------------------------------------------------
     @Transactional(readOnly = true)
-    public BezugspersonSearchResponse search(String q, int size) {
+    public BezugspersonSearchResponse search(String q, int page, int size, Long einrichtungIdOrNull) {
         access.requireAny(Role.LESEN, Role.FACHKRAFT, Role.TEAMLEITUNG, Role.EINRICHTUNG_ADMIN, Role.TRAEGER_ADMIN);
 
         Long traegerId = SecurityUtils.currentTraegerIdRequired();
-        Long einrichtungId = access.activeEinrichtungId();
-        if (einrichtungId == null) {
-            throw DomainException.conflict(ErrorCode.CONFLICT, "No active Einrichtung in context.");
+
+        int safePage = Math.max(0, page);
+        int safeSize = Math.min(100, Math.max(1, size));
+        Pageable pageable = PageRequest.of(safePage, safeSize);
+
+        Page<Bezugsperson> res;
+        if (einrichtungIdOrNull != null) {
+            res = repo.searchByTraegerAndEinrichtung(traegerId, einrichtungIdOrNull, q, pageable);
+        } else {
+            res = repo.searchByTraeger(traegerId, q, pageable);
         }
 
-        int safeSize = Math.min(50, Math.max(1, size));
-        Pageable pageable = PageRequest.of(0, safeSize);
-
-        List<Bezugsperson> res = repo.search(traegerId, einrichtungId, q, pageable);
-
         return new BezugspersonSearchResponse(
-                res.stream()
-                        .map(bp -> new BezugspersonListItem(
-                                bp.getId(),
-                                bp.getDisplayName(),
-                                bp.getGeburtsdatum(),
-                                bp.getTelefon(),
-                                bp.getKontaktEmail()
-                        ))
-                        .toList()
+                res.getContent().stream().map(this::toListItem).toList(),
+                res.getTotalElements(),
+                safePage,
+                safeSize
         );
     }
 
-    private BezugspersonResponse toDto(Bezugsperson bp) {
+    // ---------------------------------------------------------
+    // GET (optional)
+    // ---------------------------------------------------------
+    @Transactional(readOnly = true)
+    public BezugspersonResponse get(Long id) {
+        access.requireAny(Role.LESEN, Role.FACHKRAFT, Role.TEAMLEITUNG, Role.EINRICHTUNG_ADMIN, Role.TRAEGER_ADMIN);
+
+        Bezugsperson b = repo.findById(id)
+                .orElseThrow(() -> DomainException.notFound(ErrorCode.NOT_FOUND, "Bezugsperson not found"));
+
+        // Tenant-Check (minimal)
+        Long traegerId = SecurityUtils.currentTraegerIdRequired();
+        if (!traegerId.equals(b.getTraegerId())) {
+            throw DomainException.forbidden(ErrorCode.ACCESS_DENIED, "No access.");
+        }
+
+        return toDto(b);
+    }
+
+    // ---------------------------------------------------------
+    // Mapping
+    // ---------------------------------------------------------
+    private BezugspersonListItem toListItem(Bezugsperson b) {
+        return new BezugspersonListItem(
+                b.getId(),
+                b.getDisplayName(),
+                b.getGeburtsdatum(),
+                b.getTelefon(),
+                b.getKontaktEmail()
+        );
+    }
+
+    private BezugspersonResponse toDto(Bezugsperson b) {
+        // Bezug (beziehung) gehört NICHT in Bezugsperson, sondern in KindBezugsperson Link.
+        // Deshalb hier null – Beziehung kommt aus KindBezugspersonResponse.
         return new BezugspersonResponse(
-                bp.getId(),
-                bp.getVorname(),
-                bp.getNachname(),
-                bp.getGeburtsdatum(),
-                bp.getGender(),
-                bp.getTelefon(),
-                bp.getKontaktEmail(),
-                bp.getStrasse(),
-                bp.getHausnummer(),
-                bp.getPlz(),
-                bp.getOrt(),
+                b.getId(),
+                b.getVorname(),
+                b.getNachname(),
+                b.getGeburtsdatum(),
+                b.getGender(),
+                b.getTelefon(),
+                b.getKontaktEmail(),
+                b.getStrasse(),
+                b.getHausnummer(),
+                b.getPlz(),
+                b.getOrt(),
                 null
         );
     }

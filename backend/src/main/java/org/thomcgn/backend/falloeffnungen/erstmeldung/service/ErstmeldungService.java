@@ -1,5 +1,10 @@
+// src/main/java/org/thomcgn/backend/falloeffnungen/erstmeldung/service/ErstmeldungService.java
 package org.thomcgn.backend.falloeffnungen.erstmeldung.service;
 
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
+import org.jspecify.annotations.NonNull;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.thomcgn.backend.auth.model.Role;
@@ -44,6 +49,9 @@ public class ErstmeldungService {
     private final UserRepository userRepo;
     private final AccessControlService access;
     private final FallRiskService riskService;
+
+    @PersistenceContext
+    private EntityManager em;
 
     public ErstmeldungService(
             FalleroeffnungRepository fallRepo,
@@ -139,35 +147,53 @@ public class ErstmeldungService {
         User creator = userRepo.findById(userId)
                 .orElseThrow(() -> DomainException.notFound(ErrorCode.USER_NOT_FOUND, "User not found"));
 
-        FalleroeffnungErstmeldung current = repo.findCurrentByFallId(fallId).orElse(null);
+        FalleroeffnungErstmeldung supersedes =
+                repo.findTopByFalleroeffnung_IdOrderByVersionNoDesc(fallId).orElse(null);
 
-        Integer max = repo.findMaxVersionNo(fallId);
-        int newNo = (max == null ? 1 : max + 1);
+        // WICHTIG:
+        // - NICHT vorab clearCurrent -> sonst kann bei Exception "kein current" entstehen.
+        // - Erst INSERT versuchen, dann alte current=false setzen (außer dem neuen).
+        for (int attempt = 0; attempt < 2; attempt++) {
+            try {
+                Integer max = repo.findMaxVersionNo(fallId);
+                int newNo = (max == null ? 1 : max + 1);
 
-        if (current != null) {
-            current.setCurrent(false);
-            repo.save(current);
+                FalleroeffnungErstmeldung emNew = new FalleroeffnungErstmeldung();
+                emNew.setFalleroeffnung(fall);
+                emNew.setVersionNo(newNo);
+                emNew.setCurrent(true);
+                emNew.setStatus(ErstmeldungStatus.ENTWURF);
+
+                emNew.setErfasstAm(Instant.now());
+                emNew.setErfasstVon(creator);
+                emNew.setErfasstVonRolle("UNBEKANNT");
+
+                emNew.setMeldeweg(Meldeweg.EIGENBEOBACHTUNG);
+                emNew.setDringlichkeit(Dringlichkeit.UNKLAR);
+                emNew.setDatenbasis(Datenbasis.UNGEKLAERT);
+                emNew.setKurzbeschreibung("");
+
+                if (supersedes != null) {
+                    emNew.setSupersedes(supersedes);
+                }
+
+                // 1) INSERT (kann uq_erstmeldung_version triggern)
+                FalleroeffnungErstmeldung saved = repo.saveAndFlush(emNew);
+
+                // 2) erst danach alte current=false setzen, ABER das neue behalten
+                repo.clearCurrentByFallIdExcept(fallId, saved.getId());
+
+                return buildResponse(saved);
+
+            } catch (DataIntegrityViolationException ex) {
+                // nach DB-Fehler ist PersistenceContext "dirty"
+                em.clear();
+                if (attempt == 0) continue;
+                throw ex;
+            }
         }
 
-        FalleroeffnungErstmeldung em = new FalleroeffnungErstmeldung();
-        em.setFalleroeffnung(fall);
-        em.setVersionNo(newNo);
-        em.setCurrent(true);
-        em.setStatus(ErstmeldungStatus.ENTWURF);
-        em.setErfasstAm(Instant.now());
-        em.setErfasstVon(creator);
-        em.setErfasstVonRolle("UNBEKANNT");
-        em.setMeldeweg(Meldeweg.EIGENBEOBACHTUNG);
-        em.setDringlichkeit(Dringlichkeit.UNKLAR);
-        em.setDatenbasis(Datenbasis.UNGEKLAERT);
-        em.setKurzbeschreibung("");
-
-        if (current != null) {
-            em.setSupersedes(current);
-        }
-
-        FalleroeffnungErstmeldung saved = repo.save(em);
-        return buildResponse(saved);
+        throw new IllegalStateException("unreachable");
     }
 
     // ---------------------------------------------------------
@@ -190,7 +216,6 @@ public class ErstmeldungService {
             throw DomainException.forbidden(ErrorCode.ACCESS_DENIED, "Erstmeldung is closed (immutable). Create a new version.");
         }
 
-        // Main fields
         if (req.erfasstVonRolle() != null && !req.erfasstVonRolle().isBlank()) em.setErfasstVonRolle(req.erfasstVonRolle().trim());
         if (req.meldeweg() != null) em.setMeldeweg(req.meldeweg());
         em.setMeldewegSonstiges(req.meldewegSonstiges());
@@ -221,7 +246,6 @@ public class ErstmeldungService {
         em.setNaechsteUeberpruefungAm(req.naechsteUeberpruefungAm());
         em.setZusammenfassung(req.zusammenfassung());
 
-        // Replace child data atomically (simple, predictable)
         anlassRepo.deleteAllByErstmeldung_Id(em.getId());
         obsTagRepo.deleteAllByObservation_Erstmeldung_Id(em.getId());
         obsRepo.deleteAllByErstmeldung_Id(em.getId());
@@ -230,7 +254,6 @@ public class ErstmeldungService {
         attachmentRepo.deleteAllByErstmeldung_Id(em.getId());
         jugendamtRepo.deleteById(em.getId());
 
-        // Anlässe
         if (req.anlassCodes() != null) {
             for (String c0 : req.anlassCodes()) {
                 if (c0 == null || c0.isBlank()) continue;
@@ -245,26 +268,12 @@ public class ErstmeldungService {
             }
         }
 
-        // Observations + tags
         if (req.observations() != null) {
             for (ErstmeldungDraftRequest.ObservationDraft od : req.observations()) {
                 if (od == null) continue;
                 if (od.text() == null || od.text().isBlank()) continue;
 
-                FalleroeffnungErstmeldungObservation o = new FalleroeffnungErstmeldungObservation();
-                o.setErstmeldung(em);
-                o.setZeitpunkt(od.zeitpunkt());
-                o.setZeitraum(od.zeitraum());
-                o.setOrt(od.ort());
-                o.setOrtSonstiges(od.ortSonstiges());
-                o.setQuelle(od.quelle() != null ? od.quelle() : ObservationQuelle.SONSTIGE);
-                o.setText(od.text().trim());
-                o.setWoertlichesZitat(od.woertlichesZitat());
-                o.setKoerperbefund(od.koerperbefund());
-                o.setVerhaltenKind(od.verhaltenKind());
-                o.setVerhaltenBezug(od.verhaltenBezug());
-                o.setSichtbarkeit(od.sichtbarkeit() != null ? od.sichtbarkeit() : Sichtbarkeit.INTERN);
-
+                FalleroeffnungErstmeldungObservation o = getFalleroeffnungErstmeldungObservation(od, em);
                 FalleroeffnungErstmeldungObservation savedObs = obsRepo.save(o);
 
                 if (od.tags() != null) {
@@ -296,7 +305,6 @@ public class ErstmeldungService {
             }
         }
 
-        // Jugendamt
         if (req.jugendamt() != null && req.jugendamt().informiert() != null) {
             FalleroeffnungErstmeldungJugendamt j = new FalleroeffnungErstmeldungJugendamt();
             j.setErstmeldung(em);
@@ -308,7 +316,6 @@ public class ErstmeldungService {
             jugendamtRepo.save(j);
         }
 
-        // Contacts
         if (req.contacts() != null) {
             for (ErstmeldungDraftRequest.ContactDraft cd : req.contacts()) {
                 if (cd == null) continue;
@@ -325,7 +332,6 @@ public class ErstmeldungService {
             }
         }
 
-        // Extern
         if (req.extern() != null) {
             for (ErstmeldungDraftRequest.ExternDraft ed : req.extern()) {
                 if (ed == null || ed.stelle() == null) continue;
@@ -340,7 +346,6 @@ public class ErstmeldungService {
             }
         }
 
-        // Attachments
         if (req.attachments() != null) {
             for (ErstmeldungDraftRequest.AttachmentDraft ad : req.attachments()) {
                 if (ad == null || ad.fileId() == null || ad.typ() == null || ad.sichtbarkeit() == null) continue;
@@ -357,13 +362,29 @@ public class ErstmeldungService {
             }
         }
 
-        // Status optional im Draft steuern
         if (em.getStatus() == ErstmeldungStatus.ENTWURF && (req.kurzbeschreibung() != null && !req.kurzbeschreibung().isBlank())) {
             em.setStatus(ErstmeldungStatus.IN_BEARBEITUNG);
         }
 
         FalleroeffnungErstmeldung saved = repo.save(em);
         return buildResponse(saved);
+    }
+
+    private static @NonNull FalleroeffnungErstmeldungObservation getFalleroeffnungErstmeldungObservation(ErstmeldungDraftRequest.ObservationDraft od, FalleroeffnungErstmeldung em) {
+        FalleroeffnungErstmeldungObservation o = new FalleroeffnungErstmeldungObservation();
+        o.setErstmeldung(em);
+        o.setZeitpunkt(od.zeitpunkt());
+        o.setZeitraum(od.zeitraum());
+        o.setOrt(od.ort());
+        o.setOrtSonstiges(od.ortSonstiges());
+        o.setQuelle(od.quelle() != null ? od.quelle() : ObservationQuelle.SONSTIGE);
+        o.setText(od.text().trim());
+        o.setWoertlichesZitat(od.woertlichesZitat());
+        o.setKoerperbefund(od.koerperbefund());
+        o.setVerhaltenKind(od.verhaltenKind());
+        o.setVerhaltenBezug(od.verhaltenBezug());
+        o.setSichtbarkeit(od.sichtbarkeit() != null ? od.sichtbarkeit() : Sichtbarkeit.INTERN);
+        return o;
     }
 
     // ---------------------------------------------------------
@@ -418,7 +439,6 @@ public class ErstmeldungService {
         Long tid = SecurityUtils.currentTraegerIdRequired();
         Long oid = SecurityUtils.currentOrgUnitIdRequired();
 
-        // Falls eure Repo-Methode anders heißt, hier anpassen.
         return fallRepo.findByIdWithRefsScoped(fallId, tid, oid)
                 .orElseThrow(() -> DomainException.notFound(ErrorCode.NOT_FOUND, "Falleröffnung not found"));
     }
@@ -450,7 +470,6 @@ public class ErstmeldungService {
             throw DomainException.badRequest(ErrorCode.VALIDATION_FAILED, "fachText is required for submit");
         }
 
-        // Jugendamt decision required
         FalleroeffnungErstmeldungJugendamt j = jugendamtRepo.findById(em.getId()).orElse(null);
         if (j == null || j.getInformiert() == null) {
             throw DomainException.badRequest(ErrorCode.VALIDATION_FAILED, "jugendamt.informiert is required for submit");
@@ -461,7 +480,6 @@ public class ErstmeldungService {
             }
         }
 
-        // at least one observation
         List<FalleroeffnungErstmeldungObservation> obs = obsRepo.findAllByErstmeldungId(em.getId());
         if (obs.isEmpty()) {
             throw DomainException.badRequest(ErrorCode.VALIDATION_FAILED, "At least one observation is required");
@@ -488,7 +506,6 @@ public class ErstmeldungService {
             o.setLinkedNotiz(savedNotiz);
             obsRepo.save(o);
 
-            // copy tags → falloeffnung_notiz_tags
             List<FalleroeffnungErstmeldungObservationTag> tags = obsTagRepo.findAllByObservationId(o.getId());
             for (FalleroeffnungErstmeldungObservationTag t : tags) {
                 if ((t.getAnlassCode() == null || t.getAnlassCode().isBlank())
@@ -623,5 +640,223 @@ public class ErstmeldungService {
                 )).toList(),
                 obsResp
         );
+    }
+
+    @Transactional
+    public ErstmeldungResponse cloneFromCurrent(Long fallId, ErstmeldungCloneRequest req) {
+        Falleroeffnung fall = loadFallScoped(fallId);
+        accessWrite(fall);
+
+        FalleroeffnungErstmeldung current = repo.findCurrentByFallId(fallId)
+                .orElseThrow(() -> DomainException.notFound(ErrorCode.NOT_FOUND, "No current Erstmeldung to clone"));
+
+        if (req == null) {
+            req = ErstmeldungCloneRequest.defaults();
+        }
+
+        Long userId = SecurityUtils.currentUserId();
+        User creator = userRepo.findById(userId)
+                .orElseThrow(() -> DomainException.notFound(ErrorCode.USER_NOT_FOUND, "User not found"));
+
+        for (int attempt = 0; attempt < 2; attempt++) {
+            try {
+                Integer max = repo.findMaxVersionNo(fallId);
+                int newNo = (max == null ? 1 : max + 1);
+
+                FalleroeffnungErstmeldung emNew = new FalleroeffnungErstmeldung();
+                emNew.setFalleroeffnung(fall);
+                emNew.setVersionNo(newNo);
+                emNew.setCurrent(true);
+                emNew.setSupersedes(current);
+
+                emNew.setStatus(ErstmeldungStatus.ENTWURF);
+                emNew.setErfasstAm(Instant.now());
+                emNew.setErfasstVon(creator);
+
+                emNew.setErfasstVonRolle(current.getErfasstVonRolle());
+                emNew.setMeldeweg(current.getMeldeweg());
+                emNew.setMeldewegSonstiges(current.getMeldewegSonstiges());
+                emNew.setMeldendeStelleKontakt(current.getMeldendeStelleKontakt());
+                emNew.setDringlichkeit(current.getDringlichkeit());
+                emNew.setDatenbasis(current.getDatenbasis());
+                emNew.setEinwilligungVorhanden(current.getEinwilligungVorhanden());
+                emNew.setSchweigepflichtentbindungVorhanden(current.getSchweigepflichtentbindungVorhanden());
+                emNew.setKurzbeschreibung(current.getKurzbeschreibung());
+
+                emNew.setAkutGefahrImVerzug(current.isAkutGefahrImVerzug());
+                emNew.setAkutBegruendung(current.getAkutBegruendung());
+                emNew.setAkutNotrufErforderlich(current.getAkutNotrufErforderlich());
+                emNew.setAkutKindSicherUntergebracht(current.getAkutKindSicherUntergebracht());
+
+                if (req.carryOverFachlicheEinschaetzung()) {
+                    emNew.setFachAmpel(current.getFachAmpel());
+                    emNew.setFachText(current.getFachText());
+                    emNew.setAbweichungZurAuto(current.getAbweichungZurAuto());
+                    emNew.setAbweichungsBegruendung(current.getAbweichungsBegruendung());
+                } else {
+                    emNew.setFachAmpel(null);
+                    emNew.setFachText(null);
+                    emNew.setAbweichungZurAuto(null);
+                    emNew.setAbweichungsBegruendung(null);
+                }
+
+                emNew.setAutoRiskSnapshot(null);
+
+                emNew.setVerantwortlicheFachkraft(current.getVerantwortlicheFachkraft());
+                emNew.setNaechsteUeberpruefungAm(current.getNaechsteUeberpruefungAm());
+                emNew.setZusammenfassung(current.getZusammenfassung());
+
+                emNew.setSubmittedAt(null);
+                emNew.setSubmittedBy(null);
+                emNew.setFreigabeAm(null);
+                emNew.setFreigabeVon(null);
+
+                FalleroeffnungErstmeldung saved = repo.saveAndFlush(emNew);
+
+                repo.clearCurrentByFallIdExcept(fallId, saved.getId());
+
+                if (req.includeAnlaesse()) {
+                    cloneAnlaesse(current.getId(), saved.getId(), saved);
+                }
+
+                if (req.includeObservations()) {
+                    cloneObservations(current.getId(), saved.getId(), saved, req.includeObservationTags());
+                }
+
+                if (req.includeJugendamt()) {
+                    cloneJugendamt(current.getId(), saved.getId(), saved);
+                }
+
+                if (req.includeContacts()) {
+                    cloneContacts(current.getId(), saved.getId(), saved);
+                }
+
+                if (req.includeExtern()) {
+                    cloneExtern(current.getId(), saved.getId(), saved);
+                }
+
+                if (req.includeAttachments()) {
+                    cloneAttachments(current.getId(), saved.getId(), saved);
+                }
+
+                return buildResponse(saved);
+
+            } catch (DataIntegrityViolationException ex) {
+                em.clear();
+                if (attempt == 0) continue;
+                throw ex;
+            }
+        }
+
+        throw new IllegalStateException("unreachable");
+    }
+
+    private void cloneAnlaesse(Long fromErstmeldungId, Long toErstmeldungId, FalleroeffnungErstmeldung toErstmeldung) {
+        List<String> codes = anlassRepo.findCodes(fromErstmeldungId);
+        for (String c : codes) {
+            if (c == null || c.isBlank()) continue;
+            FalleroeffnungErstmeldungAnlass a = new FalleroeffnungErstmeldungAnlass();
+            a.setErstmeldung(toErstmeldung);
+            a.setCode(c.trim());
+            anlassRepo.save(a);
+        }
+    }
+
+    private void cloneObservations(Long fromErstmeldungId, Long toErstmeldungId, FalleroeffnungErstmeldung toErstmeldung, boolean includeTags) {
+        List<FalleroeffnungErstmeldungObservation> obs = obsRepo.findAllByErstmeldungId(fromErstmeldungId);
+
+        for (FalleroeffnungErstmeldungObservation o : obs) {
+            FalleroeffnungErstmeldungObservation n = new FalleroeffnungErstmeldungObservation();
+            n.setErstmeldung(toErstmeldung);
+            n.setZeitpunkt(o.getZeitpunkt());
+            n.setZeitraum(o.getZeitraum());
+            n.setOrt(o.getOrt());
+            n.setOrtSonstiges(o.getOrtSonstiges());
+            n.setQuelle(o.getQuelle());
+            n.setText(o.getText());
+            n.setWoertlichesZitat(o.getWoertlichesZitat());
+            n.setKoerperbefund(o.getKoerperbefund());
+            n.setVerhaltenKind(o.getVerhaltenKind());
+            n.setVerhaltenBezug(o.getVerhaltenBezug());
+            n.setSichtbarkeit(o.getSichtbarkeit());
+            n.setLinkedNotiz(null);
+
+            FalleroeffnungErstmeldungObservation savedObs = obsRepo.save(n);
+
+            if (!includeTags) continue;
+
+            List<FalleroeffnungErstmeldungObservationTag> tags = obsTagRepo.findAllByObservationId(o.getId());
+            for (FalleroeffnungErstmeldungObservationTag t : tags) {
+                FalleroeffnungErstmeldungObservationTag nt = new FalleroeffnungErstmeldungObservationTag();
+                nt.setObservation(savedObs);
+                nt.setAnlassCode(t.getAnlassCode());
+                nt.setIndicatorId(t.getIndicatorId());
+                nt.setSeverity(t.getSeverity());
+                nt.setComment(t.getComment());
+                obsTagRepo.save(nt);
+            }
+        }
+    }
+
+    private void cloneJugendamt(Long fromErstmeldungId, Long toErstmeldungId, FalleroeffnungErstmeldung toErstmeldung) {
+        FalleroeffnungErstmeldungJugendamt j = jugendamtRepo.findById(fromErstmeldungId).orElse(null);
+        if (j == null) return;
+
+        FalleroeffnungErstmeldungJugendamt nj = new FalleroeffnungErstmeldungJugendamt();
+        nj.setErstmeldung(toErstmeldung);
+
+        nj.setInformiert(j.getInformiert());
+        nj.setKontaktAm(j.getKontaktAm());
+        nj.setKontaktart(j.getKontaktart());
+        nj.setAktenzeichen(j.getAktenzeichen());
+        nj.setBegruendung(j.getBegruendung());
+
+        jugendamtRepo.save(nj);
+    }
+
+    private void cloneContacts(Long fromErstmeldungId, Long toErstmeldungId, FalleroeffnungErstmeldung toErstmeldung) {
+        List<FalleroeffnungErstmeldungContact> contacts = contactRepo.findAllByErstmeldungId(fromErstmeldungId);
+
+        for (FalleroeffnungErstmeldungContact c : contacts) {
+            FalleroeffnungErstmeldungContact nc = new FalleroeffnungErstmeldungContact();
+            nc.setErstmeldung(toErstmeldung);
+            nc.setKontaktMit(c.getKontaktMit());
+            nc.setKontaktAm(c.getKontaktAm());
+            nc.setStatus(c.getStatus());
+            nc.setNotiz(c.getNotiz());
+            nc.setErgebnis(c.getErgebnis());
+            contactRepo.save(nc);
+        }
+    }
+
+    private void cloneExtern(Long fromErstmeldungId, Long toErstmeldungId, FalleroeffnungErstmeldung toErstmeldung) {
+        List<FalleroeffnungErstmeldungExtern> extern = externRepo.findAllByErstmeldungId(fromErstmeldungId);
+
+        for (FalleroeffnungErstmeldungExtern e : extern) {
+            FalleroeffnungErstmeldungExtern ne = new FalleroeffnungErstmeldungExtern();
+            ne.setErstmeldung(toErstmeldung);
+            ne.setStelle(e.getStelle());
+            ne.setStelleSonstiges(e.getStelleSonstiges());
+            ne.setAm(e.getAm());
+            ne.setBegruendung(e.getBegruendung());
+            ne.setErgebnis(e.getErgebnis());
+            externRepo.save(ne);
+        }
+    }
+
+    private void cloneAttachments(Long fromErstmeldungId, Long toErstmeldungId, FalleroeffnungErstmeldung toErstmeldung) {
+        List<FalleroeffnungErstmeldungAttachment> attachments = attachmentRepo.findAllByErstmeldungId(fromErstmeldungId);
+
+        for (FalleroeffnungErstmeldungAttachment a : attachments) {
+            FalleroeffnungErstmeldungAttachment na = new FalleroeffnungErstmeldungAttachment();
+            na.setErstmeldung(toErstmeldung);
+            na.setFileId(a.getFileId());
+            na.setTyp(a.getTyp());
+            na.setTitel(a.getTitel());
+            na.setBeschreibung(a.getBeschreibung());
+            na.setSichtbarkeit(a.getSichtbarkeit());
+            na.setRechtsgrundlageHinweis(a.getRechtsgrundlageHinweis());
+            attachmentRepo.save(na);
+        }
     }
 }
