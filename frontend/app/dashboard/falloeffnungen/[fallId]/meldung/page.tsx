@@ -16,17 +16,14 @@ import {
     type MeldungResponse,
 } from "@/lib/api/meldung";
 
-function parseId(param: unknown): number | null {
-    if (typeof param === "number") return Number.isFinite(param) && param > 0 ? param : null;
-    if (typeof param === "string") {
-        const n = Number(param);
-        return Number.isFinite(n) && n > 0 ? n : null;
-    }
-    if (Array.isArray(param) && typeof param[0] === "string") {
-        const n = Number(param[0]);
-        return Number.isFinite(n) && n > 0 ? n : null;
-    }
-    return null;
+type ParamValue = string | string[] | undefined;
+
+function parseId(param: ParamValue): number | null {
+    const raw = Array.isArray(param) ? param[0] : param;
+    if (typeof raw !== "string") return null;
+
+    const n = Number(raw);
+    return Number.isFinite(n) && n > 0 ? n : null;
 }
 
 function isLockedStatus(status: string | null | undefined) {
@@ -40,21 +37,45 @@ function isLockedStatus(status: string | null | undefined) {
     );
 }
 
-function getStatus(e: any): number | undefined {
-    return e?.status ?? e?.response?.status ?? e?.data?.status ?? e?.error?.status;
+function asRecord(v: unknown): Record<string, unknown> | null {
+    return typeof v === "object" && v !== null ? (v as Record<string, unknown>) : null;
+}
+
+function readNumber(v: unknown): number | undefined {
+    return typeof v === "number" ? v : undefined;
+}
+
+function getStatus(e: unknown): number | undefined {
+    const obj = asRecord(e);
+    if (!obj) return undefined;
+
+    const direct = readNumber(obj.status);
+    if (direct !== undefined) return direct;
+
+    const response = asRecord(obj.response);
+    const data = asRecord(obj.data);
+    const error = asRecord(obj.error);
+
+    return (
+        readNumber(response?.status) ??
+        readNumber(data?.status) ??
+        readNumber(error?.status)
+    );
 }
 
 export default function ErstmeldungPage() {
-    const params = useParams();
+    const params = useParams<{ fallId?: string | string[] }>();
     const router = useRouter();
-    const fallId = parseId((params as any)?.fallId);
+
+    const fallId = parseId(params.fallId);
 
     const [loading, setLoading] = React.useState(true);
     const [err, setErr] = React.useState<string | null>(null);
     const [meldung, setMeldung] = React.useState<MeldungResponse | null>(null);
 
     React.useEffect(() => {
-        if (!fallId) return;
+        if (fallId == null) return; // ✅ narrow first
+        const id = fallId; // ✅ id is now `number`
 
         let cancelled = false;
 
@@ -64,25 +85,21 @@ export default function ErstmeldungPage() {
 
             try {
                 // 1️⃣ Versuche vorhandenes current zu laden
-                const current = await meldungApi.current(fallId);
+                const current = await meldungApi.current(id);
                 if (!cancelled) setMeldung(current);
-            } catch (e: any) {
+            } catch (e: unknown) {
                 const status = getStatus(e);
 
                 if (status === 404) {
-                    // 2️⃣ Keine Meldung vorhanden → automatisch Draft anlegen
+                    // 2️⃣ Keine Meldung vorhanden → automatisch Draft
                     try {
-                        const created = await meldungApi.ensureCurrent(fallId);
+                        const created = await meldungApi.ensureCurrent(id);
                         if (!cancelled) setMeldung(created);
                     } catch {
-                        if (!cancelled) {
-                            setErr("Erstmeldung konnte nicht gestartet werden.");
-                        }
+                        if (!cancelled) setErr("Erstmeldung konnte nicht gestartet werden.");
                     }
                 } else {
-                    if (!cancelled) {
-                        setErr("Konnte Erstmeldung nicht laden.");
-                    }
+                    if (!cancelled) setErr("Konnte Erstmeldung nicht laden.");
                 }
             } finally {
                 if (!cancelled) setLoading(false);
@@ -98,8 +115,10 @@ export default function ErstmeldungPage() {
 
     const onSaveDraft = React.useCallback(
         async (req: MeldungDraftRequest) => {
-            if (!fallId || !meldung) return;
-            const updated = await meldungApi.saveDraft(fallId, meldung.id, req);
+            if (fallId == null || !meldung) return;
+            const id = fallId;
+
+            const updated = await meldungApi.saveDraft(id, meldung.id, req);
             setMeldung(updated);
             return updated;
         },
@@ -108,23 +127,23 @@ export default function ErstmeldungPage() {
 
     const onSubmit = React.useCallback(
         async (mirrorToNotizen: boolean) => {
-            if (!fallId || !meldung) return;
-            await meldungApi.submit(fallId, meldung.id, { mirrorToNotizen });
-            router.replace(`/dashboard/falloeffnungen/${fallId}/meldungen`);
+            if (fallId == null || !meldung) return;
+            const id = fallId;
+
+            await meldungApi.submit(id, meldung.id, { mirrorToNotizen });
+            router.replace(`/dashboard/falloeffnungen/${id}/meldungen`);
         },
         [fallId, meldung, router]
     );
 
     const disabled = isLockedStatus(meldung?.status);
 
-    if (!fallId) {
+    if (fallId == null) {
         return (
             <div className="p-6">
                 <Alert>
                     <AlertTitle>Ungültige Fall-ID</AlertTitle>
-                    <AlertDescription>
-                        Die URL enthält keine gültige fallId.
-                    </AlertDescription>
+                    <AlertDescription>Die URL enthält keine gültige fallId.</AlertDescription>
                 </Alert>
             </div>
         );
