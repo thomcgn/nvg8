@@ -32,6 +32,8 @@ jobs:
         with:
           context: ./frontend
           push: true
+          build-args: |
+            NEXT_PUBLIC_API_BASE_URL=https://kidoc8a.de
           tags: |
             ${{ env.IMAGE_FRONTEND }}:${{ github.sha }}
             ${{ env.IMAGE_FRONTEND }}:latest
