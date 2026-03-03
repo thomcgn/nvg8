@@ -91,7 +91,7 @@ export default function ErstmeldungPage() {
                 const status = getStatus(e);
 
                 if (status === 404) {
-                    // 2️⃣ Keine Meldung vorhanden → automatisch Draft anlegen
+                    // 2️⃣ Keine Meldung vorhanden → automatisch Draft
                     try {
                         const created = await meldungApi.ensureCurrent(id);
                         if (!cancelled) setMeldung(created);
