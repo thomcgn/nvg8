@@ -1,6 +1,7 @@
 // src/main/java/org/thomcgn/backend/dossiers/service/AkteService.java
 package org.thomcgn.backend.dossiers.service;
 
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.thomcgn.backend.auth.model.Role;
@@ -52,6 +53,8 @@ public class AkteService {
         this.access = access;
     }
 
+    // ---------------- Akte: resolve/create ----------------
+
     @Transactional
     public AkteResponse getOrCreateAkteByKind(Long kindId) {
         access.requireAny(Role.FACHKRAFT, Role.TEAMLEITUNG, Role.EINRICHTUNG_ADMIN, Role.TRAEGER_ADMIN);
@@ -71,17 +74,47 @@ public class AkteService {
             throw DomainException.forbidden(ErrorCode.ACCESS_DENIED, "Einrichtung not in current traeger scope");
         }
 
-        KindDossier dossier = dossierRepo.findByEinrichtungOrgUnit_IdAndKind_Id(einrichtungOrgUnitId, kindId)
-                .orElseGet(() -> {
-                    KindDossier d = new KindDossier();
-                    d.setEinrichtungOrgUnit(einrichtung);
-                    d.setKind(kind);
-                    d.setEnabled(true);
-                    return dossierRepo.save(d);
-                });
+        // 1) fast path: existiert?
+        var existing = dossierRepo.findByEinrichtungOrgUnit_IdAndKind_Id(einrichtungOrgUnitId, kindId);
+        if (existing.isPresent()) {
+            return getAkte(existing.get().getId());
+        }
 
+        // 2) create path (race-condition safe)
+        try {
+            KindDossier d = new KindDossier();
+            d.setEinrichtungOrgUnit(einrichtung);
+            d.setTraeger(einrichtung.getTraeger()); // ✅ WICHTIG: NOT NULL traeger_id
+            d.setKind(kind);
+            d.setEnabled(true);
+
+            d = dossierRepo.saveAndFlush(d); // ✅ flush => unique + notnull sofort sichtbar
+            return getAkte(d.getId());
+        } catch (DataIntegrityViolationException ex) {
+            // Parallel hat jemand schon angelegt → nochmal lesen
+            KindDossier d2 = dossierRepo.findByEinrichtungOrgUnit_IdAndKind_Id(einrichtungOrgUnitId, kindId)
+                    .orElseThrow(() -> ex);
+            return getAkte(d2.getId());
+        }
+    }
+
+    /**
+     * exists-Variante: 200/404, KEIN autocreate.
+     */
+    @Transactional(readOnly = true)
+    public AkteResponse getAkteByKindIfExists(Long kindId) {
+        access.requireAny(Role.FACHKRAFT, Role.TEAMLEITUNG, Role.EINRICHTUNG_ADMIN, Role.TRAEGER_ADMIN);
+
+        Long einrichtungOrgUnitId = SecurityUtils.currentOrgUnitIdRequired();
+
+        KindDossier dossier = dossierRepo.findByEinrichtungOrgUnit_IdAndKind_Id(einrichtungOrgUnitId, kindId)
+                .orElseThrow(() -> DomainException.notFound(ErrorCode.NOT_FOUND, "Akte not found"));
+
+        // Scope/Traeger checks passieren in getAkte()
         return getAkte(dossier.getId());
     }
+
+    // ---------------- Akte: get detail ----------------
 
     @Transactional(readOnly = true)
     public AkteResponse getAkte(Long akteId) {
@@ -116,39 +149,39 @@ public class AkteService {
 
         List<Falleroeffnung> faelle = fallRepo.listByDossierScoped(traegerId, dossier.getId(), allowedEinrichtungen);
 
-        String kindName = (dossier.getKind().getVorname() + " " + dossier.getKind().getNachname()).trim();
+        String kindName = ((dossier.getKind().getVorname() == null ? "" : dossier.getKind().getVorname())
+                + " "
+                + (dossier.getKind().getNachname() == null ? "" : dossier.getKind().getNachname())).trim();
 
         List<FalleroeffnungListItemResponse> items = faelle.stream()
-                .map(f -> {
-                    Boolean akut = null;
-                    String dringlichkeit = null;
-
-                    return new FalleroeffnungListItemResponse(
-                            f.getId(),
-                            f.getStatus().name(),
-                            f.getTitel(),
-                            f.getAktenzeichen(),
-                            dossier.getId(),
-                            dossier.getKind().getId(),
-                            kindName,
-                            f.getEinrichtungOrgUnit().getId(),
-                            f.getTeamOrgUnit() != null ? f.getTeamOrgUnit().getId() : null,
-                            f.getCreatedBy() != null ? f.getCreatedBy().getDisplayName() : null,
-                            f.getCreatedAt(),
-                            akut,
-                            dringlichkeit
-                    );
-                })
+                .map(f -> new FalleroeffnungListItemResponse(
+                        f.getId(),
+                        f.getStatus() != null ? f.getStatus().name() : null,
+                        f.getTitel(),
+                        f.getAktenzeichen(),
+                        dossier.getId(),
+                        dossier.getKind().getId(),
+                        kindName,
+                        f.getEinrichtungOrgUnit() != null ? f.getEinrichtungOrgUnit().getId() : null,
+                        f.getTeamOrgUnit() != null ? f.getTeamOrgUnit().getId() : null,
+                        f.getCreatedBy() != null ? f.getCreatedBy().getDisplayName() : null,
+                        f.getCreatedAt(),
+                        null,
+                        null
+                ))
                 .toList();
 
         return new AkteResponse(
                 dossier.getId(),
                 dossier.getKind().getId(),
-                kindName,
+                kindName.isBlank() ? null : kindName,
                 dossier.isEnabled(),
+                dossier.getCreatedAt(),
                 items
         );
     }
+
+    // ---------------- Fall in Akte ----------------
 
     @Transactional
     public FalleroeffnungResponse createFallInAkte(Long akteId, CreateFallInAkteRequest req) {
@@ -170,31 +203,22 @@ public class AkteService {
             );
         }
 
+        String defaultTitel = ("Fall für "
+                + (dossier.getKind().getVorname() == null ? "" : dossier.getKind().getVorname())
+                + " "
+                + (dossier.getKind().getNachname() == null ? "" : dossier.getKind().getNachname())).trim();
+
         CreateFalleroeffnungRequest create = new CreateFalleroeffnungRequest(
                 dossier.getKind().getId(),
                 einrichtungOrgUnitId, // ✅ immer aus Kontext
                 req != null ? req.teamOrgUnitId() : null,
                 (req != null && req.titel() != null && !req.titel().isBlank())
                         ? req.titel()
-                        : ("Fall für " + dossier.getKind().getVorname() + " " + dossier.getKind().getNachname()).trim(),
+                        : (defaultTitel.isBlank() ? "Fall" : defaultTitel),
                 req != null ? req.kurzbeschreibung() : null,
                 req != null ? req.anlassCodes() : List.of()
         );
 
         return fallService.create(create);
-    }
-
-    @Transactional(readOnly = true)
-    public AkteResponse getAkteByKindIfExists(Long kindId) {
-        access.requireAny(Role.FACHKRAFT, Role.TEAMLEITUNG, Role.EINRICHTUNG_ADMIN, Role.TRAEGER_ADMIN);
-
-        Long traegerId = SecurityUtils.currentTraegerIdRequired();
-        Long einrichtungOrgUnitId = SecurityUtils.currentOrgUnitIdRequired();
-
-        KindDossier dossier = dossierRepo.findByEinrichtungOrgUnit_IdAndKind_Id(einrichtungOrgUnitId, kindId)
-                .orElseThrow(() -> DomainException.notFound(ErrorCode.NOT_FOUND, "Akte not found"));
-
-        // dann einfach bestehende laden (inkl. Scope Checks)
-        return getAkte(dossier.getId());
     }
 }

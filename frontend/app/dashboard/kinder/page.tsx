@@ -32,7 +32,7 @@ export default function KinderPage() {
     async function load(query: string) {
         setLoading(true);
         try {
-            const res = await apiFetch<KindSearchResponse>(`/kinder?q=${encodeURIComponent(query)}&page=0&size=30`, {
+            const res = await apiFetch<KindSearchResponse>(`/api/kinder?q=${encodeURIComponent(query)}&page=0&size=30`, {
                 method: "GET",
             });
             setData(res);

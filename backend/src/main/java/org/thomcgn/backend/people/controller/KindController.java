@@ -9,7 +9,7 @@ import org.thomcgn.backend.people.service.KindService;
 import java.util.List;
 
 @RestController
-@RequestMapping("/kinder")
+@RequestMapping("/api/kinder")
 public class KindController {
 
     private final KindService service;

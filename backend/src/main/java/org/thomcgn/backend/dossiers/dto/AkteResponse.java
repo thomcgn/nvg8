@@ -2,6 +2,7 @@ package org.thomcgn.backend.dossiers.dto;
 
 import org.thomcgn.backend.falloeffnungen.dto.FalleroeffnungListItemResponse;
 
+import java.time.Instant;
 import java.util.List;
 
 public record AkteResponse(
@@ -9,5 +10,6 @@ public record AkteResponse(
         Long kindId,
         String kindName,
         boolean enabled,
+        Instant createdAt,
         List<FalleroeffnungListItemResponse> faelle
 ) {}

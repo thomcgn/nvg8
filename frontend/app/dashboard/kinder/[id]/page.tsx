@@ -66,11 +66,11 @@ function todayISODate(): string {
 function safeIdFromParams(v: unknown): number | null {
     if (typeof v === "string") {
         const n = Number(v);
-        return Number.isFinite(n) ? n : null;
+        return Number.isFinite(n) && n > 0 ? n : null;
     }
     if (Array.isArray(v) && typeof v[0] === "string") {
         const n = Number(v[0]);
-        return Number.isFinite(n) ? n : null;
+        return Number.isFinite(n) && n > 0 ? n : null;
     }
     return null;
 }
@@ -102,8 +102,35 @@ type AkteResponse = {
     kindId: number;
     kindName: string | null;
     enabled: boolean;
-    faelle: Array<{ id: number }>;
+    faelle?: Array<{ id: number }>;
 };
+
+type CreateFallResponse = {
+    id: number;
+};
+
+// robust: 404 detection
+function isNotFound(e: unknown): boolean {
+    if (!e || typeof e !== "object") return false;
+    const anyE: any = e;
+
+    const status =
+        (typeof anyE.status === "number" && anyE.status) ||
+        (typeof anyE?.response?.status === "number" && anyE.response.status) ||
+        (typeof anyE?.data?.status === "number" && anyE.data.status) ||
+        (typeof anyE?.error?.status === "number" && anyE.error.status);
+
+    if (status === 404) return true;
+
+    const msg =
+        typeof anyE.message === "string"
+            ? anyE.message
+            : typeof anyE?.error?.message === "string"
+                ? anyE.error.message
+                : "";
+
+    return msg.includes("404") || msg.toLowerCase().includes("not found");
+}
 
 // ---- Badge helpers ----
 type Tone = "neutral" | "info" | "warning" | "danger" | "success";
@@ -323,17 +350,11 @@ function BezugspersonCardBody({
                         </div>
 
                         <div className="flex flex-wrap items-start gap-4">
-                            <BadgeWithLabel
-                                label="Sorgerecht"
-                                tone={toneForSorgerecht(sorgerechtRaw)}
-                            >
+                            <BadgeWithLabel label="Sorgerecht" tone={toneForSorgerecht(sorgerechtRaw)}>
                                 {sorgerechtLabel}
                             </BadgeWithLabel>
 
-                            <BadgeWithLabel
-                                label="Status"
-                                tone={isEnabled ? "success" : "neutral"}
-                            >
+                            <BadgeWithLabel label="Status" tone={isEnabled ? "success" : "neutral"}>
                                 {isEnabled ? "Aktiv" : "Inaktiv"}
                             </BadgeWithLabel>
 
@@ -341,10 +362,7 @@ function BezugspersonCardBody({
                                 {isHaupt ? "Hauptkontakt" : "—"}
                             </BadgeWithLabel>
 
-                            <BadgeWithLabel
-                                label="Haushalt"
-                                tone={isHaushalt ? "success" : "neutral"}
-                            >
+                            <BadgeWithLabel label="Haushalt" tone={isHaushalt ? "success" : "neutral"}>
                                 {isHaushalt ? "Im Haushalt" : "—"}
                             </BadgeWithLabel>
                         </div>
@@ -404,7 +422,7 @@ export default function KindDetailPage() {
     const params = useParams();
     const kindId = useMemo(() => safeIdFromParams((params as any)?.id), [params]);
 
-    const { me } = useAuth();
+    const { me } = useAuth(); // falls du es später brauchst
 
     const [kind, setKind] = useState<KindResponse | null>(null);
     const [links, setLinks] = useState<KindBezugspersonResponse[]>([]);
@@ -443,53 +461,31 @@ export default function KindDetailPage() {
     const [endLinkId, setEndLinkId] = useState<number | null>(null);
     const [validTo, setValidTo] = useState<string>(todayISODate());
 
-    // robust: 404 detection
-    function isNotFound(e: unknown): boolean {
-        if (!e || typeof e !== "object") return false;
-        const anyE: any = e;
-
-        const status =
-            (typeof anyE.status === "number" && anyE.status) ||
-            (typeof anyE?.response?.status === "number" && anyE.response.status) ||
-            (typeof anyE?.data?.status === "number" && anyE.data.status) ||
-            (typeof anyE?.error?.status === "number" && anyE.error.status);
-
-        if (status === 404) return true;
-
-        const msg =
-            typeof anyE.message === "string"
-                ? anyE.message
-                : typeof anyE?.error?.message === "string"
-                    ? anyE.error.message
-                    : "";
-
-        return msg.includes("404") || msg.toLowerCase().includes("not found");
-    }
-
     async function loadAkteIfExists(kId: number) {
         try {
-            // ✅ must exist backend-side: GET /api/kinder/{kindId}/akte/exists
+            // ✅ GET /api/kinder/{kindId}/akte/exists (kein autocreate)
             const akte = await apiFetch<AkteResponse>(`/api/kinder/${kId}/akte/exists`, { method: "GET" });
             const id = Number(akte?.akteId);
             setAkteId(Number.isFinite(id) && id > 0 ? id : null);
-
         } catch (e: unknown) {
             if (isNotFound(e)) setAkteId(null);
+            // andere Fehler ignorieren wir hier bewusst nicht still:
+            else throw e;
         }
     }
 
     async function resolveAkteId(): Promise<number> {
         if (!kindId) throw new Error("kindId fehlt");
 
-        // autocreate endpoint: GET /api/kinder/{kindId}/akte
+        // ✅ autocreate: GET /api/kinder/{kindId}/akte
         const akte = await apiFetch<AkteResponse>(`/api/kinder/${kindId}/akte`, { method: "GET" });
         const id = Number(akte?.akteId);
-        if (!Number.isFinite(id) || id <= 0) throw new Error("Akte-ID konnte nicht ermittelt werden.");
+
+        if (!Number.isFinite(id) || id <= 0) {
+            throw new Error("Akte-ID konnte nicht ermittelt werden.");
+        }
 
         setAkteId(id);
-        useEffect(() => {
-            console.log("UI akteId state =", akteId);
-        }, [akteId]);
         return id;
     }
 
@@ -504,8 +500,9 @@ export default function KindDetailPage() {
         setErr(null);
 
         try {
-            const k = await apiFetch<KindResponse>(`/kinder/${kindId}`, { method: "GET" });
-            const bps = await apiFetch<KindBezugspersonResponse[]>(`/kinder/${kindId}/bezugspersonen`, {
+            // ✅ (wichtig) wenn deine Controller unter /api laufen:
+            const k = await apiFetch<KindResponse>(`/api/kinder/${kindId}`, { method: "GET" });
+            const bps = await apiFetch<KindBezugspersonResponse[]>(`/api/kinder/${kindId}/bezugspersonen`, {
                 method: "GET",
             });
 
@@ -528,6 +525,11 @@ export default function KindDetailPage() {
         loadAll();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [kindId]);
+
+    useEffect(() => {
+        // Debug optional
+        // console.log("UI akteId state =", akteId);
+    }, [akteId]);
 
     async function onAddBezugsperson() {
         if (!kindId) return;
@@ -563,7 +565,7 @@ export default function KindDetailPage() {
         }
 
         try {
-            await apiFetch<KindBezugspersonResponse>(`/kinder/${kindId}/bezugspersonen`, {
+            await apiFetch<KindBezugspersonResponse>(`/api/kinder/${kindId}/bezugspersonen`, {
                 method: "POST",
                 body: payload,
             });
@@ -615,7 +617,7 @@ export default function KindDetailPage() {
 
         try {
             await apiFetch<KindBezugspersonResponse>(
-                `/kinder/${kindId}/bezugspersonen/${linkId}/end`,
+                `/api/kinder/${kindId}/bezugspersonen/${linkId}/end`,
                 { method: "PATCH", body: payload }
             );
 
@@ -637,8 +639,9 @@ export default function KindDetailPage() {
         try {
             const aId = akteId ?? (await resolveAkteId());
 
-            // create fall (Fall-ID needed for /dashboard/falloeffnungen/[id]/meldung)
-            const fall = await apiFetch<{ id: number }>(`/akten/${aId}/faelle`, {
+            // ✅ create fall (Fall-ID needed for /dashboard/falloeffnungen/[id]/meldung)
+            // Backend: POST /api/akten/{akteId}/faelle
+            const fall = await apiFetch<CreateFallResponse>(`/api/akten/${aId}/faelle`, {
                 method: "POST",
                 body: null,
             });
@@ -683,31 +686,44 @@ export default function KindDetailPage() {
 
                 <div className="mx-auto max-w-6xl space-y-4 p-4 md:p-6">
                     <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                        <Button variant="secondary" onClick={() => router.back()} className="w-full sm:w-auto">
+                        <Button
+                            variant="secondary"
+                            onClick={() => router.back()}
+                            className="w-full sm:w-auto gap-2"
+                        >
                             <ArrowLeft className="h-4 w-4" />
                             Zurück
                         </Button>
 
                         <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
-                            <Button variant="secondary" onClick={() => setAddOpen(true)} className="w-full sm:w-auto">
+                            <Button
+                                variant="secondary"
+                                onClick={() => setAddOpen(true)}
+                                className="w-full sm:w-auto gap-2"
+                            >
                                 <UserPlus className="h-4 w-4" />
                                 Bezugsperson hinzufügen
                             </Button>
 
                             {akteId ? (
-                                <Button onClick={onGoToAkte} className="w-full sm:w-auto" disabled={starting} title="Akte öffnen">
+                                <Button
+                                    onClick={onGoToAkte}
+                                    className="w-full sm:w-auto gap-2"
+                                    disabled={starting}
+                                    title="Akte öffnen"
+                                >
                                     <ArrowRight className="h-4 w-4" />
                                     Zur Akte
                                 </Button>
                             ) : (
                                 <Button
                                     onClick={onStartErstmeldung}
-                                    className="w-full sm:w-auto"
+                                    className="w-full sm:w-auto gap-2"
                                     disabled={starting}
                                     title="Akte anlegen (falls nötig), Fall erstellen und Erstmeldung starten"
                                 >
                                     <FilePlus2 className="h-4 w-4" />
-                                    Akte anlegen
+                                    Akte starten
                                 </Button>
                             )}
                         </div>
@@ -746,19 +762,23 @@ export default function KindDetailPage() {
 
                                     <div className="rounded-2xl border border-border bg-card p-3">
                                         <div className="text-xs font-semibold text-muted-foreground">Geburtsdatum</div>
-                                        <div className="mt-1 text-sm font-semibold break-words">{kind.geburtsdatum || "—"}</div>
+                                        <div className="mt-1 text-sm font-semibold break-words">
+                                            {kind.geburtsdatum || "—"}
+                                        </div>
                                     </div>
 
                                     <div className="rounded-2xl border border-border bg-card p-3">
                                         <div className="text-xs font-semibold text-muted-foreground">Gender</div>
-                                        <div className="mt-1 text-sm font-semibold break-words">{kind.gender || "—"}</div>
+                                        <div className="mt-1 text-sm font-semibold break-words">{(kind as any).gender || "—"}</div>
                                     </div>
 
                                     <div className="rounded-2xl border border-border bg-card p-3">
                                         <div className="text-xs font-semibold text-muted-foreground">Förderbedarf</div>
-                                        <div className="mt-1 text-sm font-semibold">{kind.foerderbedarf ? "Ja" : "Nein"}</div>
-                                        {kind.foerderbedarfDetails ? (
-                                            <div className="mt-1 text-xs text-muted-foreground break-words">{kind.foerderbedarfDetails}</div>
+                                        <div className="mt-1 text-sm font-semibold">{(kind as any).foerderbedarf ? "Ja" : "Nein"}</div>
+                                        {(kind as any).foerderbedarfDetails ? (
+                                            <div className="mt-1 text-xs text-muted-foreground break-words">
+                                                {(kind as any).foerderbedarfDetails}
+                                            </div>
                                         ) : null}
                                     </div>
 
@@ -770,10 +790,10 @@ export default function KindDetailPage() {
                                         </div>
                                     </div>
 
-                                    {kind.gesundheitsHinweise ? (
+                                    {(kind as any).gesundheitsHinweise ? (
                                         <div className="sm:col-span-2 rounded-2xl border border-border bg-card p-3">
                                             <div className="text-xs font-semibold text-muted-foreground">Gesundheitshinweise</div>
-                                            <div className="mt-1 text-sm break-words">{kind.gesundheitsHinweise}</div>
+                                            <div className="mt-1 text-sm break-words">{(kind as any).gesundheitsHinweise}</div>
                                         </div>
                                     ) : null}
                                 </div>
@@ -805,9 +825,9 @@ export default function KindDetailPage() {
                                         setAddMode("existing");
                                         setExistingId(l.bezugspersonId ? String(l.bezugspersonId) : "");
                                         setBeziehung(l.beziehung || "SONSTIGE");
-                                        setSorgerecht((l.sorgerecht as SorgerechtTyp) || "UNGEKLAERT");
-                                        setHauptkontakt(Boolean(l.hauptkontakt));
-                                        setLebtImHaushalt(Boolean(l.lebtImHaushalt));
+                                        setSorgerecht(((l as any).sorgerecht as SorgerechtTyp) || "UNGEKLAERT");
+                                        setHauptkontakt(Boolean((l as any).hauptkontakt));
+                                        setLebtImHaushalt(Boolean((l as any).lebtImHaushalt));
                                     }}
                                     onEnd={() => {
                                         const lid = getLinkId(links[0]);
@@ -824,16 +844,12 @@ export default function KindDetailPage() {
                                         const linkId = getLinkId(l);
                                         const key = linkId
                                             ? `link-${linkId}`
-                                            : `bp-${String((l as any)?.bezugspersonId ?? "na")}-${String(
-                                                (l as any)?.validFrom ?? "na"
-                                            )}-${idx}`;
+                                            : `bp-${String((l as any)?.bezugspersonId ?? "na")}-${String((l as any)?.validFrom ?? "na")}-${idx}`;
 
                                         const title = l.bezugspersonName || `Bezugsperson ${idx + 1}`;
                                         const sub = [
                                             l.beziehung ? `Beziehung: ${l.beziehung}` : null,
-                                            (l as any)?.sorgerecht
-                                                ? `Sorgerecht: ${formatSorgerechtLabel((l as any)?.sorgerecht)}`
-                                                : null,
+                                            (l as any)?.sorgerecht ? `Sorgerecht: ${formatSorgerechtLabel((l as any)?.sorgerecht)}` : null,
                                         ]
                                             .filter(Boolean)
                                             .join(" · ");
@@ -860,9 +876,9 @@ export default function KindDetailPage() {
                                                                 setAddMode("existing");
                                                                 setExistingId(l.bezugspersonId ? String(l.bezugspersonId) : "");
                                                                 setBeziehung(l.beziehung || "SONSTIGE");
-                                                                setSorgerecht((l.sorgerecht as SorgerechtTyp) || "UNGEKLAERT");
-                                                                setHauptkontakt(Boolean(l.hauptkontakt));
-                                                                setLebtImHaushalt(Boolean(l.lebtImHaushalt));
+                                                                setSorgerecht(((l as any).sorgerecht as SorgerechtTyp) || "UNGEKLAERT");
+                                                                setHauptkontakt(Boolean((l as any).hauptkontakt));
+                                                                setLebtImHaushalt(Boolean((l as any).lebtImHaushalt));
                                                             }}
                                                             onEnd={() => {
                                                                 const lid = getLinkId(l);
@@ -898,7 +914,7 @@ export default function KindDetailPage() {
                                     <Button
                                         variant={addMode === "create" ? "default" : "secondary"}
                                         onClick={() => setAddMode("create")}
-                                        className="w-full sm:w-auto"
+                                        className="w-full sm:w-auto gap-2"
                                     >
                                         <UserPlus className="h-4 w-4" />
                                         Neu erstellen
@@ -906,7 +922,7 @@ export default function KindDetailPage() {
                                     <Button
                                         variant={addMode === "existing" ? "default" : "secondary"}
                                         onClick={() => setAddMode("existing")}
-                                        className="w-full sm:w-auto"
+                                        className="w-full sm:w-auto gap-2"
                                     >
                                         <Link2 className="h-4 w-4" />
                                         Existierende anhängen (ID)

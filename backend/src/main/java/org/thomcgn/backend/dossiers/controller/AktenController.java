@@ -2,13 +2,17 @@ package org.thomcgn.backend.dossiers.controller;
 
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.*;
-import org.thomcgn.backend.dossiers.dto.*;
+import org.thomcgn.backend.dossiers.dto.AkteListResponse;
+import org.thomcgn.backend.dossiers.dto.AkteResponse;
+import org.thomcgn.backend.dossiers.dto.CreateAkteRequest;
+import org.thomcgn.backend.dossiers.dto.CreateFallInAkteRequest;
+import org.thomcgn.backend.dossiers.dto.FallListResponse;
 import org.thomcgn.backend.dossiers.service.AkteService;
 import org.thomcgn.backend.dossiers.service.KindDossierService;
 import org.thomcgn.backend.falloeffnungen.dto.FalleroeffnungResponse;
 
 @RestController
-@RequestMapping("/api") // <- Empfehlung: bleibt drin
+@RequestMapping("/api")
 public class AktenController {
 
     private final KindDossierService dossierService;
@@ -21,6 +25,7 @@ public class AktenController {
 
     // --------- Akten ---------
 
+    // Liste bleibt bei dossierService (List DTO ist ok)
     @GetMapping("/akten")
     public AkteListResponse listAkten(
             @RequestParam(name = "q", required = false) String q,
@@ -30,7 +35,7 @@ public class AktenController {
         return dossierService.list(q, page, size);
     }
 
-    // ✅ Akte laden (einheitlich -> AkteResponse)
+    // ✅ Akte-Detail IMMER als AkteResponse (ein Shape)
     @GetMapping("/akten/{akteId}")
     public AkteResponse getAkte(@PathVariable Long akteId) {
         return akteService.getAkte(akteId);
@@ -38,10 +43,10 @@ public class AktenController {
 
     // --------- Kind → Akte ---------
 
-    // ✅ exists (kein autocreate)
+    // ✅ exists (kein autocreate) -> 200 oder 404
     @GetMapping("/kinder/{kindId}/akte/exists")
     public AkteResponse getAkteByKindIfExists(@PathVariable Long kindId) {
-        return akteService.getAkteByKindIfExists(kindId); // wirft 404 wenn nicht vorhanden
+        return akteService.getAkteByKindIfExists(kindId);
     }
 
     // ✅ resolve (autocreate)
@@ -52,15 +57,6 @@ public class AktenController {
 
     // --------- Fälle scoped to Akte ---------
 
-    @PostMapping("/akten/{akteId}/faelle")
-    public FalleroeffnungResponse createFallInAkte(
-            @PathVariable Long akteId,
-            @RequestBody(required = false) CreateFallInAkteRequest req
-    ) {
-        return akteService.createFallInAkte(akteId, req);
-    }
-
-    // OPTIONAL: falls dein FE es braucht (du hattest es im anderen Service)
     @GetMapping("/akten/{akteId}/faelle")
     public FallListResponse listFaelle(
             @PathVariable Long akteId,
@@ -70,15 +66,23 @@ public class AktenController {
         return dossierService.listFaelle(akteId, page, size);
     }
 
-    // OPTIONAL: falls create akte via POST gebraucht wird
-    @PostMapping("/akten")
-    public AkteDto createAkte(@RequestBody @Valid CreateAkteRequest req) {
-        return dossierService.createAkte(req);
+    @PostMapping("/akten/{akteId}/faelle")
+    public FalleroeffnungResponse createFallInAkte(
+            @PathVariable Long akteId,
+            @RequestBody(required = false) CreateFallInAkteRequest req
+    ) {
+        return akteService.createFallInAkte(akteId, req);
     }
 
-    // OPTIONAL: falls by-kind Endpoint gebraucht wird (würde ich eher entfernen)
-    @GetMapping("/akten/by-kind/{kindId}")
-    public AkteDto getAkteByKind(@PathVariable Long kindId) {
-        return dossierService.getAkteByKind(kindId);
+    // --------- Optional: create akte ---------
+    // Ich würde es behalten (ist praktisch), aber als AkteResponse wäre konsistenter.
+    // Wenn du es brauchst, mappe intern auf resolve/create und gib AkteResponse zurück.
+    @PostMapping("/akten")
+    public AkteResponse createAkte(@RequestBody @Valid CreateAkteRequest req) {
+        // "create" ist letztlich resolve-or-create für das Kind
+        return akteService.getOrCreateAkteByKind(req.kindId());
     }
+
+    // ❌ Optional entfernen: by-kind über /akten/by-kind/{kindId}
+    // Macht doppelte API und andere DTO Shapes.
 }
