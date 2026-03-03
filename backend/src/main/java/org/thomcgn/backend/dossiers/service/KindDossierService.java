@@ -1,5 +1,6 @@
 package org.thomcgn.backend.dossiers.service;
 
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
@@ -51,6 +52,13 @@ public class KindDossierService {
         return n.isBlank() ? null : n;
     }
 
+    private static AkteDto toAkteDto(KindDossier d) {
+        String createdAt = d.getCreatedAt() == null ? null : d.getCreatedAt().toString();
+        return new AkteDto(d.getId(), d.getKind().getId(), kindNameOf(d.getKind()), createdAt);
+    }
+
+    // ---------------- Akte ----------------
+
     @Transactional(readOnly = true)
     public AkteDto getAkte(Long akteId) {
         Long einrichtungOrgUnitId = SecurityUtils.currentOrgUnitIdRequired();
@@ -58,8 +66,7 @@ public class KindDossierService {
         KindDossier d = dossierRepo.findByIdScopedWithKind(akteId, einrichtungOrgUnitId)
                 .orElseThrow(() -> DomainException.notFound(ErrorCode.NOT_FOUND, "Akte nicht gefunden"));
 
-        String createdAt = d.getCreatedAt() == null ? null : d.getCreatedAt().toString();
-        return new AkteDto(d.getId(), d.getKind().getId(), kindNameOf(d.getKind()), createdAt);
+        return toAkteDto(d);
     }
 
     @Transactional(readOnly = true)
@@ -69,41 +76,58 @@ public class KindDossierService {
         KindDossier d = dossierRepo.findByEinrichtungOrgUnit_IdAndKind_Id(einrichtungOrgUnitId, kindId)
                 .orElseThrow(() -> DomainException.notFound(ErrorCode.NOT_FOUND, "Akte nicht gefunden"));
 
-        String createdAt = d.getCreatedAt() == null ? null : d.getCreatedAt().toString();
-        return new AkteDto(d.getId(), d.getKind().getId(), kindNameOf(d.getKind()), createdAt);
+        return toAkteDto(d);
     }
 
+    /**
+     * ✅ Exists-Variante: wirft 404 wenn nicht vorhanden (kein autocreate)
+     */
+    @Transactional(readOnly = true)
+    public AkteDto getAkteByKindIfExists(Long kindId) {
+        return getAkteByKind(kindId); // gleiche Semantik: 404 wenn nicht vorhanden
+    }
 
+    /**
+     * ✅ Resolve/Create: erzeugt Akte genau 1x pro (einrichtung, kind) und ist robust gegen Race-Conditions.
+     * Wichtig: KindDossier hat NOT NULL traeger_id (ManyToOne) -> MUSS gesetzt werden.
+     */
     @Transactional
     public AkteDto resolveOrCreateAkteForKind(Long kindId) {
         Long einrichtungOrgUnitId = SecurityUtils.currentOrgUnitIdRequired();
 
         return dossierRepo.findByEinrichtungOrgUnit_IdAndKind_Id(einrichtungOrgUnitId, kindId)
-                .map(d -> {
-                    String createdAt = d.getCreatedAt() == null ? null : d.getCreatedAt().toString();
-                    return new AkteDto(d.getId(), d.getKind().getId(), kindNameOf(d.getKind()), createdAt);
-                })
+                .map(KindDossierService::toAkteDto)
                 .orElseGet(() -> {
                     Kind k = kindRepo.findById(kindId)
                             .orElseThrow(() -> DomainException.notFound(ErrorCode.NOT_FOUND, "Kind nicht gefunden"));
 
                     OrgUnit einrichtung = orgUnitRepository.findById(einrichtungOrgUnitId)
-                            .orElseThrow(() -> DomainException.forbidden(ErrorCode.ACCESS_DENIED, "Einrichtungs-Kontext ungültig"));
+                            .orElseThrow(() -> DomainException.forbidden(
+                                    ErrorCode.ACCESS_DENIED,
+                                    "Einrichtungs-Kontext ungültig"
+                            ));
 
                     if (einrichtung.getTraeger() == null) {
                         throw DomainException.conflict(ErrorCode.CONFLICT, "Einrichtung hat keinen Träger");
                     }
 
-                    KindDossier d = new KindDossier();
-                    d.setEinrichtungOrgUnit(einrichtung);
-                    d.setTraeger(einrichtung.getTraeger()); // ✅ wichtig wegen NOT NULL traeger_id
-                    d.setKind(k);
-                    d.setEnabled(true);
+                    try {
+                        KindDossier d = new KindDossier();
+                        d.setEinrichtungOrgUnit(einrichtung);
+                        d.setTraeger(einrichtung.getTraeger()); // ✅ fix: NOT NULL traeger_id
+                        d.setKind(k);
+                        d.setEnabled(true);
 
-                    d = dossierRepo.save(d);
+                        // saveAndFlush hilft, Unique/NotNull sofort zu sehen (und nicht erst später)
+                        d = dossierRepo.saveAndFlush(d);
 
-                    String createdAt = d.getCreatedAt() == null ? null : d.getCreatedAt().toString();
-                    return new AkteDto(d.getId(), k.getId(), kindNameOf(k), createdAt);
+                        return toAkteDto(d);
+                    } catch (DataIntegrityViolationException ex) {
+                        // ✅ Falls parallel schon angelegt wurde (uk_dossier_einrichtung_kind):
+                        KindDossier existing = dossierRepo.findByEinrichtungOrgUnit_IdAndKind_Id(einrichtungOrgUnitId, kindId)
+                                .orElseThrow(() -> ex);
+                        return toAkteDto(existing);
+                    }
                 });
     }
 
@@ -144,6 +168,8 @@ public class KindDossierService {
         return new AkteListResponse(items, p.getTotalElements(), page, size);
     }
 
+    // ---------------- Fälle ----------------
+
     @Transactional(readOnly = true)
     public FallListResponse listFaelle(Long akteId, int page, int size) {
         // scope-check (Einrichtung)
@@ -161,7 +187,6 @@ public class KindDossierService {
 
         return new FallListResponse(items, p.getTotalElements());
     }
-
 
     @Transactional
     public CreateFallInAkteResponse createFall(Long akteId, CreateFallInAkteRequest req) {
