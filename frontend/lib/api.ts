@@ -3,7 +3,8 @@
 import { getCurrentEinrichtungId } from "@/lib/context-store";
 import { apiSwitchContext } from "@/lib/context";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8080";
+const API_BASE = ""; // immer same-origin
+const API_PREFIX = "/api";
 
 export type ProblemDetails = {
   status?: number;
@@ -56,7 +57,8 @@ async function rawFetch<T>(
     path: string,
     options: Omit<RequestInit, "body"> & { body?: any } = {}
 ): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, {
+  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+  const res = await fetch(`${API_BASE}${API_PREFIX}${normalizedPath}`, {
     ...options,
     credentials: "include", // HttpOnly JWT
     headers: {
