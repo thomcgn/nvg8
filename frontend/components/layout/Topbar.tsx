@@ -36,7 +36,7 @@ export function Topbar({
                     className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-brand-border bg-white text-brand-text2 hover:bg-brand-bg"
                     aria-label="Benachrichtigungen"
                 >
-                    <Bell className="h-4 w-4" />
+                    <Bell className="h-4 w-4" /> Nachrichten
                 </button>
             </div>
 
