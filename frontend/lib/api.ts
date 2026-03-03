@@ -3,8 +3,9 @@
 import { getCurrentEinrichtungId } from "@/lib/context-store";
 import { apiSwitchContext } from "@/lib/context";
 
-const API_BASE = ""; // immer same-origin
-const API_PREFIX = "/api";
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || "";
+// lokal: http://localhost:8080
+// prod: "" → same-origin (Caddy leitet ans Backend)
 
 export type ProblemDetails = {
   status?: number;
@@ -46,7 +47,7 @@ function asProblemDetails(body: unknown): ProblemDetails | undefined {
     instance: typeof body.instance === "string" ? body.instance : undefined,
     timestamp: typeof body.timestamp === "string" ? body.timestamp : undefined,
     path: typeof body.path === "string" ? body.path : undefined,
-    meta: body.meta,
+    meta: (body as any).meta,
   };
 
   if (!pd.status && !pd.title && !pd.detail && !pd.code) return undefined;
@@ -58,9 +59,10 @@ async function rawFetch<T>(
     options: Omit<RequestInit, "body"> & { body?: any } = {}
 ): Promise<T> {
   const normalizedPath = path.startsWith("/") ? path : `/${path}`;
-  const res = await fetch(`${API_BASE}${API_PREFIX}${normalizedPath}`, {
+
+  const res = await fetch(`${API_BASE}${normalizedPath}`, {
     ...options,
-    credentials: "include", // HttpOnly JWT
+    credentials: "include",
     headers: {
       ...(options.body !== undefined ? { "Content-Type": "application/json" } : {}),
       ...(options.headers || {}),
@@ -122,9 +124,7 @@ export async function apiFetch<T>(
       throw e;
     }
 
-    // 🔁 1x automatisch switchen und retry
     await apiSwitchContext(desiredEinrichtungId);
-
     return await rawFetch<T>(path, options);
   }
 }
