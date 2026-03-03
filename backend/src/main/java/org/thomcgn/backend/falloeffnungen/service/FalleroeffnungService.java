@@ -1,3 +1,4 @@
+// src/main/java/org/thomcgn/backend/falloeffnungen/service/FalleroeffnungService.java
 package org.thomcgn.backend.falloeffnungen.service;
 
 import org.springframework.data.domain.Page;
@@ -31,12 +32,17 @@ import org.thomcgn.backend.tenants.model.Traeger;
 import org.thomcgn.backend.tenants.repo.TraegerRepository;
 import org.thomcgn.backend.users.model.User;
 import org.thomcgn.backend.users.repo.UserRepository;
-import org.thomcgn.backend.falloeffnungen.dto.CreateFalleroeffnungRequest;
-import org.thomcgn.backend.falloeffnungen.dto.FalleroeffnungResponse;
+
+import org.thomcgn.backend.falloeffnungen.meldung.model.Dringlichkeit;
+import org.thomcgn.backend.falloeffnungen.meldung.model.Meldung;
+import org.thomcgn.backend.falloeffnungen.meldung.repo.MeldungRepository;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 public class FalleroeffnungService {
@@ -51,10 +57,14 @@ public class FalleroeffnungService {
     private final AccessControlService access;
     private final AuditService audit;
     private final org.thomcgn.backend.aktenzeichen.service.AktennummerService aktennummerService;
+    private final DossierFallNoService dossierFallNoService;
 
     private final FalleroeffnungAnlassRepository anlassRepo;
     private final FalleroeffnungNotizTagRepository tagRepo;
     private final FallRiskService riskService;
+
+    // ✅ Neu: current Meldung für List (akut/dringlichkeit)
+    private final MeldungRepository meldungRepo;
 
     public FalleroeffnungService(
             FalleroeffnungRepository repo,
@@ -67,9 +77,11 @@ public class FalleroeffnungService {
             AccessControlService access,
             AuditService audit,
             org.thomcgn.backend.aktenzeichen.service.AktennummerService aktennummerService,
+            DossierFallNoService dossierFallNoService,
             FalleroeffnungAnlassRepository anlassRepo,
             FalleroeffnungNotizTagRepository tagRepo,
-            FallRiskService riskService
+            FallRiskService riskService,
+            MeldungRepository meldungRepo
     ) {
         this.repo = repo;
         this.notizRepo = notizRepo;
@@ -81,9 +93,11 @@ public class FalleroeffnungService {
         this.access = access;
         this.audit = audit;
         this.aktennummerService = aktennummerService;
+        this.dossierFallNoService = dossierFallNoService;
         this.anlassRepo = anlassRepo;
         this.tagRepo = tagRepo;
         this.riskService = riskService;
+        this.meldungRepo = meldungRepo;
     }
 
     // =========================================================
@@ -111,17 +125,21 @@ public class FalleroeffnungService {
         Kind kind = kindRepo.findById(req.kindId())
                 .orElseThrow(() -> DomainException.notFound(ErrorCode.NOT_FOUND, "Kind not found"));
 
-        KindDossier dossier = dossierRepo.findByTraegerIdAndKindId(traegerId, req.kindId())
+        OrgUnit einrichtung = orgUnitRepo.findById(einrichtungId)
+                .orElseThrow(() -> DomainException.notFound(ErrorCode.ORG_UNIT_NOT_FOUND, "Einrichtung org unit not found"));
+
+        KindDossier dossier = dossierRepo.findByEinrichtungOrgUnit_IdAndKind_Id(einrichtungId, req.kindId())
                 .orElseGet(() -> {
+                    if (einrichtung.getTraeger() == null) {
+                        throw DomainException.conflict(ErrorCode.CONFLICT, "Einrichtung hat keinen Träger");
+                    }
                     KindDossier d = new KindDossier();
-                    d.setTraeger(traeger);
+                    d.setEinrichtungOrgUnit(einrichtung);
+                    d.setTraeger(einrichtung.getTraeger()); // ✅ wichtig (kind_dossiers.traeger_id NOT NULL)
                     d.setKind(kind);
                     d.setEnabled(true);
                     return dossierRepo.save(d);
                 });
-
-        OrgUnit einrichtung = orgUnitRepo.findById(einrichtungId)
-                .orElseThrow(() -> DomainException.notFound(ErrorCode.ORG_UNIT_NOT_FOUND, "Einrichtung org unit not found"));
 
         // Defense-in-depth Rollencheck
         access.requireAccessToEinrichtungObject(
@@ -154,6 +172,9 @@ public class FalleroeffnungService {
         f.setKurzbeschreibung(req.kurzbeschreibung());
         f.setCreatedBy(creator);
         f.setOpenedAt(Instant.now());
+
+        int nextFallNo = dossierFallNoService.nextFallNo(dossier.getId()); // ✅ race-safe
+        f.setFallNo(nextFallNo);
 
         Falleroeffnung saved = repo.save(f);
 
@@ -268,11 +289,37 @@ public class FalleroeffnungService {
                 pageable
         );
 
+        // ✅ Batch: current Meldung Info (akut/dringlichkeit) holen
+        List<Long> fallIds = page.getContent().stream()
+                .map(Falleroeffnung::getId)
+                .filter(Objects::nonNull)
+                .toList();
+
+        final Map<Long, Meldung> currentMeldungByFallId;
+        if (fallIds.isEmpty()) {
+            currentMeldungByFallId = Map.of();
+        } else {
+            currentMeldungByFallId = meldungRepo.findCurrentByFallIds(fallIds).stream()
+                    .filter(m -> m.getFalleroeffnung() != null && m.getFalleroeffnung().getId() != null)
+                    .collect(Collectors.toMap(
+                            m -> m.getFalleroeffnung().getId(),
+                            m -> m,
+                            (a, b) -> a
+                    ));
+        }
+
         List<FalleroeffnungListItemResponse> items = page.getContent().stream()
                 .map(f -> {
                     var k = f.getDossier().getKind();
                     String kindName = ((k.getVorname() != null ? k.getVorname() : "") + " " + (k.getNachname() != null ? k.getNachname() : "")).trim();
                     if (kindName.isBlank()) kindName = "-";
+
+                    Meldung cur = currentMeldungByFallId.get(f.getId());
+                    Boolean akut = (cur == null) ? null : cur.isAkutGefahrImVerzug();
+
+                    Dringlichkeit d = (cur == null) ? null : cur.getDringlichkeit();
+                    String dringlichkeit = (d == null) ? null : d.name();
+
                     return new FalleroeffnungListItemResponse(
                             f.getId(),
                             f.getStatus().name(),
@@ -283,8 +330,10 @@ public class FalleroeffnungService {
                             kindName,
                             f.getEinrichtungOrgUnit().getId(),
                             f.getTeamOrgUnit() != null ? f.getTeamOrgUnit().getId() : null,
-                            f.getCreatedBy().getDisplayName(),
-                            f.getCreatedAt()
+                            f.getCreatedBy() != null ? f.getCreatedBy().getDisplayName() : null,
+                            f.getCreatedAt(),
+                            akut,
+                            dringlichkeit
                     );
                 })
                 .toList();
@@ -370,14 +419,11 @@ public class FalleroeffnungService {
                 "Note added" + (req.typ() != null ? " (" + req.typ() + ")" : "") + " visibility=" + vis
         );
 
-        // Optional: neu bewerten und Snapshot speichern (UX)
         try {
             riskService.recomputeAndSnapshot(f.getId());
         } catch (Exception ignored) {
-            // Bewertung ist Assistenz; Notiz speichern ist wichtiger.
         }
 
-        // Response inkl. Tags (für UI sofort)
         var tags = tagRepo.findAllByNotizId(saved.getId());
         var anlassCodes = tags.stream()
                 .map(FalleroeffnungNotizTag::getAnlassCode)
@@ -469,7 +515,7 @@ public class FalleroeffnungService {
                 kindName,
                 f.getEinrichtungOrgUnit().getId(),
                 f.getTeamOrgUnit() != null ? f.getTeamOrgUnit().getId() : null,
-                f.getCreatedBy().getDisplayName(),
+                f.getCreatedBy() != null ? f.getCreatedBy().getDisplayName() : null,
                 anlassCodes != null ? anlassCodes : List.of(),
                 latestRisk,
                 notizen

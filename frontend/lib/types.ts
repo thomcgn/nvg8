@@ -215,6 +215,10 @@ export type FalleroeffnungResponse = {
   kindName?: string | null;
   createdAt?: string | null;
   updatedAt?: string | null;
+
+  // ✅ optional: aus current Meldung gespiegelt (für Detail/Dashboard nützlich)
+  akutGefahrImVerzug?: boolean | null;
+  dringlichkeit?: string | null;
 };
 
 export type FalleroeffnungListItem = {
@@ -224,6 +228,10 @@ export type FalleroeffnungListItem = {
   kindName?: string | null;
   createdAt?: string | null;
   updatedAt?: string | null;
+
+  // ✅ Dashboard-Spalten (werden vom Backend optional geliefert)
+  akutGefahrImVerzug?: boolean | null;
+  dringlichkeit?: string | null;
 };
 
 export type FalleroeffnungListResponse = {

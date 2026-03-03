@@ -17,5 +17,10 @@ public record CreateKindRequest(
         String strasse,
         String hausnummer,
         String plz,
-        String ort
+        String ort,
+
+        // ✅ Einrichtung beim Anlegen (optional)
+        // - null => nimmt aktive Einrichtung aus dem Context
+        // - != null => muss == aktive Einrichtung sein, sonst 403 CONTEXT_REQUIRED
+        Long ownerEinrichtungOrgUnitId
 ) {}

@@ -15,7 +15,8 @@ public abstract class BasePerson extends AuditableEntity {
     @Column(name = "traeger_id", nullable = false, updatable = false)
     private Long traegerId;
 
-    @Column(name = "owner_einrichtung_org_unit_id", nullable = false, updatable = false)
+    // ✅ updatebar (Kita -> Schule Wechsel)
+    @Column(name = "owner_einrichtung_org_unit_id")
     private Long ownerEinrichtungOrgUnitId;
 
     public Long getTraegerId() { return traegerId; }

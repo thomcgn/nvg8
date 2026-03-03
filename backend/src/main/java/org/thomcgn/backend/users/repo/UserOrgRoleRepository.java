@@ -48,4 +48,14 @@ public interface UserOrgRoleRepository extends JpaRepository<UserOrgRole, Long> 
         where uor.user.id = :userId and uor.enabled = true
     """)
     List<UserOrgRole> findAllEnabledWithOrgUnit(@Param("userId") Long userId);
+
+    @Query("""
+    select uor
+    from UserOrgRole uor
+    join fetch uor.user u
+    where uor.orgUnit.id = :orgUnitId
+      and uor.enabled = true
+      and u.enabled = true
+""")
+    List<UserOrgRole> findAllEnabledByOrgUnitIdWithUser(@Param("orgUnitId") Long orgUnitId);
 }

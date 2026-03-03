@@ -10,51 +10,47 @@ import org.springframework.security.config.annotation.web.configurers.AbstractHt
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+
 @EnableConfigurationProperties(JwtProperties.class)
 @Configuration
 @EnableMethodSecurity
 public class SecurityConfig {
 
     @Bean
-    public SecurityFilterChain filterChain(HttpSecurity http, JwtService jwtService, ObjectMapper objectMapper) throws Exception {
-        JwtAuthFilter jwtAuthFilter = new JwtAuthFilter(jwtService,objectMapper);
-        ContextRequiredFilter contextRequiredFilter = new ContextRequiredFilter();
+    public SecurityFilterChain filterChain(
+            HttpSecurity http,
+            JwtService jwtService,
+            ObjectMapper objectMapper,
+            ProblemAuthEntryPoint authEntryPoint,
+            ProblemAccessDeniedHandler accessDeniedHandler
+    ) throws Exception {
+
+        JwtAuthFilter jwtAuthFilter = new JwtAuthFilter(jwtService, objectMapper);
+        ContextRequiredFilter contextRequiredFilter = new ContextRequiredFilter(objectMapper);
 
         return http
-                .cors(cors ->{})
+                .cors(cors -> {})
                 .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .exceptionHandling(ex -> ex
-                        .authenticationEntryPoint(new ProblemAuthEntryPoint())
-                        .accessDeniedHandler(new ProblemAccessDeniedHandler())
+                        .authenticationEntryPoint(authEntryPoint)
+                        .accessDeniedHandler(accessDeniedHandler)
                 )
                 .authorizeHttpRequests(auth -> auth
-                        // Public
                         .requestMatchers("/auth/login").permitAll()
                         .requestMatchers("/auth/logout").permitAll()
                         .requestMatchers("/auth/accept-invite").permitAll()
-                        .requestMatchers(
-                                "/swagger-ui/**",
-                                "/swagger-ui.html",
-                                "/v3/api-docs/**"
-                        ).permitAll()
-                        // External/public share endpoints (falls wirklich öffentlich)
+                        .requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**").permitAll()
                         .requestMatchers("/external/share/download").permitAll()
-                        .requestMatchers(("/external/share/download.pdf")).permitAll()
+                        .requestMatchers("/external/share/download.pdf").permitAll()
                         .requestMatchers("/external/**").authenticated()
-
-                        // Context endpoints: authenticated (Base oder ctx Token reicht)
                         .requestMatchers("/auth/context").authenticated()
                         .requestMatchers("/auth/context/switch").authenticated()
-
-                        // Legacy aliases (optional, falls du sie im Controller lässt)
                         .requestMatchers("/auth/contexts").authenticated()
                         .requestMatchers("/auth/switch-context").authenticated()
-
-                        // Everything else requires authentication (und wird zusätzlich vom ContextRequiredFilter geschützt)
+                        .requestMatchers("/akten/**").authenticated()
                         .anyRequest().authenticated()
                 )
-                // Reihenfolge: JWT zuerst, dann Context
                 .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
                 .addFilterAfter(contextRequiredFilter, JwtAuthFilter.class)
                 .build();

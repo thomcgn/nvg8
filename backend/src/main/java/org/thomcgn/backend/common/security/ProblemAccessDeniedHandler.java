@@ -1,40 +1,37 @@
 package org.thomcgn.backend.common.security;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.web.access.AccessDeniedHandler;
-import org.thomcgn.backend.common.errors.DomainException;
+import org.springframework.stereotype.Component;
 import org.thomcgn.backend.common.errors.ErrorCode;
 
 import java.io.IOException;
 import java.time.Instant;
 
+@Component
 public class ProblemAccessDeniedHandler implements AccessDeniedHandler {
 
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    private final ObjectMapper objectMapper;
+
+    public ProblemAccessDeniedHandler(ObjectMapper objectMapper) {
+        this.objectMapper = objectMapper;
+    }
 
     @Override
-    public void handle(HttpServletRequest request, HttpServletResponse response, AccessDeniedException ex)
-            throws IOException {
-
-        // Wenn wir DomainException (Forbidden) geworfen haben, nutzen wir deren Code/Message.
-        ErrorCode code = ErrorCode.ACCESS_DENIED;
-        String detail = "You do not have permission to access this resource.";
-
-        Throwable cause = ex.getCause();
-        if (cause instanceof DomainException de) {
-            code = de.getCode();
-            detail = de.getMessage();
-        }
+    public void handle(HttpServletRequest request,
+                       HttpServletResponse response,
+                       AccessDeniedException accessDeniedException) throws IOException, ServletException {
 
         ProblemDetail pd = ProblemDetail.forStatus(HttpStatus.FORBIDDEN);
-        pd.setTitle(code.name());
-        pd.setDetail(detail);
-        pd.setProperty("code", code.name());
+        pd.setTitle(ErrorCode.ACCESS_DENIED.name());
+        pd.setDetail("Access denied.");
+        pd.setProperty("code", ErrorCode.ACCESS_DENIED.name());
         pd.setProperty("timestamp", Instant.now());
         pd.setProperty("path", request.getRequestURI());
 

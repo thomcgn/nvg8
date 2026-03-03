@@ -48,9 +48,7 @@ import { useAuth } from "@/lib/useAuth";
 import type {
     AddKindBezugspersonRequest,
     CreateBezugspersonRequest,
-    CreateFalleroeffnungRequest,
     EndKindBezugspersonRequest,
-    FalleroeffnungResponse,
     KindBezugspersonResponse,
     KindResponse,
     SorgerechtTyp,
@@ -582,34 +580,10 @@ export default function KindDetailPage() {
     async function onStartAkte() {
         if (!kindId) return;
 
-        const einrichtungId = me?.orgUnitId;
-        if (!einrichtungId) {
-            setErr("Kein aktiver Einrichtungskontext gesetzt (me.orgUnitId fehlt).");
-            return;
-        }
-
-        setErr(null);
-
-        const req: CreateFalleroeffnungRequest = {
-            kindId,
-            einrichtungOrgUnitId: einrichtungId,
-            teamOrgUnitId: null,
-            titel: `Akte für ${kind?.vorname ?? ""} ${kind?.nachname ?? ""}`.trim(),
-            kurzbeschreibung: "Akte gestartet aus Kind-Details.",
-            anlassCodes: [],
-        };
-
-        try {
-            const created = await apiFetch<FalleroeffnungResponse>("/falloeffnungen", {
-                method: "POST",
-                body: req,
-            });
-
-            // ✅ direkt in den Wizard (Route existiert unter /dashboard/falloeffnungen/[fallId]/erstmeldung)
-            router.push(`/dashboard/falloeffnungen/${created.id}/erstmeldung`);
-        } catch (e: unknown) {
-            setErr(errorMessage(e, "Akte konnte nicht gestartet werden."));
-        }
+        // ✅ Sauber: Akte ist 1:1 KindDossier.
+        // Diese Route löst Akte für Kind auf (und legt sie an, falls nötig)
+        // und erstellt optional direkt einen neuen Fall + öffnet den Wizard.
+        router.push(`/dashboard/kinder/${kindId}/akte?autostart=fall&next=erstmeldung`);
     }
 
     const kindAddress = getKindAddress(kind);

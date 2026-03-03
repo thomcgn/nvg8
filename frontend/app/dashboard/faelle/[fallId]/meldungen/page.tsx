@@ -311,7 +311,7 @@ export default function FallMeldungenPage() {
                                                     id="kurz"
                                                     value={draftKurz}
                                                     onChange={(e) => setDraftKurz(e.target.value)}
-                                                    className="min-h-[120px]"
+                                                    className="min-h-30"
                                                     disabled={loading || current.status === "ABGESCHLOSSEN"}
                                                 />
                                                 <div className="flex gap-2">
@@ -328,7 +328,7 @@ export default function FallMeldungenPage() {
 
                                             <div className="rounded-xl border border-brand-border bg-white p-3">
                                                 <div className="text-xs font-semibold text-brand-text2">Raw (Debug)</div>
-                                                <pre className="mt-2 max-h-[360px] overflow-auto text-xs text-brand-navy">
+                                                <pre className="mt-2 max-h-90 overflow-auto text-xs text-brand-navy">
 {JSON.stringify(current, null, 2)}
                         </pre>
                                             </div>

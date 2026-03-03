@@ -48,51 +48,27 @@ function toneForDringlichkeit(d: string | null): "success" | "warning" | "danger
   return "neutral";
 }
 
-const MOCK: FalleroeffnungListItem[] = [
-  { id: 101, aktenzeichen: "KID-2026-001", status: "OFFEN", kindName: "M. (7)", createdAt: "2026-02-12" } as any,
-  { id: 102, aktenzeichen: "KID-2026-002", status: "WARNUNG", kindName: "L. (12)", createdAt: "2026-02-13" } as any,
-  { id: 103, aktenzeichen: "KID-2026-003", status: "RISIKO_HOCH", kindName: "S. (4)", createdAt: "2026-02-15" } as any,
-  { id: 104, aktenzeichen: "KID-2026-004", status: "ABGESCHLOSSEN", kindName: "A. (9)", createdAt: "2026-02-18" } as any,
-];
-
-function filterItems(list: FalleroeffnungListItem[], q: string) {
-  const qq = q.trim().toLowerCase();
-  if (!qq) return list;
-  return list.filter((i) => {
-    const any = i as any;
-    const akut = typeof any.akutGefahrImVerzug === "boolean" ? String(any.akutGefahrImVerzug) : "";
-    const dring = typeof any.dringlichkeit === "string" ? any.dringlichkeit : "";
-    const hay = `${i.aktenzeichen ?? ""} ${i.kindName ?? ""} ${i.status ?? ""} ${akut} ${dring}`.toLowerCase();
-    return hay.includes(qq);
-  });
-}
-
 export default function DashboardHome() {
   const router = useRouter();
 
   const [q, setQ] = useState("");
   const [items, setItems] = useState<FalleroeffnungListItem[]>([]);
   const [loading, setLoading] = useState(false);
-  const [useMock, setUseMock] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   async function load(currentQ: string) {
     setLoading(true);
-
-    const forceMock = process.env.NEXT_PUBLIC_FORCE_MOCK === "1";
-    if (forceMock || useMock) {
-      setItems(filterItems(MOCK, currentQ));
-      setLoading(false);
-      return;
-    }
+    setError(null);
 
     try {
-      const res = await apiFetch<FalleroeffnungListResponse>(`/falloeffnungen?q=${encodeURIComponent(currentQ)}&size=8`, {
-        method: "GET",
-      });
+      const res = await apiFetch<FalleroeffnungListResponse>(
+          `/falloeffnungen?q=${encodeURIComponent(currentQ)}&size=8`,
+          { method: "GET" }
+      );
       setItems(res.items || []);
-    } catch {
-      setUseMock(true);
-      setItems(filterItems(MOCK, currentQ));
+    } catch (e: any) {
+      setItems([]);
+      setError(e?.message || "Backend nicht erreichbar/unauthorisiert.");
     } finally {
       setLoading(false);
     }
@@ -107,7 +83,7 @@ export default function DashboardHome() {
     const t = setTimeout(() => load(q), 250);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [q, useMock]);
+  }, [q]);
 
   const stats = useMemo(() => {
     const total = items.length;
@@ -127,9 +103,9 @@ export default function DashboardHome() {
           <Topbar title="Übersicht" onSearch={(val) => setQ(val)} />
 
           <div className="mx-auto w-full max-w-6xl space-y-4 px-4 pb-8 pt-4 sm:space-y-6 sm:px-6 md:px-8">
-            {useMock ? (
+            {error ? (
                 <div className="rounded-2xl border border-brand-warning/25 bg-brand-warning/10 p-4 text-sm text-brand-text">
-                  Backend nicht erreichbar/unauthorisiert – zeige Mock-Daten (Suche läuft lokal).
+                  {error}
                 </div>
             ) : null}
 
@@ -183,9 +159,6 @@ export default function DashboardHome() {
               <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                 <div className="min-w-0">
                   <div className="text-sm font-semibold text-brand-text">Aktuelle Fälle</div>
-                  <div className="mt-1 text-xs text-brand-text2">
-                    Kurzliste aus <code className="rounded bg-brand-bg px-1">/falloeffnungen</code>
-                  </div>
                 </div>
                 <div className="text-xs text-brand-text2">{loading ? "lädt…" : `${items.length} Einträge`}</div>
               </CardHeader>
@@ -245,7 +218,11 @@ export default function DashboardHome() {
                             </td>
 
                             <td className="py-3 pr-4 whitespace-nowrap">
-                              {dring ? <Badge tone={toneForDringlichkeit(dring)}>{dring}</Badge> : <span className="text-brand-text2">—</span>}
+                              {dring ? (
+                                  <Badge tone={toneForDringlichkeit(dring)}>{dring}</Badge>
+                              ) : (
+                                  <span className="text-brand-text2">—</span>
+                              )}
                             </td>
 
                             <td className="py-3 pr-0 text-brand-text2 whitespace-nowrap">{i.createdAt || "—"}</td>
@@ -253,10 +230,12 @@ export default function DashboardHome() {
                       );
                     })}
 
-                    {!items.length ? (
+                    {!loading && !items.length ? (
                         <tr>
                           <td className="py-6 text-center text-brand-text2" colSpan={6}>
-                            Keine Daten.
+                            {q.trim()
+                                ? "Keine Treffer für deine Suche."
+                                : "Noch keine Fälle vorhanden. Sobald ein Fall eröffnet wird, erscheint er hier."}
                           </td>
                         </tr>
                     ) : null}
@@ -265,14 +244,6 @@ export default function DashboardHome() {
                 </div>
 
                 <div className="mt-3 text-xs text-brand-text2 sm:hidden">Tipp: Tabelle kann horizontal gescrollt werden.</div>
-
-                {useMock ? (
-                    <div className="mt-3 text-xs text-brand-text2">
-                      Hinweis: In Mock-Daten sind <code className="rounded bg-brand-bg px-1">Akut</code> /{" "}
-                      <code className="rounded bg-brand-bg px-1">Dringlichkeit</code> nicht hinterlegt – im Backend-Response erscheinen sie, sobald du sie
-                      in <code className="rounded bg-brand-bg px-1">/falloeffnungen</code> mitsendest.
-                    </div>
-                ) : null}
               </CardContent>
             </Card>
 

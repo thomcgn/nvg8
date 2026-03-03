@@ -10,9 +10,14 @@ import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 import { MeldungEditor } from "@/components/meldung/MeldungEditor";
-import { meldungApi, type MeldungDraftRequest, type MeldungResponse } from "@/lib/api/meldung";
+import {
+    meldungApi,
+    type MeldungDraftRequest,
+    type MeldungResponse,
+} from "@/lib/api/meldung";
 
 function parseId(param: unknown): number | null {
+    if (typeof param === "number") return Number.isFinite(param) && param > 0 ? param : null;
     if (typeof param === "string") {
         const n = Number(param);
         return Number.isFinite(n) && n > 0 ? n : null;
@@ -24,14 +29,22 @@ function parseId(param: unknown): number | null {
     return null;
 }
 
-function errorMessage(e: unknown, fallback: string) {
-    if (e && typeof e === "object" && "message" in e && typeof (e as any).message === "string") {
-        return (e as any).message as string;
-    }
-    return fallback;
+function isLockedStatus(status: string | null | undefined) {
+    const s = (status ?? "").toLowerCase();
+    return (
+        s.includes("abgesch") ||
+        s.includes("geschlossen") ||
+        s.includes("submitted") ||
+        s.includes("freigabe") ||
+        s.includes("freigegeben")
+    );
 }
 
-export default function ErstmeldungWizardPage() {
+function getStatus(e: any): number | undefined {
+    return e?.status ?? e?.response?.status ?? e?.data?.status ?? e?.error?.status;
+}
+
+export default function ErstmeldungPage() {
     const params = useParams();
     const router = useRouter();
     const fallId = parseId((params as any)?.fallId);
@@ -40,31 +53,48 @@ export default function ErstmeldungWizardPage() {
     const [err, setErr] = React.useState<string | null>(null);
     const [meldung, setMeldung] = React.useState<MeldungResponse | null>(null);
 
-    const refresh = React.useCallback(async () => {
-        if (!fallId) return;
-        setErr(null);
-        setLoading(true);
-        try {
-            // 1) versuche current
-            const cur = await meldungApi.current(fallId);
-            setMeldung(cur);
-        } catch (e: any) {
-            // 2) wenn es noch keine Meldung gibt, lege eine neue an
-            try {
-                const created = await meldungApi.createNew(fallId, null);
-                setMeldung(created);
-            } catch (e2: any) {
-                setErr(errorMessage(e2, "Konnte Erstmeldung nicht laden/erstellen."));
-                setMeldung(null);
-            }
-        } finally {
-            setLoading(false);
-        }
-    }, [fallId]);
-
     React.useEffect(() => {
-        refresh();
-    }, [refresh]);
+        if (!fallId) return;
+
+        let cancelled = false;
+
+        async function load() {
+            setErr(null);
+            setLoading(true);
+
+            try {
+                // 1️⃣ Versuche vorhandenes current zu laden
+                const current = await meldungApi.current(fallId);
+                if (!cancelled) setMeldung(current);
+            } catch (e: any) {
+                const status = getStatus(e);
+
+                if (status === 404) {
+                    // 2️⃣ Keine Meldung vorhanden → automatisch Draft anlegen
+                    try {
+                        const created = await meldungApi.ensureCurrent(fallId);
+                        if (!cancelled) setMeldung(created);
+                    } catch {
+                        if (!cancelled) {
+                            setErr("Erstmeldung konnte nicht gestartet werden.");
+                        }
+                    }
+                } else {
+                    if (!cancelled) {
+                        setErr("Konnte Erstmeldung nicht laden.");
+                    }
+                }
+            } finally {
+                if (!cancelled) setLoading(false);
+            }
+        }
+
+        load();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [fallId]);
 
     const onSaveDraft = React.useCallback(
         async (req: MeldungDraftRequest) => {
@@ -80,20 +110,21 @@ export default function ErstmeldungWizardPage() {
         async (mirrorToNotizen: boolean) => {
             if (!fallId || !meldung) return;
             await meldungApi.submit(fallId, meldung.id, { mirrorToNotizen });
-            // nach Submit zurück zur Meldungs-Übersicht (Versionen)
             router.replace(`/dashboard/falloeffnungen/${fallId}/meldungen`);
         },
         [fallId, meldung, router]
     );
 
-    const disabled = (meldung?.status || "").toUpperCase().includes("ABGESCHLOSSEN");
+    const disabled = isLockedStatus(meldung?.status);
 
     if (!fallId) {
         return (
             <div className="p-6">
                 <Alert>
                     <AlertTitle>Ungültige Fall-ID</AlertTitle>
-                    <AlertDescription>Die URL enthält keine gültige fallId.</AlertDescription>
+                    <AlertDescription>
+                        Die URL enthält keine gültige fallId.
+                    </AlertDescription>
                 </Alert>
             </div>
         );
@@ -106,9 +137,14 @@ export default function ErstmeldungWizardPage() {
 
                 <div className="mx-auto w-full max-w-6xl space-y-4 px-4 pb-10 pt-4 sm:px-6">
                     <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                        <Button variant="secondary" onClick={() => router.back()} className="w-full sm:w-auto">
+                        <Button
+                            variant="secondary"
+                            onClick={() => router.back()}
+                            className="w-full sm:w-auto"
+                        >
                             Zurück
                         </Button>
+
                         <div className="text-xs text-muted-foreground">
                             Fall #{fallId}
                             {meldung ? ` · Meldung #${meldung.id} · v${meldung.versionNo}` : ""}
@@ -117,8 +153,8 @@ export default function ErstmeldungWizardPage() {
 
                     {err ? (
                         <Alert>
-                            <AlertTitle>Fehler</AlertTitle>
-                            <AlertDescription className="break-words">{err}</AlertDescription>
+                            <AlertTitle>Hinweis</AlertTitle>
+                            <AlertDescription>{err}</AlertDescription>
                         </Alert>
                     ) : null}
 
@@ -126,25 +162,22 @@ export default function ErstmeldungWizardPage() {
                         <Card>
                             <CardHeader>
                                 <div className="text-sm font-semibold">Lade…</div>
-                                <div className="text-xs text-muted-foreground">Erstmeldung wird geladen.</div>
-                            </CardHeader>
-                            <CardContent className="text-sm text-muted-foreground">Bitte einen Moment…</CardContent>
-                        </Card>
-                    ) : !meldung ? (
-                        <Card>
-                            <CardHeader>
-                                <div className="text-sm font-semibold">Keine Meldung</div>
                                 <div className="text-xs text-muted-foreground">
-                                    Es konnte keine Meldung geladen oder erstellt werden.
+                                    Erstmeldung wird vorbereitet.
                                 </div>
                             </CardHeader>
-                            <CardContent>
-                                <Button onClick={refresh}>Erneut versuchen</Button>
+                            <CardContent className="text-sm text-muted-foreground">
+                                Bitte einen Moment…
                             </CardContent>
                         </Card>
-                    ) : (
-                        <MeldungEditor value={meldung} disabled={disabled} onSaveDraft={onSaveDraft} onSubmit={onSubmit} />
-                    )}
+                    ) : meldung ? (
+                        <MeldungEditor
+                            value={meldung}
+                            disabled={disabled}
+                            onSaveDraft={onSaveDraft}
+                            onSubmit={onSubmit}
+                        />
+                    ) : null}
                 </div>
             </div>
         </AuthGate>

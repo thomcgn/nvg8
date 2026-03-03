@@ -14,9 +14,106 @@ import { Switch } from "@/components/ui/switch";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
+import { FileText, X } from "lucide-react";
+
 function clampSeverity(n: number): number {
     if (!Number.isFinite(n)) return 0;
     return Math.max(0, Math.min(3, Math.round(n)));
+}
+
+function formatBytes(bytes: number): string {
+    if (!Number.isFinite(bytes) || bytes <= 0) return "0 B";
+    const units = ["B", "KB", "MB", "GB", "TB"];
+    let idx = 0;
+    let v = bytes;
+    while (v >= 1024 && idx < units.length - 1) {
+        v = v / 1024;
+        idx++;
+    }
+    const rounded = idx === 0 ? Math.round(v) : Math.round(v * 10) / 10;
+    return `${rounded} ${units[idx]}`;
+}
+
+function formatFileType(file: File): string {
+    // "application/pdf" => "PDF", etc.
+    const t = (file.type || "").toLowerCase();
+    if (!t) return "Datei";
+    if (t === "application/pdf") return "PDF";
+    if (t.startsWith("image/")) return "Bild";
+    if (t.startsWith("text/")) return "Text";
+    return t;
+}
+
+type UploadInfoListProps = {
+    title?: string;
+    files: File[];
+    onUploadClick: () => void;
+    onRemoveAt: (idx: number) => void;
+    disabled?: boolean;
+};
+
+function UploadInfoList({
+                            title = "Unterlagen",
+                            files,
+                            onUploadClick,
+                            onRemoveAt,
+                            disabled = false,
+                        }: UploadInfoListProps) {
+    return (
+        <div className="space-y-2">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="text-xs text-muted-foreground">{title}</div>
+                <Button type="button" variant="outline" size="sm" onClick={onUploadClick} disabled={disabled}>
+                    Unterlagen hochladen
+                </Button>
+            </div>
+
+            {files.length === 0 ? (
+                <div className="rounded-md border border-dashed border-border px-3 py-2 text-xs text-muted-foreground">
+                    Keine Unterlagen ausgewählt.
+                </div>
+            ) : (
+                <div className="space-y-2">
+                    <div className="text-xs text-muted-foreground">{files.length} Datei(en) ausgewählt</div>
+
+                    <div className="space-y-1">
+                        {files.map((file, idx) => (
+                            <div
+                                key={`${file.name}-${file.size}-${file.lastModified}-${idx}`}
+                                className="flex items-center justify-between gap-2 rounded-md border border-border bg-background px-2 py-2"
+                            >
+                                <div className="flex min-w-0 items-start gap-2">
+                                    <FileText className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                                    <div className="min-w-0">
+                                        <div className="truncate text-sm">{file.name}</div>
+                                        <div className="mt-0.5 text-xs text-muted-foreground">
+                                            {formatFileType(file)} · {formatBytes(file.size)}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => onRemoveAt(idx)}
+                                    disabled={disabled}
+                                    className="h-8 w-8 text-destructive hover:text-destructive"
+                                    title="Entfernen"
+                                >
+                                    <X className="h-4 w-4" />
+                                </Button>
+                            </div>
+                        ))}
+                    </div>
+
+                    <div className="text-[11px] leading-snug text-muted-foreground">
+                        Hinweis: Upload ist aktuell nur eine UI-Info (keine Speicherung).
+                    </div>
+                </div>
+            )}
+        </div>
+    );
 }
 
 type AnlassCategory = {
@@ -157,31 +254,95 @@ const INDICATORS: { id: string; label: string }[] = [
     { id: "DISCLOSURE", label: "Offenbarung/Aussage Kind" },
 ];
 
-const MELDEWEG = [
-    "EIGENBEOBACHTUNG",
-    "KIND_SELBER",
-    "ELTERN",
-    "ANGEHOERIGE",
-    "MITSCHUELER_IN",
-    "ANONYM",
-    "POLIZEI",
-    "ARZT_KLINIK",
-    "JUGENDAMT",
-    "BERATUNGSSTELLE",
-    "SONSTIGE",
-] as const;
+/**
+ * Backend-Enums (falloeffnungen/meldung/model):
+ * - Meldeweg: TELEFON, EMAIL, PERSOENLICH, BRIEF, SONSTIGES
+ * - Dringlichkeit: AKUT_HEUTE, ZEITNAH_24_48H, BEOBACHTEN, UNKLAR
+ * - Datenbasis: BEOBACHTUNG, ERZAEHLUNG, DOKUMENT, UNKLAR
+ * - AmpelStatus: GRUEN, GELB, ROT
+ * - JugendamtInformiert: JA, NEIN, UNKLAR
+ * - JugendamtKontaktart: TELEFON, EMAIL, SCHRIFTLICH, PERSOENLICH
+ * - ObservationQuelle: EIGENE_WAHRNEHMUNG, KIND, DRITTE, UNBEKANNT
+ * - ObservationOrt: ZUHAUSE, SCHULE_KITA, OEFFENTLICH, SONSTIGES
+ * - ObservationZeitraum: EINMALIG, WIEDERHOLT, UNBEKANNT
+ * - Sichtbarkeit: INTERN, EXTERN
+ */
+
+const MELDEWEG = ["TELEFON", "EMAIL", "PERSOENLICH", "BRIEF", "SONSTIGES"] as const;
+const MELDEWEG_LABEL: Record<(typeof MELDEWEG)[number], string> = {
+    TELEFON: "Telefon",
+    EMAIL: "E-Mail",
+    PERSOENLICH: "Persönlich",
+    BRIEF: "Brief",
+    SONSTIGES: "Sonstiges",
+};
 
 const DRING = ["AKUT_HEUTE", "ZEITNAH_24_48H", "BEOBACHTEN", "UNKLAR"] as const;
-const DATENB = ["EIGENE_AUFTRAGSERFUELLUNG", "EINWILLIGUNG_LIEGT_VOR", "GESETZL_GRUNDLAGE", "UNGEKLAERT"] as const;
-const AMPEL = ["GRUEN", "GELB", "ROT", "UNKLAR"] as const;
+const DRING_LABEL: Record<(typeof DRING)[number], string> = {
+    AKUT_HEUTE: "Akut (heute)",
+    ZEITNAH_24_48H: "Zeitnah 24-48h",
+    BEOBACHTEN: "Beobachten",
+    UNKLAR: "Unklar",
+};
 
-const JUG_INF = ["JA", "NEIN", "NOCH_NICHT_ENTSCHIEDEN"] as const;
-const JUG_KONTAKTART = ["TELEFON", "SCHRIFTLICH", "PERSOENLICH", "ONLINE"] as const;
+const DATENB = ["BEOBACHTUNG", "ERZAEHLUNG", "DOKUMENT", "UNKLAR"] as const;
+const DATENB_LABEL: Record<(typeof DATENB)[number], string> = {
+    BEOBACHTUNG: "Beobachtung",
+    ERZAEHLUNG: "Erzählung",
+    DOKUMENT: "Dokument",
+    UNKLAR: "Unklar",
+};
 
-const OBS_QUELLE = ["EIGENBEOBACHTUNG", "AUSSAGE_KIND", "AUSSAGE_DRITTE", "DOKUMENT", "SONSTIGE"] as const;
-const OBS_ORT = ["SCHULE", "KITA", "ZUHAUSE", "WEG", "ONLINE", "SONSTIGE"] as const;
-const OBS_ZEITRAUM = ["HEUTE", "LETZTE_WOCHE", "LETZTER_MONAT", "LAENGER", "UNBEKANNT"] as const;
-const SICHT = ["INTERN", "WEITERGABEHINWEIS"] as const;
+const AMPEL = ["GRUEN", "GELB", "ROT"] as const;
+const AMPEL_LABEL: Record<(typeof AMPEL)[number], string> = {
+    GRUEN: "Grün",
+    GELB: "Gelb",
+    ROT: "Rot",
+};
+
+const JUG_INF = ["JA", "NEIN", "UNKLAR"] as const;
+const JUG_INF_LABEL: Record<(typeof JUG_INF)[number], string> = {
+    JA: "Ja",
+    NEIN: "Nein",
+    UNKLAR: "Unklar",
+};
+
+const JUG_KONTAKTART = ["TELEFON", "EMAIL", "SCHRIFTLICH", "PERSOENLICH"] as const;
+const JUG_KONTAKTART_LABEL: Record<(typeof JUG_KONTAKTART)[number], string> = {
+    TELEFON: "Telefon",
+    EMAIL: "E-Mail",
+    SCHRIFTLICH: "Schriftlich",
+    PERSOENLICH: "Persönlich",
+};
+
+const OBS_QUELLE = ["EIGENE_WAHRNEHMUNG", "KIND", "DRITTE", "UNBEKANNT"] as const;
+const OBS_QUELLE_LABEL: Record<(typeof OBS_QUELLE)[number], string> = {
+    EIGENE_WAHRNEHMUNG: "Eigene Wahrnehmung",
+    KIND: "Kind",
+    DRITTE: "Dritte",
+    UNBEKANNT: "Unbekannt",
+};
+
+const OBS_ORT = ["ZUHAUSE", "SCHULE_KITA", "OEFFENTLICH", "SONSTIGES"] as const;
+const OBS_ORT_LABEL: Record<(typeof OBS_ORT)[number], string> = {
+    ZUHAUSE: "Zuhause",
+    SCHULE_KITA: "Schule/Kita",
+    OEFFENTLICH: "Öffentlich",
+    SONSTIGES: "Sonstiges",
+};
+
+const OBS_ZEITRAUM = ["EINMALIG", "WIEDERHOLT", "UNBEKANNT"] as const;
+const OBS_ZEITRAUM_LABEL: Record<(typeof OBS_ZEITRAUM)[number], string> = {
+    EINMALIG: "Einmalig",
+    WIEDERHOLT: "Wiederholt",
+    UNBEKANNT: "Unbekannt",
+};
+
+const SICHT = ["INTERN", "EXTERN"] as const;
+const SICHT_LABEL: Record<(typeof SICHT)[number], string> = {
+    INTERN: "Intern",
+    EXTERN: "Extern",
+};
 
 function pick<T extends string>(value: string, allowed: readonly T[], fallback: T): T {
     return (allowed as readonly string[]).includes(value) ? (value as T) : fallback;
@@ -195,6 +356,7 @@ function toDraftFromResponse(v: MeldungResponse): MeldungDraftRequest {
         meldendeStelleKontakt: v.meldendeStelleKontakt ?? null,
         dringlichkeit: v.dringlichkeit,
         datenbasis: v.datenbasis,
+        // Einwilligung obsolet: wird hier nicht mehr als UI gerendert, Feld kann aber im Draft weiter existieren
         einwilligungVorhanden: v.einwilligungVorhanden ?? null,
         schweigepflichtentbindungVorhanden: v.schweigepflichtentbindungVorhanden ?? null,
 
@@ -221,7 +383,7 @@ function toDraftFromResponse(v: MeldungResponse): MeldungDraftRequest {
             zeitraum: o.zeitraum ?? null,
             ort: o.ort ?? null,
             ortSonstiges: o.ortSonstiges ?? null,
-            quelle: o.quelle ?? "SONSTIGE",
+            quelle: o.quelle ?? "UNBEKANNT",
             text: o.text ?? "",
             woertlichesZitat: o.woertlichesZitat ?? null,
             koerperbefund: o.koerperbefund ?? null,
@@ -262,13 +424,30 @@ export function MeldungEditor(props: {
     const [submitMirror, setSubmitMirror] = React.useState(true);
     const [validationErr, setValidationErr] = React.useState<string | null>(null);
 
-    // ✅ wichtig: wenn value (Version) wechselt, Form neu initialisieren
+    // --- UI-only Upload "Info": Schweigepflichtentbindung ---
+    const waiverFileRef = React.useRef<HTMLInputElement | null>(null);
+    const [waiverFiles, setWaiverFiles] = React.useState<File[]>([]);
+
+    const openFileDialog = (ref: React.RefObject<HTMLInputElement | null>) => {
+        if (!ref.current) return;
+        ref.current.value = ""; // erlaubt erneut dieselbe Datei zu wählen
+        ref.current.click();
+    };
+
+    const onPickFilesAppend =
+        (setter: React.Dispatch<React.SetStateAction<File[]>>) => (e: React.ChangeEvent<HTMLInputElement>) => {
+            const incoming = Array.from(e.target.files ?? []);
+            if (incoming.length === 0) return;
+            setter((prev) => [...prev, ...incoming]);
+        };
+    // -------------------------------------------------------
+
     React.useEffect(() => {
         setForm(toDraftFromResponse(value));
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [value.id]);
 
-    const set = <K extends keyof MeldungDraftRequest>(k: K, v: MeldungDraftRequest[K]) =>
-        setForm((s) => ({ ...s, [k]: v }));
+    const set = <K extends keyof MeldungDraftRequest>(k: K, v: MeldungDraftRequest[K]) => setForm((s) => ({ ...s, [k]: v }));
 
     const toggleAnlass = (code: string) => {
         const cur = new Set(form.anlassCodes || []);
@@ -280,9 +459,9 @@ export function MeldungEditor(props: {
     const addObservation = () => {
         const obs = {
             zeitpunkt: new Date().toISOString(),
-            zeitraum: "HEUTE",
-            ort: "SCHULE",
-            quelle: "EIGENBEOBACHTUNG",
+            zeitraum: "EINMALIG",
+            ort: "SCHULE_KITA",
+            quelle: "EIGENE_WAHRNEHMUNG",
             sichtbarkeit: "INTERN",
             text: "",
             tags: [],
@@ -352,8 +531,6 @@ export function MeldungEditor(props: {
         try {
             await onSaveDraft(form);
             setSaveMsg("Gespeichert.");
-        } catch {
-            setSaveMsg(null);
         } finally {
             setSaving(false);
             setTimeout(() => setSaveMsg(null), 2000);
@@ -397,7 +574,7 @@ export function MeldungEditor(props: {
                 <TabsContent value="basis" className="mt-4 space-y-4">
                     <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
                         <div className="space-y-2">
-                            <Label>Erfasst von Rolle</Label>
+                            <Label>Erfasst von:</Label>
                             <Input
                                 value={form.erfasstVonRolle ?? ""}
                                 onChange={(e) => set("erfasstVonRolle", e.target.value)}
@@ -410,17 +587,17 @@ export function MeldungEditor(props: {
                             <Label>Meldeweg</Label>
                             <select
                                 className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
-                                value={(form.meldeweg ?? "EIGENBEOBACHTUNG") as string}
-                                onChange={(e) => set("meldeweg", pick(e.target.value, MELDEWEG, "EIGENBEOBACHTUNG"))}
+                                value={(form.meldeweg ?? "TELEFON") as string}
+                                onChange={(e) => set("meldeweg", pick(e.target.value, MELDEWEG, "TELEFON"))}
                                 disabled={disabled || statusIsDone}
                             >
                                 {MELDEWEG.map((m) => (
                                     <option key={m} value={m}>
-                                        {m}
+                                        {MELDEWEG_LABEL[m]}
                                     </option>
                                 ))}
                             </select>
-                            {form.meldeweg === "SONSTIGE" ? (
+                            {form.meldeweg === "SONSTIGES" ? (
                                 <Input
                                     value={form.meldewegSonstiges ?? ""}
                                     onChange={(e) => set("meldewegSonstiges", e.target.value)}
@@ -440,7 +617,7 @@ export function MeldungEditor(props: {
                             >
                                 {DRING.map((d) => (
                                     <option key={d} value={d}>
-                                        {d}
+                                        {DRING_LABEL[d]}
                                     </option>
                                 ))}
                             </select>
@@ -450,20 +627,20 @@ export function MeldungEditor(props: {
                             <Label>Datenbasis</Label>
                             <select
                                 className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
-                                value={(form.datenbasis ?? "UNGEKLAERT") as string}
-                                onChange={(e) => set("datenbasis", pick(e.target.value, DATENB, "UNGEKLAERT"))}
+                                value={(form.datenbasis ?? "UNKLAR") as string}
+                                onChange={(e) => set("datenbasis", pick(e.target.value, DATENB, "UNKLAR"))}
                                 disabled={disabled || statusIsDone}
                             >
                                 {DATENB.map((d) => (
                                     <option key={d} value={d}>
-                                        {d}
+                                        {DATENB_LABEL[d]}
                                     </option>
                                 ))}
                             </select>
                         </div>
 
                         <div className="space-y-2">
-                            <Label>Meldende Stelle / Kontakt (optional)</Label>
+                            <Label>Informationsquelle / Kontakt (optional)</Label>
                             <Input
                                 value={form.meldendeStelleKontakt ?? ""}
                                 onChange={(e) => set("meldendeStelleKontakt", e.target.value)}
@@ -472,28 +649,36 @@ export function MeldungEditor(props: {
                             />
                         </div>
 
-                        <div className="flex items-center justify-between rounded-xl border border-border p-3">
-                            <div>
-                                <div className="font-medium">Einwilligung vorhanden</div>
-                                <div className="text-xs text-muted-foreground">Nur Metadaten.</div>
-                            </div>
-                            <Switch
-                                checked={!!form.einwilligungVorhanden}
-                                onCheckedChange={(v) => set("einwilligungVorhanden", v)}
-                                disabled={disabled || statusIsDone}
-                            />
-                        </div>
-
-                        <div className="flex items-center justify-between rounded-xl border border-border p-3">
-                            <div>
+                        {/* SCHWEIGEPFLICHTENTBINDUNG: Upload-Info + Switch */}
+                        <div className="flex items-start justify-between gap-4 rounded-xl border border-border p-3">
+                            <div className="flex-1 space-y-2">
                                 <div className="font-medium">Schweigepflichtentbindung</div>
-                                <div className="text-xs text-muted-foreground">Nur Metadaten.</div>
+
+                                <input
+                                    ref={waiverFileRef}
+                                    type="file"
+                                    className="hidden"
+                                    multiple
+                                    onChange={onPickFilesAppend(setWaiverFiles)}
+                                    disabled={disabled || statusIsDone}
+                                />
+
+                                <UploadInfoList
+                                    title="Angehängte Unterlagen (UI)"
+                                    files={waiverFiles}
+                                    onUploadClick={() => openFileDialog(waiverFileRef)}
+                                    onRemoveAt={(idx) => setWaiverFiles((prev) => prev.filter((_, i) => i !== idx))}
+                                    disabled={disabled || statusIsDone}
+                                />
                             </div>
-                            <Switch
-                                checked={!!form.schweigepflichtentbindungVorhanden}
-                                onCheckedChange={(v) => set("schweigepflichtentbindungVorhanden", v)}
-                                disabled={disabled || statusIsDone}
-                            />
+
+                            <div className="pt-1">
+                                <Switch
+                                    checked={!!form.schweigepflichtentbindungVorhanden}
+                                    onCheckedChange={(v) => set("schweigepflichtentbindungVorhanden", v)}
+                                    disabled={disabled || statusIsDone}
+                                />
+                            </div>
                         </div>
                     </div>
 
@@ -589,12 +774,14 @@ export function MeldungEditor(props: {
                                             <select
                                                 className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
                                                 value={o.zeitraum ?? "UNBEKANNT"}
-                                                onChange={(e) => updateObs(idx, { zeitraum: pick(e.target.value, OBS_ZEITRAUM, "UNBEKANNT") })}
+                                                onChange={(e) =>
+                                                    updateObs(idx, { zeitraum: pick(e.target.value, OBS_ZEITRAUM, "UNBEKANNT") })
+                                                }
                                                 disabled={disabled || statusIsDone}
                                             >
                                                 {OBS_ZEITRAUM.map((z) => (
                                                     <option key={z} value={z}>
-                                                        {z}
+                                                        {OBS_ZEITRAUM_LABEL[z]}
                                                     </option>
                                                 ))}
                                             </select>
@@ -604,17 +791,17 @@ export function MeldungEditor(props: {
                                             <Label>Ort</Label>
                                             <select
                                                 className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
-                                                value={o.ort ?? "SONSTIGE"}
-                                                onChange={(e) => updateObs(idx, { ort: pick(e.target.value, OBS_ORT, "SONSTIGE") })}
+                                                value={o.ort ?? "SONSTIGES"}
+                                                onChange={(e) => updateObs(idx, { ort: pick(e.target.value, OBS_ORT, "SONSTIGES") })}
                                                 disabled={disabled || statusIsDone}
                                             >
                                                 {OBS_ORT.map((x) => (
                                                     <option key={x} value={x}>
-                                                        {x}
+                                                        {OBS_ORT_LABEL[x]}
                                                     </option>
                                                 ))}
                                             </select>
-                                            {o.ort === "SONSTIGE" ? (
+                                            {o.ort === "SONSTIGES" ? (
                                                 <Input
                                                     value={o.ortSonstiges ?? ""}
                                                     onChange={(e) => updateObs(idx, { ortSonstiges: e.target.value })}
@@ -628,13 +815,15 @@ export function MeldungEditor(props: {
                                             <Label>Quelle</Label>
                                             <select
                                                 className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
-                                                value={o.quelle ?? "SONSTIGE"}
-                                                onChange={(e) => updateObs(idx, { quelle: pick(e.target.value, OBS_QUELLE, "SONSTIGE") })}
+                                                value={o.quelle ?? "UNBEKANNT"}
+                                                onChange={(e) =>
+                                                    updateObs(idx, { quelle: pick(e.target.value, OBS_QUELLE, "UNBEKANNT") })
+                                                }
                                                 disabled={disabled || statusIsDone}
                                             >
                                                 {OBS_QUELLE.map((q) => (
                                                     <option key={q} value={q}>
-                                                        {q}
+                                                        {OBS_QUELLE_LABEL[q]}
                                                     </option>
                                                 ))}
                                             </select>
@@ -704,7 +893,7 @@ export function MeldungEditor(props: {
                                         >
                                             {SICHT.map((s) => (
                                                 <option key={s} value={s}>
-                                                    {s}
+                                                    {SICHT_LABEL[s]}
                                                 </option>
                                             ))}
                                         </select>
@@ -768,7 +957,9 @@ export function MeldungEditor(props: {
                                                                     min={0}
                                                                     max={3}
                                                                     value={t.severity ?? 0}
-                                                                    onChange={(e) => updateObsTag(idx, tIdx, { severity: clampSeverity(Number(e.target.value)) })}
+                                                                    onChange={(e) =>
+                                                                        updateObsTag(idx, tIdx, { severity: clampSeverity(Number(e.target.value)) })
+                                                                    }
                                                                     disabled={disabled || statusIsDone}
                                                                 />
                                                             </div>
@@ -784,7 +975,11 @@ export function MeldungEditor(props: {
                                                                     disabled={disabled || statusIsDone}
                                                                 />
                                                             </div>
-                                                            <Button variant="outline" onClick={() => removeObsTag(idx, tIdx)} disabled={disabled || statusIsDone}>
+                                                            <Button
+                                                                variant="outline"
+                                                                onClick={() => removeObsTag(idx, tIdx)}
+                                                                disabled={disabled || statusIsDone}
+                                                            >
                                                                 Entfernen
                                                             </Button>
                                                         </div>
@@ -818,13 +1013,13 @@ export function MeldungEditor(props: {
                                 <select
                                     className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
                                     value={form.fachAmpel ?? ""}
-                                    onChange={(e) => set("fachAmpel", e.target.value ? pick(e.target.value, AMPEL, "UNKLAR") : null)}
+                                    onChange={(e) => set("fachAmpel", e.target.value ? pick(e.target.value, AMPEL, "GRUEN") : null)}
                                     disabled={disabled || statusIsDone}
                                 >
                                     <option value="">—</option>
                                     {AMPEL.map((a) => (
                                         <option key={a} value={a}>
-                                            {a}
+                                            {AMPEL_LABEL[a]}
                                         </option>
                                     ))}
                                 </select>
@@ -895,8 +1090,8 @@ export function MeldungEditor(props: {
                                     value={form.jugendamt?.informiert ?? ""}
                                     onChange={(e) =>
                                         set("jugendamt", {
-                                            ...(form.jugendamt || { informiert: "NOCH_NICHT_ENTSCHIEDEN" }),
-                                            informiert: pick(e.target.value, JUG_INF, "NOCH_NICHT_ENTSCHIEDEN"),
+                                            ...(form.jugendamt || { informiert: "UNKLAR" }),
+                                            informiert: pick(e.target.value, JUG_INF, "UNKLAR"),
                                         })
                                     }
                                     disabled={disabled || statusIsDone}
@@ -904,7 +1099,7 @@ export function MeldungEditor(props: {
                                     <option value="">—</option>
                                     {JUG_INF.map((x) => (
                                         <option key={x} value={x}>
-                                            {x}
+                                            {JUG_INF_LABEL[x]}
                                         </option>
                                     ))}
                                 </select>
@@ -918,7 +1113,7 @@ export function MeldungEditor(props: {
                                         value={form.jugendamt?.kontaktart ?? ""}
                                         onChange={(e) =>
                                             set("jugendamt", {
-                                                ...(form.jugendamt || { informiert: "NOCH_NICHT_ENTSCHIEDEN" }),
+                                                ...(form.jugendamt || { informiert: "UNKLAR" }),
                                                 kontaktart: e.target.value ? pick(e.target.value, JUG_KONTAKTART, "TELEFON") : null,
                                             })
                                         }
@@ -927,7 +1122,7 @@ export function MeldungEditor(props: {
                                         <option value="">—</option>
                                         {JUG_KONTAKTART.map((x) => (
                                             <option key={x} value={x}>
-                                                {x}
+                                                {JUG_KONTAKTART_LABEL[x]}
                                             </option>
                                         ))}
                                     </select>
@@ -939,7 +1134,7 @@ export function MeldungEditor(props: {
                                         value={form.jugendamt?.kontaktAm ?? ""}
                                         onChange={(e) =>
                                             set("jugendamt", {
-                                                ...(form.jugendamt || { informiert: "NOCH_NICHT_ENTSCHIEDEN" }),
+                                                ...(form.jugendamt || { informiert: "UNKLAR" }),
                                                 kontaktAm: e.target.value || null,
                                             })
                                         }
@@ -955,7 +1150,7 @@ export function MeldungEditor(props: {
                                     value={form.jugendamt?.aktenzeichen ?? ""}
                                     onChange={(e) =>
                                         set("jugendamt", {
-                                            ...(form.jugendamt || { informiert: "NOCH_NICHT_ENTSCHIEDEN" }),
+                                            ...(form.jugendamt || { informiert: "UNKLAR" }),
                                             aktenzeichen: e.target.value || null,
                                         })
                                     }
@@ -971,7 +1166,7 @@ export function MeldungEditor(props: {
                                         value={form.jugendamt?.begruendung ?? ""}
                                         onChange={(e) =>
                                             set("jugendamt", {
-                                                ...(form.jugendamt || { informiert: "NOCH_NICHT_ENTSCHIEDEN" }),
+                                                ...(form.jugendamt || { informiert: "UNKLAR" }),
                                                 begruendung: e.target.value || null,
                                             })
                                         }
@@ -986,7 +1181,7 @@ export function MeldungEditor(props: {
                                         value={form.jugendamt?.begruendung ?? ""}
                                         onChange={(e) =>
                                             set("jugendamt", {
-                                                ...(form.jugendamt || { informiert: "NOCH_NICHT_ENTSCHIEDEN" }),
+                                                ...(form.jugendamt || { informiert: "UNKLAR" }),
                                                 begruendung: e.target.value || null,
                                             })
                                         }

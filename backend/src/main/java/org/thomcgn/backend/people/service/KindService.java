@@ -68,14 +68,33 @@ public class KindService {
             throw DomainException.badRequest(ErrorCode.VALIDATION_FAILED, "request required");
         }
 
+        Long traegerId = SecurityUtils.currentTraegerIdRequired();
+
+        // ✅ aktiver Context
+        Long activeEinrichtung = access.activeEinrichtungId();
+        if (activeEinrichtung == null) {
+            throw DomainException.conflict(ErrorCode.CONFLICT, "No active Einrichtung in context.");
+        }
+
+        // ✅ Request-Einrichtung (optional)
+        Long requestedEinrichtung = req.ownerEinrichtungOrgUnitId();
+
+        // ✅ Wenn Client Einrichtung mitschickt, MUSS sie dem aktiven Context entsprechen,
+        // sonst -> 403 CONTEXT_REQUIRED (so wie bei deinem /akten/1/faelle Fehler)
+        if (requestedEinrichtung != null && !requestedEinrichtung.equals(activeEinrichtung)) {
+            throw DomainException.forbidden(
+                    ErrorCode.CONTEXT_REQUIRED,
+                    "Active context differs from requested EINRICHTUNG. Switch context first."
+            );
+        }
+
+        // ✅ final owner: entweder requested (wenn gesetzt) oder aktive Einrichtung
+        Long ownerEinrichtung = (requestedEinrichtung != null) ? requestedEinrichtung : activeEinrichtung;
+
         Kind k = new Kind();
 
         // Scope/Owner
-        k.setTraegerId(SecurityUtils.currentTraegerIdRequired());
-        Long ownerEinrichtung = access.activeEinrichtungId();
-        if (ownerEinrichtung == null) {
-            throw DomainException.conflict(ErrorCode.CONFLICT, "No active Einrichtung in context.");
-        }
+        k.setTraegerId(traegerId);
         k.setOwnerEinrichtungOrgUnitId(ownerEinrichtung);
 
         // Fachfelder
@@ -89,7 +108,7 @@ public class KindService {
         k.setFoerderbedarfDetails(req.foerderbedarfDetails());
         k.setGesundheitsHinweise(req.gesundheitsHinweise());
 
-        // ✅ Adresse (NEU)
+        // ✅ Adresse
         k.setStrasse(req.strasse());
         k.setHausnummer(req.hausnummer());
         k.setPlz(req.plz());
@@ -304,6 +323,7 @@ public class KindService {
         Long traegerId = kind.getTraegerId();
         Long einrichtungId = kind.getOwnerEinrichtungOrgUnitId();
 
+        // NOTE: Ich lasse deine bestehende Signatur so wie sie ist.
         Falleroeffnung existing = fallRepo
                 .findLatestByKindIdScoped(traegerId, einrichtungId, kind.getId(), PageRequest.of(0, 1))
                 .stream()
@@ -315,7 +335,6 @@ public class KindService {
         String titel = "Automatisch angelegte Akte (Bezugsperson-Änderung)";
         String kurz = buildAkteMessage(kind, link);
 
-        // ✅ CreateFalleroeffnungRequest erwartet 6 Parameter (inkl. anlassCodes)
         CreateFalleroeffnungRequest createReq = new CreateFalleroeffnungRequest(
                 kind.getId(),
                 einrichtungId,
@@ -358,7 +377,7 @@ public class KindService {
                 k.getFoerderbedarfDetails(),
                 k.getGesundheitsHinweise(),
 
-                // ✅ Adresse (NEU)
+                // ✅ Adresse
                 k.getStrasse(),
                 k.getHausnummer(),
                 k.getPlz(),
@@ -382,7 +401,7 @@ public class KindService {
                 bpId,
                 name,
 
-                // ✅ Adresse der Bezugsperson (NEU)
+                // ✅ Adresse der Bezugsperson
                 strasse,
                 hausnummer,
                 plz,

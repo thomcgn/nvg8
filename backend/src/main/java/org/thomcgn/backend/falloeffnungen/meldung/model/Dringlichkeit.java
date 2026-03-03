@@ -1,7 +1,8 @@
 package org.thomcgn.backend.falloeffnungen.meldung.model;
 
 public enum Dringlichkeit {
-    NORMAL,
-    DRINGEND,
-    SOFORT
+    AKUT_HEUTE,
+    ZEITNAH_24_48H,
+    BEOBACHTEN,
+    UNKLAR
 }

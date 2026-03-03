@@ -1,3 +1,4 @@
+// /lib/meldungApi.ts
 import { apiFetch } from "@/lib/api";
 
 /**
@@ -10,7 +11,7 @@ export type MeldungListItemResponse = {
     current: boolean;
     status: string;
     type: string;
-    createdAt: string | null;
+    createdAt: string | null; // Instant
     createdByDisplayName: string | null;
     supersedesId: number | null;
     correctsId: number | null;
@@ -23,7 +24,7 @@ export type MeldungChangeResponse = {
     oldValue: string | null;
     newValue: string | null;
     reason: string | null;
-    changedAt: string | null;
+    changedAt: string | null; // Instant
     changedByDisplayName: string | null;
 };
 
@@ -35,8 +36,8 @@ export type MeldungResponse = {
     status: string;
     type: string;
 
-    createdAt: string | null;
-    updatedAt: string | null;
+    createdAt: string | null; // Instant
+    updatedAt: string | null; // Instant
     createdByDisplayName: string | null;
 
     supersedesId: number | null;
@@ -69,7 +70,7 @@ export type MeldungResponse = {
 
     // Planung
     verantwortlicheFachkraftUserId: number | null;
-    naechsteUeberpruefungAm: string | null; // LocalDate
+    naechsteUeberpruefungAm: string | null; // LocalDate (yyyy-mm-dd)
     zusammenfassung: string | null;
 
     // Sections
@@ -123,7 +124,7 @@ export type MeldungResponse = {
         verhaltenKind: string | null;
         verhaltenBezug: string | null;
         sichtbarkeit: string | null;
-        createdAt: string | null;
+        createdAt: string | null; // Instant
         createdByDisplayName: string | null;
         tags: Array<{
             id: number;
@@ -135,9 +136,9 @@ export type MeldungResponse = {
     }>;
 
     // Submit
-    submittedAt: string | null;
+    submittedAt: string | null; // Instant
     submittedByDisplayName: string | null;
-    freigabeAm: string | null;
+    freigabeAm: string | null; // Instant
     freigabeVonDisplayName: string | null;
 
     // Changes
@@ -253,14 +254,16 @@ function extractHttpStatus(err: unknown): number | null {
 }
 
 /**
- * ✅ Lösung A Frontend-Helper:
+ * ✅ Robust:
  * - GET current
  * - nur wenn 404: POST create
  * - wenn create 409: GET current (Race / parallel tab)
  */
 async function ensureCurrentMeldung(fallId: number): Promise<MeldungResponse> {
     try {
-        return await apiFetch<MeldungResponse>(`/falloeffnungen/${fallId}/meldungen/current`, { method: "GET" });
+        return await apiFetch<MeldungResponse>(`/falloeffnungen/${fallId}/meldungen/current`, {
+            method: "GET",
+        });
     } catch (e: any) {
         const st = extractHttpStatus(e);
         if (st !== 404) throw e;
@@ -273,7 +276,9 @@ async function ensureCurrentMeldung(fallId: number): Promise<MeldungResponse> {
         } catch (e2: any) {
             const st2 = extractHttpStatus(e2);
             if (st2 === 409) {
-                return await apiFetch<MeldungResponse>(`/falloeffnungen/${fallId}/meldungen/current`, { method: "GET" });
+                return await apiFetch<MeldungResponse>(`/falloeffnungen/${fallId}/meldungen/current`, {
+                    method: "GET",
+                });
             }
             throw e2;
         }
