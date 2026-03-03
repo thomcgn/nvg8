@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import {
     ArrowLeft,
+    ArrowRight,
     Plus,
     Link2,
     UserPlus,
@@ -86,10 +87,7 @@ function errorMessage(e: unknown, fallback: string) {
     return fallback;
 }
 
-/**
- * Robust: Backend kann linkId statt id liefern.
- * Wir akzeptieren id | linkId | linkID.
- */
+/** Robust: Backend kann linkId statt id liefern. */
 function getLinkId(l: unknown): number | null {
     const obj = l as Record<string, unknown> | null;
     if (!obj) return null;
@@ -98,8 +96,16 @@ function getLinkId(l: unknown): number | null {
     return Number.isFinite(n) && n > 0 ? n : null;
 }
 
-// ---- Badge helpers ----
+// ---- Akte API types (Backend uses akteId, not id) ----
+type AkteResponse = {
+    akteId: number; // dossier_id / KindDossier.id
+    kindId: number;
+    kindName: string | null;
+    enabled: boolean;
+    faelle: Array<{ id: number }>;
+};
 
+// ---- Badge helpers ----
 type Tone = "neutral" | "info" | "warning" | "danger" | "success";
 
 function formatSorgerechtLabel(s: string | null | undefined): string {
@@ -142,7 +148,9 @@ function BadgeWithLabel({
 }) {
     return (
         <div className="flex flex-col gap-1">
-            <span className="text-[11px] font-medium text-muted-foreground">{label}</span>
+      <span className="text-[11px] font-medium text-muted-foreground">
+        {label}
+      </span>
             <Badge tone={tone} className="w-fit">
                 {children}
             </Badge>
@@ -151,7 +159,6 @@ function BadgeWithLabel({
 }
 
 // ---- Address helpers ----
-
 function formatAddress(parts: {
     strasse?: string | null;
     hausnummer?: string | null;
@@ -164,16 +171,10 @@ function formatAddress(parts: {
     return full.length ? full : null;
 }
 
-/**
- * KindAddress: sehr robust gegen verschiedene Backend-Fieldnames.
- * Falls du sicher weißt, dass es exakt strasse/hausnummer/plz/ort ist,
- * kannst du die Extraktion unten vereinfachen.
- */
 function getKindAddress(kind: KindResponse | null): string | null {
     if (!kind) return null;
     const k = kind as any;
 
-    // häufige Varianten:
     const strasse =
         k.strasse ??
         k.street ??
@@ -215,7 +216,6 @@ function getKindAddress(kind: KindResponse | null): string | null {
 function getBezugspersonAddress(l: KindBezugspersonResponse): string | null {
     const anyL = l as any;
 
-    // 1) flach am Link
     const direct = formatAddress({
         strasse: anyL.strasse ?? anyL.street ?? null,
         hausnummer: anyL.hausnummer ?? anyL.houseNumber ?? null,
@@ -224,7 +224,6 @@ function getBezugspersonAddress(l: KindBezugspersonResponse): string | null {
     });
     if (direct) return direct;
 
-    // 2) nested (bezugsperson / person / bp)
     const nested = anyL.bezugsperson ?? anyL.person ?? anyL.bp ?? null;
     if (nested) {
         const nestedAddr = formatAddress({
@@ -236,18 +235,15 @@ function getBezugspersonAddress(l: KindBezugspersonResponse): string | null {
         if (nestedAddr) return nestedAddr;
     }
 
-    // 3) spezielle Feldnamen
-    const specific = formatAddress({
+    return formatAddress({
         strasse: anyL.bezugspersonStrasse ?? anyL.bpStrasse ?? null,
         hausnummer: anyL.bezugspersonHausnummer ?? anyL.bpHausnummer ?? null,
         plz: anyL.bezugspersonPlz ?? anyL.bpPlz ?? null,
         ort: anyL.bezugspersonOrt ?? anyL.bpOrt ?? null,
     });
-    return specific;
 }
 
 // ---- UI helpers ----
-
 function Field({
                    label,
                    htmlFor,
@@ -268,7 +264,6 @@ function Field({
 }
 
 // ---- Options (UI only) ----
-
 const BEZIEHUNG_OPTIONS: Array<{ value: string; label: string }> = [
     { value: "MUTTER", label: "Mutter" },
     { value: "VATER", label: "Vater" },
@@ -328,11 +323,17 @@ function BezugspersonCardBody({
                         </div>
 
                         <div className="flex flex-wrap items-start gap-4">
-                            <BadgeWithLabel label="Sorgerecht" tone={toneForSorgerecht(sorgerechtRaw)}>
+                            <BadgeWithLabel
+                                label="Sorgerecht"
+                                tone={toneForSorgerecht(sorgerechtRaw)}
+                            >
                                 {sorgerechtLabel}
                             </BadgeWithLabel>
 
-                            <BadgeWithLabel label="Status" tone={isEnabled ? "success" : "neutral"}>
+                            <BadgeWithLabel
+                                label="Status"
+                                tone={isEnabled ? "success" : "neutral"}
+                            >
                                 {isEnabled ? "Aktiv" : "Inaktiv"}
                             </BadgeWithLabel>
 
@@ -340,22 +341,18 @@ function BezugspersonCardBody({
                                 {isHaupt ? "Hauptkontakt" : "—"}
                             </BadgeWithLabel>
 
-                            <BadgeWithLabel label="Haushalt" tone={isHaushalt ? "success" : "neutral"}>
+                            <BadgeWithLabel
+                                label="Haushalt"
+                                tone={isHaushalt ? "success" : "neutral"}
+                            >
                                 {isHaushalt ? "Im Haushalt" : "—"}
                             </BadgeWithLabel>
                         </div>
 
-                        {addr ? (
-                            <div className="flex items-start gap-2 text-sm text-muted-foreground">
-                                <MapPin className="mt-0.5 h-4 w-4 shrink-0" />
-                                <span className="break-words">{addr}</span>
-                            </div>
-                        ) : (
-                            <div className="flex items-start gap-2 text-sm text-muted-foreground">
-                                <MapPin className="mt-0.5 h-4 w-4 shrink-0" />
-                                <span className="break-words">—</span>
-                            </div>
-                        )}
+                        <div className="flex items-start gap-2 text-sm text-muted-foreground">
+                            <MapPin className="mt-0.5 h-4 w-4 shrink-0" />
+                            <span className="break-words">{addr ?? "—"}</span>
+                        </div>
                     </div>
 
                     <div className="mt-3 grid grid-cols-1 gap-2 text-xs text-muted-foreground sm:grid-cols-3">
@@ -386,9 +383,7 @@ function BezugspersonCardBody({
                         onClick={() => {
                             const lid = getLinkId(l);
                             if (!lid) {
-                                setErr(
-                                    "Link-ID fehlt (Backend liefert kein id/linkId) – Beziehung kann nicht beendet werden."
-                                );
+                                setErr("Link-ID fehlt (Backend liefert kein id/linkId) – Beziehung kann nicht beendet werden.");
                                 return;
                             }
                             onEnd();
@@ -415,6 +410,10 @@ export default function KindDetailPage() {
     const [links, setLinks] = useState<KindBezugspersonResponse[]>([]);
     const [loading, setLoading] = useState(true);
     const [err, setErr] = useState<string | null>(null);
+
+    // ✅ Akte-Status (für Button-Toggle)
+    const [akteId, setAkteId] = useState<number | null>(null);
+    const [starting, setStarting] = useState(false);
 
     // --- Dialog: Add Bezugsperson ---
     const [addOpen, setAddOpen] = useState(false);
@@ -444,6 +443,56 @@ export default function KindDetailPage() {
     const [endLinkId, setEndLinkId] = useState<number | null>(null);
     const [validTo, setValidTo] = useState<string>(todayISODate());
 
+    // robust: 404 detection
+    function isNotFound(e: unknown): boolean {
+        if (!e || typeof e !== "object") return false;
+        const anyE: any = e;
+
+        const status =
+            (typeof anyE.status === "number" && anyE.status) ||
+            (typeof anyE?.response?.status === "number" && anyE.response.status) ||
+            (typeof anyE?.data?.status === "number" && anyE.data.status) ||
+            (typeof anyE?.error?.status === "number" && anyE.error.status);
+
+        if (status === 404) return true;
+
+        const msg =
+            typeof anyE.message === "string"
+                ? anyE.message
+                : typeof anyE?.error?.message === "string"
+                    ? anyE.error.message
+                    : "";
+
+        return msg.includes("404") || msg.toLowerCase().includes("not found");
+    }
+
+    async function loadAkteIfExists(kId: number) {
+        try {
+            // ✅ must exist backend-side: GET /api/kinder/{kindId}/akte/exists
+            const akte = await apiFetch<AkteResponse>(`/api/kinder/${kId}/akte/exists`, { method: "GET" });
+            const id = Number(akte?.akteId);
+            setAkteId(Number.isFinite(id) && id > 0 ? id : null);
+
+        } catch (e: unknown) {
+            if (isNotFound(e)) setAkteId(null);
+        }
+    }
+
+    async function resolveAkteId(): Promise<number> {
+        if (!kindId) throw new Error("kindId fehlt");
+
+        // autocreate endpoint: GET /api/kinder/{kindId}/akte
+        const akte = await apiFetch<AkteResponse>(`/api/kinder/${kindId}/akte`, { method: "GET" });
+        const id = Number(akte?.akteId);
+        if (!Number.isFinite(id) || id <= 0) throw new Error("Akte-ID konnte nicht ermittelt werden.");
+
+        setAkteId(id);
+        useEffect(() => {
+            console.log("UI akteId state =", akteId);
+        }, [akteId]);
+        return id;
+    }
+
     async function loadAll() {
         if (!kindId) {
             setErr("Ungültige Kind-ID in der URL.");
@@ -455,20 +504,21 @@ export default function KindDetailPage() {
         setErr(null);
 
         try {
-            const k = await apiFetch<KindResponse>(`/kinder/${kindId}`, {
+            const k = await apiFetch<KindResponse>(`/kinder/${kindId}`, { method: "GET" });
+            const bps = await apiFetch<KindBezugspersonResponse[]>(`/kinder/${kindId}/bezugspersonen`, {
                 method: "GET",
             });
-            const bps = await apiFetch<KindBezugspersonResponse[]>(
-                `/kinder/${kindId}/bezugspersonen`,
-                { method: "GET" }
-            );
 
             setKind(k);
             setLinks(Array.isArray(bps) ? bps : []);
+
+            // ✅ check without creating
+            await loadAkteIfExists(kindId);
         } catch (e: unknown) {
             setErr(errorMessage(e, "Fehler beim Laden."));
             setKind(null);
             setLinks([]);
+            setAkteId(null);
         } finally {
             setLoading(false);
         }
@@ -577,13 +627,51 @@ export default function KindDetailPage() {
         }
     }
 
-    async function onStartAkte() {
+    async function onStartErstmeldung() {
         if (!kindId) return;
+        if (starting) return;
 
-        // ✅ Sauber: Akte ist 1:1 KindDossier.
-        // Diese Route löst Akte für Kind auf (und legt sie an, falls nötig)
-        // und erstellt optional direkt einen neuen Fall + öffnet den Wizard.
-        router.push(`/dashboard/kinder/${kindId}/akte?autostart=fall&next=erstmeldung`);
+        setStarting(true);
+        setErr(null);
+
+        try {
+            const aId = akteId ?? (await resolveAkteId());
+
+            // create fall (Fall-ID needed for /dashboard/falloeffnungen/[id]/meldung)
+            const fall = await apiFetch<{ id: number }>(`/akten/${aId}/faelle`, {
+                method: "POST",
+                body: null,
+            });
+
+            const fallId = Number((fall as any)?.id);
+            if (!Number.isFinite(fallId) || fallId <= 0) {
+                setErr("Fall-ID konnte nicht ermittelt werden.");
+                return;
+            }
+
+            router.push(`/dashboard/falloeffnungen/${fallId}/meldung`);
+        } catch (e: unknown) {
+            setErr(errorMessage(e, "Akte/Fall konnte nicht erstellt werden."));
+        } finally {
+            setStarting(false);
+        }
+    }
+
+    async function onGoToAkte() {
+        if (!kindId) return;
+        if (starting) return;
+
+        setStarting(true);
+        setErr(null);
+
+        try {
+            const aId = akteId ?? (await resolveAkteId());
+            router.push(`/dashboard/akten/${aId}`);
+        } catch (e: unknown) {
+            setErr(errorMessage(e, "Akte konnte nicht geöffnet werden."));
+        } finally {
+            setStarting(false);
+        }
     }
 
     const kindAddress = getKindAddress(kind);
@@ -595,29 +683,33 @@ export default function KindDetailPage() {
 
                 <div className="mx-auto max-w-6xl space-y-4 p-4 md:p-6">
                     <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                        <Button
-                            variant="secondary"
-                            onClick={() => router.back()}
-                            className="w-full sm:w-auto"
-                        >
+                        <Button variant="secondary" onClick={() => router.back()} className="w-full sm:w-auto">
                             <ArrowLeft className="h-4 w-4" />
                             Zurück
                         </Button>
 
                         <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
-                            <Button
-                                variant="secondary"
-                                onClick={() => setAddOpen(true)}
-                                className="w-full sm:w-auto"
-                            >
+                            <Button variant="secondary" onClick={() => setAddOpen(true)} className="w-full sm:w-auto">
                                 <UserPlus className="h-4 w-4" />
                                 Bezugsperson hinzufügen
                             </Button>
 
-                            <Button onClick={onStartAkte} className="w-full sm:w-auto">
-                                <FilePlus2 className="h-4 w-4" />
-                                Akte starten
-                            </Button>
+                            {akteId ? (
+                                <Button onClick={onGoToAkte} className="w-full sm:w-auto" disabled={starting} title="Akte öffnen">
+                                    <ArrowRight className="h-4 w-4" />
+                                    Zur Akte
+                                </Button>
+                            ) : (
+                                <Button
+                                    onClick={onStartErstmeldung}
+                                    className="w-full sm:w-auto"
+                                    disabled={starting}
+                                    title="Akte anlegen (falls nötig), Fall erstellen und Erstmeldung starten"
+                                >
+                                    <FilePlus2 className="h-4 w-4" />
+                                    Akte anlegen
+                                </Button>
+                            )}
                         </div>
                     </div>
 
@@ -631,9 +723,7 @@ export default function KindDetailPage() {
                         <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                             <div className="min-w-0">
                                 <div className="text-sm font-semibold">Details</div>
-                                <div className="mt-1 text-xs text-muted-foreground">
-                                    Stammdaten & Kontext
-                                </div>
+                                <div className="mt-1 text-xs text-muted-foreground">Stammdaten & Kontext</div>
                             </div>
                             <div className="text-xs text-muted-foreground">
                                 {loading ? "lädt…" : kind ? `#${kind.id}` : "—"}
@@ -655,40 +745,25 @@ export default function KindDetailPage() {
                                     </div>
 
                                     <div className="rounded-2xl border border-border bg-card p-3">
-                                        <div className="text-xs font-semibold text-muted-foreground">
-                                            Geburtsdatum
-                                        </div>
-                                        <div className="mt-1 text-sm font-semibold break-words">
-                                            {kind.geburtsdatum || "—"}
-                                        </div>
+                                        <div className="text-xs font-semibold text-muted-foreground">Geburtsdatum</div>
+                                        <div className="mt-1 text-sm font-semibold break-words">{kind.geburtsdatum || "—"}</div>
                                     </div>
 
                                     <div className="rounded-2xl border border-border bg-card p-3">
                                         <div className="text-xs font-semibold text-muted-foreground">Gender</div>
-                                        <div className="mt-1 text-sm font-semibold break-words">
-                                            {kind.gender || "—"}
-                                        </div>
+                                        <div className="mt-1 text-sm font-semibold break-words">{kind.gender || "—"}</div>
                                     </div>
 
                                     <div className="rounded-2xl border border-border bg-card p-3">
-                                        <div className="text-xs font-semibold text-muted-foreground">
-                                            Förderbedarf
-                                        </div>
-                                        <div className="mt-1 text-sm font-semibold">
-                                            {kind.foerderbedarf ? "Ja" : "Nein"}
-                                        </div>
+                                        <div className="text-xs font-semibold text-muted-foreground">Förderbedarf</div>
+                                        <div className="mt-1 text-sm font-semibold">{kind.foerderbedarf ? "Ja" : "Nein"}</div>
                                         {kind.foerderbedarfDetails ? (
-                                            <div className="mt-1 text-xs text-muted-foreground break-words">
-                                                {kind.foerderbedarfDetails}
-                                            </div>
+                                            <div className="mt-1 text-xs text-muted-foreground break-words">{kind.foerderbedarfDetails}</div>
                                         ) : null}
                                     </div>
 
-                                    {/* ✅ Kind-Adresse: immer sichtbar (wenn leer dann —) */}
                                     <div className="sm:col-span-2 rounded-2xl border border-border bg-card p-3">
-                                        <div className="text-xs font-semibold text-muted-foreground">
-                                            Adresse
-                                        </div>
+                                        <div className="text-xs font-semibold text-muted-foreground">Adresse</div>
                                         <div className="mt-1 flex items-start gap-2 text-sm text-muted-foreground">
                                             <MapPin className="mt-0.5 h-4 w-4 shrink-0" />
                                             <span className="break-words">{kindAddress ?? "—"}</span>
@@ -697,12 +772,8 @@ export default function KindDetailPage() {
 
                                     {kind.gesundheitsHinweise ? (
                                         <div className="sm:col-span-2 rounded-2xl border border-border bg-card p-3">
-                                            <div className="text-xs font-semibold text-muted-foreground">
-                                                Gesundheitshinweise
-                                            </div>
-                                            <div className="mt-1 text-sm break-words">
-                                                {kind.gesundheitsHinweise}
-                                            </div>
+                                            <div className="text-xs font-semibold text-muted-foreground">Gesundheitshinweise</div>
+                                            <div className="mt-1 text-sm break-words">{kind.gesundheitsHinweise}</div>
                                         </div>
                                     ) : null}
                                 </div>
@@ -715,9 +786,7 @@ export default function KindDetailPage() {
                             <div>
                                 <div className="text-sm font-semibold">Bezugspersonen</div>
                             </div>
-                            <div className="text-xs text-muted-foreground">
-                                {loading ? "…" : `${links.length} Einträge`}
-                            </div>
+                            <div className="text-xs text-muted-foreground">{loading ? "…" : `${links.length} Einträge`}</div>
                         </CardHeader>
 
                         <CardContent>
@@ -743,9 +812,7 @@ export default function KindDetailPage() {
                                     onEnd={() => {
                                         const lid = getLinkId(links[0]);
                                         if (!lid) {
-                                            setErr(
-                                                "Link-ID fehlt (Backend liefert kein id/linkId) – Beziehung kann nicht beendet werden."
-                                            );
+                                            setErr("Link-ID fehlt (Backend liefert kein id/linkId) – Beziehung kann nicht beendet werden.");
                                             return;
                                         }
                                         openEnd(lid);
@@ -778,9 +845,7 @@ export default function KindDetailPage() {
                                                         <div className="flex min-w-0 flex-col items-start text-left">
                                                             <div className="truncate text-sm font-semibold">{title}</div>
                                                             {sub ? (
-                                                                <div className="mt-0.5 text-xs text-muted-foreground line-clamp-1">
-                                                                    {sub}
-                                                                </div>
+                                                                <div className="mt-0.5 text-xs text-muted-foreground line-clamp-1">{sub}</div>
                                                             ) : null}
                                                         </div>
                                                     </AccordionTrigger>
@@ -802,9 +867,7 @@ export default function KindDetailPage() {
                                                             onEnd={() => {
                                                                 const lid = getLinkId(l);
                                                                 if (!lid) {
-                                                                    setErr(
-                                                                        "Link-ID fehlt (Backend liefert kein id/linkId) – Beziehung kann nicht beendet werden."
-                                                                    );
+                                                                    setErr("Link-ID fehlt (Backend liefert kein id/linkId) – Beziehung kann nicht beendet werden.");
                                                                     return;
                                                                 }
                                                                 openEnd(lid);
@@ -821,7 +884,7 @@ export default function KindDetailPage() {
                     </Card>
                 </div>
 
-                {/* Add Bezugsperson (shadcn Dialog) */}
+                {/* Add Bezugsperson */}
                 <Dialog open={addOpen} onOpenChange={setAddOpen}>
                     <DialogContent className="max-w-2xl">
                         <ShadDialogHeader>
@@ -933,12 +996,7 @@ export default function KindDetailPage() {
                                             <Input
                                                 id="bp-nachname"
                                                 value={createBp.nachname ?? ""}
-                                                onChange={(e) =>
-                                                    setCreateBp((p) => ({
-                                                        ...p,
-                                                        nachname: e.target.value,
-                                                    }))
-                                                }
+                                                onChange={(e) => setCreateBp((p) => ({ ...p, nachname: e.target.value }))}
                                                 placeholder="Mustermann"
                                             />
                                         </Field>
@@ -950,12 +1008,7 @@ export default function KindDetailPage() {
                                                 id="bp-geb"
                                                 type="date"
                                                 value={createBp.geburtsdatum ?? ""}
-                                                onChange={(e) =>
-                                                    setCreateBp((p) => ({
-                                                        ...p,
-                                                        geburtsdatum: e.target.value || null,
-                                                    }))
-                                                }
+                                                onChange={(e) => setCreateBp((p) => ({ ...p, geburtsdatum: e.target.value || null }))}
                                             />
                                         </Field>
 
@@ -983,12 +1036,7 @@ export default function KindDetailPage() {
                                             <Input
                                                 id="bp-telefon"
                                                 value={createBp.telefon ?? ""}
-                                                onChange={(e) =>
-                                                    setCreateBp((p) => ({
-                                                        ...p,
-                                                        telefon: e.target.value || null,
-                                                    }))
-                                                }
+                                                onChange={(e) => setCreateBp((p) => ({ ...p, telefon: e.target.value || null }))}
                                                 placeholder="+49 …"
                                             />
                                         </Field>
@@ -996,12 +1044,7 @@ export default function KindDetailPage() {
                                             <Input
                                                 id="bp-email"
                                                 value={createBp.kontaktEmail ?? ""}
-                                                onChange={(e) =>
-                                                    setCreateBp((p) => ({
-                                                        ...p,
-                                                        kontaktEmail: e.target.value || null,
-                                                    }))
-                                                }
+                                                onChange={(e) => setCreateBp((p) => ({ ...p, kontaktEmail: e.target.value || null }))}
                                                 placeholder="name@mail.de"
                                             />
                                         </Field>
@@ -1012,24 +1055,14 @@ export default function KindDetailPage() {
                                             <Input
                                                 id="bp-str"
                                                 value={createBp.strasse ?? ""}
-                                                onChange={(e) =>
-                                                    setCreateBp((p) => ({
-                                                        ...p,
-                                                        strasse: e.target.value || null,
-                                                    }))
-                                                }
+                                                onChange={(e) => setCreateBp((p) => ({ ...p, strasse: e.target.value || null }))}
                                             />
                                         </Field>
                                         <Field label="Hausnr. (optional)" htmlFor="bp-hnr">
                                             <Input
                                                 id="bp-hnr"
                                                 value={createBp.hausnummer ?? ""}
-                                                onChange={(e) =>
-                                                    setCreateBp((p) => ({
-                                                        ...p,
-                                                        hausnummer: e.target.value || null,
-                                                    }))
-                                                }
+                                                onChange={(e) => setCreateBp((p) => ({ ...p, hausnummer: e.target.value || null }))}
                                             />
                                         </Field>
                                     </div>
@@ -1039,24 +1072,14 @@ export default function KindDetailPage() {
                                             <Input
                                                 id="bp-plz"
                                                 value={createBp.plz ?? ""}
-                                                onChange={(e) =>
-                                                    setCreateBp((p) => ({
-                                                        ...p,
-                                                        plz: e.target.value || null,
-                                                    }))
-                                                }
+                                                onChange={(e) => setCreateBp((p) => ({ ...p, plz: e.target.value || null }))}
                                             />
                                         </Field>
                                         <Field label="Ort (optional)" htmlFor="bp-ort">
                                             <Input
                                                 id="bp-ort"
                                                 value={createBp.ort ?? ""}
-                                                onChange={(e) =>
-                                                    setCreateBp((p) => ({
-                                                        ...p,
-                                                        ort: e.target.value || null,
-                                                    }))
-                                                }
+                                                onChange={(e) => setCreateBp((p) => ({ ...p, ort: e.target.value || null }))}
                                             />
                                         </Field>
                                     </div>
@@ -1078,7 +1101,7 @@ export default function KindDetailPage() {
                     </DialogContent>
                 </Dialog>
 
-                {/* End Beziehung (shadcn Dialog) */}
+                {/* End Beziehung */}
                 <Dialog
                     open={endOpen}
                     onOpenChange={(open) => {
@@ -1093,12 +1116,16 @@ export default function KindDetailPage() {
 
                         <div className="space-y-4">
                             <div className="rounded-2xl border border-border bg-muted p-3 text-sm">
-                                Du beendest den Link (gültig bis) – die Bezugsperson wird nicht gelöscht,
-                                nur die Verknüpfung wird inaktiv.
+                                Du beendest den Link (gültig bis) – die Bezugsperson wird nicht gelöscht, nur die Verknüpfung wird inaktiv.
                             </div>
 
                             <Field label="Gültig bis (validTo)" htmlFor="validTo">
-                                <Input id="validTo" type="date" value={validTo} onChange={(e) => setValidTo(e.target.value)} />
+                                <Input
+                                    id="validTo"
+                                    type="date"
+                                    value={validTo}
+                                    onChange={(e) => setValidTo(e.target.value)}
+                                />
                             </Field>
                         </div>
 

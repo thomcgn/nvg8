@@ -56,7 +56,7 @@ export default function AktenPage() {
           params.set("page", String(pp));
           params.set("size", String(size));
 
-          const res = await apiFetch<AkteListResponse>(`/akten?${params.toString()}`, { method: "GET" });
+          const res = await apiFetch<AkteListResponse>(`/api/akten?${params.toString()}`, { method: "GET" });
           setData(res);
         } catch (e: any) {
           setErr(e?.message || "Konnte Aktenliste nicht laden.");

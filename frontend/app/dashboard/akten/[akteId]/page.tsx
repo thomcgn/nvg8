@@ -3,13 +3,16 @@
 import * as React from "react";
 import { useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
+
 import { AuthGate } from "@/components/AuthGate";
 import { Topbar } from "@/components/layout/Topbar";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+
 import { apiFetch, ApiError } from "@/lib/api";
 import { ArrowLeft, Plus, ArrowRight, RefreshCw } from "lucide-react";
+
 import {
     findFallWithDraftMeldung,
     loadMeldungStatusByFallIds,
@@ -29,11 +32,15 @@ function safeNumber(v: unknown): number | null {
 }
 
 type AkteResponse = {
-    id: number;
+    akteId: number;
     kindId: number;
     kindName: string | null;
-    createdAt: string | null;
+    enabled: boolean;
 
+    // optional (nur wenn Backend es liefert)
+    createdAt?: string | null;
+
+    // optional (falls Backend es liefert – sonst lassen wir es null)
     einrichtungOrgUnitId?: number | null;
 };
 
@@ -45,6 +52,8 @@ type FallListResponse = {
 type CreateFallRequest = {
     titel?: string | null;
     kurzbeschreibung?: string | null;
+
+    // ⚠️ Backend nimmt einrichtungOrgUnitId aus Kontext – kann hier null bleiben
     einrichtungOrgUnitId?: number | null;
     teamOrgUnitId?: number | null;
 };
@@ -59,13 +68,6 @@ type ContextResponse = {
         einrichtungOrgUnitId?: number | null;
         roles?: string[];
     };
-    available?: Array<{
-        traegerId: number;
-        traegerName?: string;
-        einrichtungOrgUnitId: number;
-        einrichtungName?: string;
-        roles?: string[];
-    }>;
 };
 
 type ContextActive = {
@@ -74,11 +76,26 @@ type ContextActive = {
     roles?: string[];
 };
 
-function toneForStatus(status: string | null | undefined): "success" | "warning" | "danger" | "info" | "neutral" {
+function toneForStatus(
+    status: string | null | undefined
+): "success" | "warning" | "danger" | "info" | "neutral" {
     const s = (status || "").toLowerCase();
-    if (s.includes("hoch") || s.includes("krit") || s.includes("risiko")) return "danger";
-    if (s.includes("warn") || s.includes("prüf") || s.includes("review") || s.includes("in_pruef")) return "warning";
-    if (s.includes("abgesch") || s.includes("done") || s.includes("geschlossen") || s.includes("abgeschlossen")) return "success";
+    if (s.includes("hoch") || s.includes("krit") || s.includes("risiko"))
+        return "danger";
+    if (
+        s.includes("warn") ||
+        s.includes("prüf") ||
+        s.includes("review") ||
+        s.includes("in_pruef")
+    )
+        return "warning";
+    if (
+        s.includes("abgesch") ||
+        s.includes("done") ||
+        s.includes("geschlossen") ||
+        s.includes("abgeschlossen")
+    )
+        return "success";
     if (s.includes("offen") || s.includes("neu")) return "info";
     return "neutral";
 }
@@ -96,11 +113,25 @@ function extractRequestedEinrichtungId(err: unknown): number | null {
     ];
 
     for (const c of candidates) {
-        const n = typeof c === "number" ? c : typeof c === "string" ? Number(c) : null;
+        const n =
+            typeof c === "number" ? c : typeof c === "string" ? Number(c) : null;
         if (n && Number.isFinite(n) && n > 0) return n;
     }
 
     return null;
+}
+
+function isMeldungLocked(status: string | null | undefined) {
+    const s = String(status ?? "").toLowerCase();
+    return (
+        s.includes("abgesch") ||
+        s.includes("abgeschlossen") ||
+        s.includes("geschlossen") ||
+        s.includes("submitted") ||
+        s.includes("submit") ||
+        s.includes("freigabe") ||
+        s.includes("freigegeben")
+    );
 }
 
 export default function AkteDetailPage() {
@@ -116,7 +147,9 @@ export default function AkteDetailPage() {
     const [err, setErr] = React.useState<string | null>(null);
 
     // Meldung-Status je Fall (current Meldung)
-    const [meldungStatusByFallId, setMeldungStatusByFallId] = React.useState<Record<number, string>>({});
+    const [meldungStatusByFallId, setMeldungStatusByFallId] = React.useState<
+        Record<number, string>
+    >({});
     const [loadingMeldungStates, setLoadingMeldungStates] = React.useState(false);
 
     // Context/UI State
@@ -127,7 +160,10 @@ export default function AkteDetailPage() {
 
     const loadContext = React.useCallback(async () => {
         try {
-            const ctx = await apiFetch<ContextResponse>(`/auth/context`, { method: "GET" });
+            // ✅ hier bewusst OHNE /api, falls dein Backend auth endpoints nicht unter /api hat
+            const ctx = await apiFetch<ContextResponse>(`/auth/context`, {
+                method: "GET",
+            });
             setContext(ctx?.active ?? null);
         } catch {
             setContext(null);
@@ -168,15 +204,24 @@ export default function AkteDetailPage() {
         try {
             await loadContext();
 
-            const a = await apiFetch<AkteResponse>(`/akten/${akteId}`, { method: "GET" });
+            // ✅ Akte Detail (AkteResponse)
+            const a = await apiFetch<AkteResponse>(`/api/akten/${akteId}`, {
+                method: "GET",
+            });
             setAkte(a);
 
-            const f = await apiFetch<FallListResponse>(`/akten/${akteId}/faelle`, { method: "GET" });
+            // ✅ Fälle für Akte
+            const f = await apiFetch<FallListResponse>(`/api/akten/${akteId}/faelle`, {
+                method: "GET",
+            });
             setFaelle(f);
 
             // ✅ nach Laden der Fälle: Meldung-Status pro Fall laden
             const ids = (f?.items || []).map((x) => x.id);
             setLoadingMeldungStates(true);
+
+            // ⚠️ WICHTIG: wenn dein helper intern ohne /api callt, kriegst du wieder /falloeffnungen oder /meldungen ohne prefix.
+            // Wenn du auch diese helper umstellst, ist alles stabil.
             const map = await loadMeldungStatusByFallIds(ids);
             setMeldungStatusByFallId(map);
         } catch (e: any) {
@@ -226,17 +271,17 @@ export default function AkteDetailPage() {
         setContextRequired(false);
         setContextHint(null);
 
-        // ✅ HARTE UI-REGEL (so wie du es willst)
         if (hasDraftMeldungBlocking && fallWithDraftMeldung) {
             setErr(
-                `Es gibt bereits eine Erstmeldung im Entwurf (${fallWithDraftMeldung.aktenzeichen || `Fall #${fallWithDraftMeldung.id}`}). ` +
-                `Bitte diesen Entwurf zuerst fertigstellen oder löschen/abschließen.`
+                `Es gibt bereits eine Erstmeldung im Entwurf (${
+                    fallWithDraftMeldung.aktenzeichen || `Fall #${fallWithDraftMeldung.id}`
+                }). Bitte diesen Entwurf zuerst fertigstellen oder löschen/abschließen.`
             );
             return;
         }
 
         const doCreate = async () => {
-            const created = await apiFetch<CreateFallResponse>(`/akten/${akteId}/faelle`, {
+            const created = await apiFetch<CreateFallResponse>(`/api/akten/${akteId}/faelle`, {
                 method: "POST",
                 body: {
                     titel: null,
@@ -258,7 +303,6 @@ export default function AkteDetailPage() {
                 setContextRequired(true);
 
                 const requested = extractRequestedEinrichtungId(e);
-
                 if (requested) {
                     await trySwitchContextAndRetry(requested, async () => {
                         await doCreate();
@@ -297,13 +341,22 @@ export default function AkteDetailPage() {
 
                 <div className="mx-auto max-w-6xl space-y-4 p-4 md:p-6">
                     <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                        <Button variant="secondary" onClick={() => router.back()} className="w-full sm:w-auto gap-2">
+                        <Button
+                            variant="secondary"
+                            onClick={() => router.back()}
+                            className="w-full sm:w-auto gap-2"
+                        >
                             <ArrowLeft className="h-4 w-4" />
                             Zurück
                         </Button>
 
                         <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
-                            <Button variant="secondary" onClick={load} disabled={loading} className="w-full sm:w-auto gap-2">
+                            <Button
+                                variant="secondary"
+                                onClick={load}
+                                disabled={loading}
+                                className="w-full sm:w-auto gap-2"
+                            >
                                 <RefreshCw className="h-4 w-4" />
                                 Aktualisieren
                             </Button>
@@ -328,9 +381,12 @@ export default function AkteDetailPage() {
 
                     {hasDraftMeldungBlocking && fallWithDraftMeldung ? (
                         <div className="rounded-2xl border border-border bg-muted p-3 text-sm text-muted-foreground">
-                            Es existiert bereits eine Meldung im <span className="font-semibold">ENTWURF</span> für{" "}
-                            <span className="font-semibold">{fallWithDraftMeldung.aktenzeichen || `Fall #${fallWithDraftMeldung.id}`}</span>.
-                            Solange dieser Entwurf existiert, kann kein neuer Fall angelegt werden.
+                            Es existiert bereits eine Meldung im{" "}
+                            <span className="font-semibold">ENTWURF</span> für{" "}
+                            <span className="font-semibold">
+                {fallWithDraftMeldung.aktenzeichen || `Fall #${fallWithDraftMeldung.id}`}
+              </span>
+                            . Solange dieser Entwurf existiert, kann kein neuer Fall angelegt werden.
                         </div>
                     ) : null}
 
@@ -369,9 +425,13 @@ export default function AkteDetailPage() {
                         <CardHeader className="flex flex-row items-center justify-between">
                             <div>
                                 <div className="text-sm font-semibold">Details</div>
-                                <div className="mt-1 text-xs text-muted-foreground">KindDossier (1 pro Kind)</div>
+                                <div className="mt-1 text-xs text-muted-foreground">
+                                    KindDossier (1 pro Kind)
+                                </div>
                             </div>
-                            <div className="text-xs text-muted-foreground">{loading ? "…" : akteId ? `#${akteId}` : "—"}</div>
+                            <div className="text-xs text-muted-foreground">
+                                {loading ? "…" : akteId ? `#${akteId}` : "—"}
+                            </div>
                         </CardHeader>
                         <CardContent>
                             {loading ? (
@@ -382,16 +442,24 @@ export default function AkteDetailPage() {
                                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                                     <div className="rounded-2xl border border-border bg-card p-3">
                                         <div className="text-xs font-semibold text-muted-foreground">Kind</div>
-                                        <div className="mt-1 text-sm font-extrabold break-words">{akte.kindName || `Kind #${akte.kindId}`}</div>
-                                        <div className="mt-1 text-xs text-muted-foreground">Kind-ID: {akte.kindId}</div>
+                                        <div className="mt-1 text-sm font-extrabold break-words">
+                                            {akte.kindName || `Kind #${akte.kindId}`}
+                                        </div>
+                                        <div className="mt-1 text-xs text-muted-foreground">
+                                            Kind-ID: {akte.kindId}
+                                        </div>
                                     </div>
 
                                     <div className="rounded-2xl border border-border bg-card p-3">
                                         <div className="text-xs font-semibold text-muted-foreground">Erstellt</div>
-                                        <div className="mt-1 text-sm font-semibold break-words">{akte.createdAt || "—"}</div>
+                                        <div className="mt-1 text-sm font-semibold break-words">
+                                            {akte.createdAt || "—"}
+                                        </div>
 
                                         {typeof akte.einrichtungOrgUnitId === "number" ? (
-                                            <div className="mt-1 text-xs text-muted-foreground">Einrichtung: #{akte.einrichtungOrgUnitId}</div>
+                                            <div className="mt-1 text-xs text-muted-foreground">
+                                                Einrichtung: #{akte.einrichtungOrgUnitId}
+                                            </div>
                                         ) : null}
                                     </div>
                                 </div>
@@ -403,9 +471,13 @@ export default function AkteDetailPage() {
                         <CardHeader className="flex flex-row items-center justify-between">
                             <div>
                                 <div className="text-sm font-semibold">Fälle</div>
-                                <div className="mt-1 text-xs text-muted-foreground">Mehrere Fälle pro Akte</div>
+                                <div className="mt-1 text-xs text-muted-foreground">
+                                    Mehrere Fälle pro Akte
+                                </div>
                             </div>
-                            <div className="text-xs text-muted-foreground">{loading ? "…" : `${total} Einträge`}</div>
+                            <div className="text-xs text-muted-foreground">
+                                {loading ? "…" : `${total} Einträge`}
+                            </div>
                         </CardHeader>
 
                         <CardContent className="space-y-2">
@@ -418,17 +490,22 @@ export default function AkteDetailPage() {
                             ) : (
                                 <div className="space-y-2">
                                     {fallItems.map((f) => {
-                                        const ms = (meldungStatusByFallId[f.id] || "").toUpperCase();
+                                        const msRaw = meldungStatusByFallId[f.id] || "";
+                                        const ms = msRaw.toUpperCase();
                                         const msIsDraft = ms === "ENTWURF" || ms === "DRAFT";
+                                        const msLocked = isMeldungLocked(msRaw);
 
                                         return (
                                             <div key={f.id} className="rounded-2xl border border-border bg-card p-3">
                                                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                                                     <div className="min-w-0">
                                                         <div className="text-sm font-semibold break-words">
-                                                            {f.fallNo ? `Fall ${f.fallNo}` : "Fall"} · {f.aktenzeichen || `#${f.id}`}
+                                                            {f.fallNo ? `Fall ${f.fallNo}` : "Fall"} ·{" "}
+                                                            {f.aktenzeichen || `#${f.id}`}
                                                         </div>
-                                                        <div className="mt-1 text-xs text-muted-foreground">Eröffnet: {f.openedAt || f.createdAt || "—"}</div>
+                                                        <div className="mt-1 text-xs text-muted-foreground">
+                                                            Eröffnet: {f.openedAt || f.createdAt || "—"}
+                                                        </div>
                                                     </div>
 
                                                     <div className="flex flex-wrap items-center gap-2">
@@ -444,14 +521,33 @@ export default function AkteDetailPage() {
                                                             <Badge tone="neutral">Keine Meldung</Badge>
                                                         )}
 
-                                                        <Button variant="secondary" size="sm" onClick={() => router.push(`/dashboard/falloeffnungen/${f.id}`)}>
+                                                        <Button
+                                                            variant="secondary"
+                                                            size="sm"
+                                                            onClick={() => router.push(`/dashboard/falloeffnungen/${f.id}`)}
+                                                        >
                                                             Details
                                                         </Button>
 
-                                                        <Button size="sm" onClick={() => router.push(`/dashboard/falloeffnungen/${f.id}/meldung`)} className="gap-2">
-                                                            Draft weiterführen
-                                                            <ArrowRight className="h-4 w-4" />
-                                                        </Button>
+                                                        {/* ✅ Draft-Button nur wenn NICHT locked (z.B. ABGESCHLOSSEN) */}
+                                                        {!msLocked ? (
+                                                            <Button
+                                                                size="sm"
+                                                                onClick={() => router.push(`/dashboard/falloeffnungen/${f.id}/meldung`)}
+                                                                className="gap-2"
+                                                            >
+                                                                Draft weiterführen
+                                                                <ArrowRight className="h-4 w-4" />
+                                                            </Button>
+                                                        ) : (
+                                                            <Button
+                                                                size="sm"
+                                                                variant="secondary"
+                                                                onClick={() => router.push(`/dashboard/falloeffnungen/${f.id}/meldungen`)}
+                                                            >
+                                                                Meldungen ansehen
+                                                            </Button>
+                                                        )}
                                                     </div>
                                                 </div>
                                             </div>

@@ -183,4 +183,18 @@ public class AkteService {
 
         return fallService.create(create);
     }
+
+    @Transactional(readOnly = true)
+    public AkteResponse getAkteByKindIfExists(Long kindId) {
+        access.requireAny(Role.FACHKRAFT, Role.TEAMLEITUNG, Role.EINRICHTUNG_ADMIN, Role.TRAEGER_ADMIN);
+
+        Long traegerId = SecurityUtils.currentTraegerIdRequired();
+        Long einrichtungOrgUnitId = SecurityUtils.currentOrgUnitIdRequired();
+
+        KindDossier dossier = dossierRepo.findByEinrichtungOrgUnit_IdAndKind_Id(einrichtungOrgUnitId, kindId)
+                .orElseThrow(() -> DomainException.notFound(ErrorCode.NOT_FOUND, "Akte not found"));
+
+        // dann einfach bestehende laden (inkl. Scope Checks)
+        return getAkte(dossier.getId());
+    }
 }
