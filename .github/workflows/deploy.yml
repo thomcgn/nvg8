@@ -12,6 +12,7 @@ jobs:
   deploy:
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
+
     steps:
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.0.3
@@ -23,7 +24,18 @@ jobs:
           script: |
             set -euo pipefail
             cd /opt/nvg8
-            echo "APP_TAG=${{ github.event.workflow_run.head_sha }}" > .env
+
+            # Ensure .env exists
+            touch .env
+
+            # Update APP_TAG without deleting other variables
+            grep -v '^APP_TAG=' .env > .env.tmp || true
+            echo "APP_TAG=${{ github.event.workflow_run.head_sha }}" >> .env.tmp
+            mv .env.tmp .env
+
+            echo "Deploying image tag: ${{ github.event.workflow_run.head_sha }}"
+
             docker compose pull
             docker compose up -d --force-recreate
+
             docker image prune -f
