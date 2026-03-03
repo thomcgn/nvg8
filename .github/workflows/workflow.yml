@@ -30,7 +30,7 @@ jobs:
       - name: Build & push frontend
         uses: docker/build-push-action@v6
         with:
-          context: ./frontend/Dockerfile
+          context: ./frontend
           push: true
           tags: |
             ${{ env.IMAGE_FRONTEND }}:${{ github.sha }}
