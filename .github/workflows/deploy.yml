@@ -1,0 +1,37 @@
+name: Deploy to VPS
+
+on:
+  workflow_run:
+    workflows: ["Build & Push (GHCR)"]
+    types: [completed]
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          port: ${{ secrets.VPS_PORT || 22 }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: |
+            set -euo pipefail
+            cd /opt/nvg8
+
+            # If GHCR is private, login (works even if GHCR_TOKEN isn't set; it will just fail and continue)
+            if [ -n "${{ secrets.GHCR_TOKEN }}" ]; then
+              echo "${{ secrets.GHCR_TOKEN }}" | docker login ghcr.io -u thomcgn --password-stdin
+            fi
+
+            # Deploy exact build (SHA tag)
+            echo "APP_TAG=${{ github.event.workflow_run.head_sha }}" > .env
+
+            docker compose pull
+            docker compose up -d --force-recreate
+            docker image prune -f
