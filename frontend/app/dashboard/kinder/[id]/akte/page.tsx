@@ -40,6 +40,18 @@ function getStatus(e: any): number | undefined {
     return e?.status ?? e?.response?.status ?? e?.data?.status ?? e?.error?.status;
 }
 
+// 👇 versucht aktenId aus params oder meldung zu ziehen
+function getAktenId(params: any, meldung: any, fallId: number | null) {
+    return (
+        parseId(params?.aktenId) ||
+        parseId(meldung?.aktenId) ||
+        parseId(meldung?.akteId) ||
+        parseId(meldung?.akte?.id) ||
+        // Fallback, falls bei euch Akte == Fall (wenn nicht, nimm diese Zeile raus)
+        fallId
+    );
+}
+
 export default function MeldungCurrentPage() {
     const params = useParams();
     const router = useRouter();
@@ -49,7 +61,6 @@ export default function MeldungCurrentPage() {
     const [err, setErr] = React.useState<string | null>(null);
     const [meldung, setMeldung] = React.useState<MeldungResponse | null>(null);
 
-    // 🔥 Wenn kein current existiert -> direkt zum Erstmeldung-Wizard
     const refresh = React.useCallback(async () => {
         if (!fallId) return;
 
@@ -81,23 +92,38 @@ export default function MeldungCurrentPage() {
         refresh();
     }, [refresh]);
 
+    const goToAkte = React.useCallback(
+        (m?: MeldungResponse | null) => {
+            const aktenId = getAktenId(params as any, m ?? meldung, fallId);
+            if (!aktenId) return;
+            router.replace(`/dashboard/akten/${aktenId}`);
+        },
+        [params, meldung, fallId, router]
+    );
+
     const onSaveDraft = React.useCallback(
         async (req: MeldungDraftRequest) => {
             if (!fallId || !meldung) return;
             const updated = await meldungApi.saveDraft(fallId, meldung.id, req);
             setMeldung(updated);
+
+            // ✅ nach erfolgreichem Draft speichern zurück zur Akte
+            goToAkte(updated);
+
             return updated;
         },
-        [fallId, meldung]
+        [fallId, meldung, goToAkte]
     );
 
     const onSubmit = React.useCallback(
         async (mirrorToNotizen: boolean) => {
             if (!fallId || !meldung) return;
             await meldungApi.submit(fallId, meldung.id, { mirrorToNotizen });
-            router.replace(`/dashboard/falloeffnungen/${fallId}/meldungen`);
+
+            // ✅ nach erfolgreichem Submit zurück zur Akte
+            goToAkte(meldung);
         },
-        [fallId, meldung, router]
+        [fallId, meldung, goToAkte]
     );
 
     const disabled = isLockedStatus(meldung?.status);
@@ -107,9 +133,7 @@ export default function MeldungCurrentPage() {
             <div className="p-6">
                 <Alert>
                     <AlertTitle>Ungültige Fall-ID</AlertTitle>
-                    <AlertDescription>
-                        Die URL enthält keine gültige fallId.
-                    </AlertDescription>
+                    <AlertDescription>Die URL enthält keine gültige fallId.</AlertDescription>
                 </Alert>
             </div>
         );
@@ -122,11 +146,7 @@ export default function MeldungCurrentPage() {
 
                 <div className="mx-auto w-full max-w-6xl space-y-4 px-4 pb-10 pt-4 sm:px-6">
                     <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                        <Button
-                            variant="secondary"
-                            onClick={() => router.back()}
-                            className="w-full sm:w-auto"
-                        >
+                        <Button variant="secondary" onClick={() => router.back()} className="w-full sm:w-auto">
                             Zurück
                         </Button>
 
@@ -147,21 +167,12 @@ export default function MeldungCurrentPage() {
                         <Card>
                             <CardHeader>
                                 <div className="text-sm font-semibold">Lade…</div>
-                                <div className="text-xs text-muted-foreground">
-                                    Erstmeldung wird geladen.
-                                </div>
+                                <div className="text-xs text-muted-foreground">Erstmeldung wird geladen.</div>
                             </CardHeader>
-                            <CardContent className="text-sm text-muted-foreground">
-                                Bitte einen Moment…
-                            </CardContent>
+                            <CardContent className="text-sm text-muted-foreground">Bitte einen Moment…</CardContent>
                         </Card>
                     ) : meldung ? (
-                        <MeldungEditor
-                            value={meldung}
-                            disabled={disabled}
-                            onSaveDraft={onSaveDraft}
-                            onSubmit={onSubmit}
-                        />
+                        <MeldungEditor value={meldung} disabled={disabled} onSaveDraft={onSaveDraft} onSubmit={onSubmit} />
                     ) : null}
                 </div>
             </div>
