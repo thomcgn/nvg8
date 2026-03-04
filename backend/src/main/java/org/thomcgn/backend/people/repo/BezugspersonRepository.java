@@ -2,9 +2,13 @@ package org.thomcgn.backend.people.repo;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.jpa.repository.*;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.thomcgn.backend.people.model.Bezugsperson;
+
+import java.time.LocalDate;
+import java.util.List;
 
 public interface BezugspersonRepository extends JpaRepository<Bezugsperson, Long> {
 
@@ -48,5 +52,18 @@ public interface BezugspersonRepository extends JpaRepository<Bezugsperson, Long
             @Param("einrichtungId") Long einrichtungId,
             @Param("q") String q,
             Pageable pageable
+    );
+
+    @Query("""
+  select bp
+  from Bezugsperson bp
+  where lower(bp.vorname) = lower(:vorname)
+    and lower(bp.nachname) = lower(:nachname)
+    and bp.geburtsdatum = :geburtsdatum
+""")
+    List<Bezugsperson> findDuplicates(
+            @Param("vorname") String vorname,
+            @Param("nachname") String nachname,
+            @Param("geburtsdatum") LocalDate geburtsdatum
     );
 }

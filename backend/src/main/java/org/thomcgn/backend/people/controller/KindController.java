@@ -74,4 +74,13 @@ public class KindController {
     ) {
         return ResponseEntity.ok(service.endBezugspersonLink(id, linkId, req));
     }
+
+    @GetMapping("/duplicates")
+    public ResponseEntity<KindDuplicateResponse> duplicates(
+            @RequestParam String vorname,
+            @RequestParam String nachname,
+            @RequestParam java.time.LocalDate geburtsdatum
+    ) {
+        return ResponseEntity.ok(service.findDuplicates(vorname, nachname, geburtsdatum));
+    }
 }

@@ -7,6 +7,9 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.thomcgn.backend.people.model.Kind;
 
+import java.time.LocalDate;
+import java.util.List;
+
 public interface KindRepository extends JpaRepository<Kind, Long> {
 
 // ...
@@ -28,4 +31,7 @@ public interface KindRepository extends JpaRepository<Kind, Long> {
             @Param("q") String q,
             Pageable pageable
     );
+        List<Kind> findByVornameIgnoreCaseAndNachnameIgnoreCaseAndGeburtsdatum(
+                String vorname, String nachname, LocalDate geburtsdatum
+        );
 }

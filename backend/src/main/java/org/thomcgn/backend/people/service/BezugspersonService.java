@@ -10,13 +10,12 @@ import org.thomcgn.backend.auth.service.AccessControlService;
 import org.thomcgn.backend.common.errors.DomainException;
 import org.thomcgn.backend.common.errors.ErrorCode;
 import org.thomcgn.backend.common.security.SecurityUtils;
-import org.thomcgn.backend.people.dto.BezugspersonListItem;
-import org.thomcgn.backend.people.dto.BezugspersonResponse;
-import org.thomcgn.backend.people.dto.BezugspersonSearchResponse;
-import org.thomcgn.backend.people.dto.CreateBezugspersonRequest;
+import org.thomcgn.backend.people.dto.*;
 import org.thomcgn.backend.people.model.Bezugsperson;
 import org.thomcgn.backend.people.model.Gender;
 import org.thomcgn.backend.people.repo.BezugspersonRepository;
+
+import java.time.LocalDate;
 
 @Service
 public class BezugspersonService {
@@ -144,5 +143,20 @@ public class BezugspersonService {
                 b.getOrt(),
                 null
         );
+    }
+
+    public BezugspersonDuplicateResponse findDuplicates(String vorname, String nachname, LocalDate geburtsdatum, Long einrichtungId) {
+        var hits = repo.findDuplicates(vorname.trim(), nachname.trim(), geburtsdatum);
+
+        var items = hits.stream()
+                .limit(10)
+                .map(bp -> new DuplicateItem(
+                        bp.getId(),
+                        bp.getDisplayName(),   // ✅ passt zu deinem DTO
+                        bp.getGeburtsdatum()
+                ))
+                .toList();
+
+        return new BezugspersonDuplicateResponse(items);
     }
 }

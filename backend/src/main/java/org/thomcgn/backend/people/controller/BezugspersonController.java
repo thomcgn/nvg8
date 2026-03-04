@@ -35,4 +35,14 @@ public class BezugspersonController {
     ) {
         return ResponseEntity.ok(service.search(q, page, size, einrichtungId));
     }
+
+    @GetMapping("/duplicates")
+    public ResponseEntity<BezugspersonDuplicateResponse> duplicates(
+            @RequestParam String vorname,
+            @RequestParam String nachname,
+            @RequestParam java.time.LocalDate geburtsdatum,
+            @RequestParam(required = false) Long einrichtungId
+    ) {
+        return ResponseEntity.ok(service.findDuplicates(vorname, nachname, geburtsdatum, einrichtungId));
+    }
 }

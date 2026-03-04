@@ -1,26 +1,38 @@
 package org.thomcgn.backend.people.dto;
 
+import jakarta.validation.constraints.AssertTrue;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import org.thomcgn.backend.people.model.Gender;
 
 import java.time.LocalDate;
 
 public record CreateKindRequest(
-        String vorname,
-        String nachname,
-        LocalDate geburtsdatum,
-        Gender gender,
+        @NotBlank String vorname,
+        @NotBlank String nachname,
+        @NotNull LocalDate geburtsdatum,
+        @NotNull Gender gender,
+
         boolean foerderbedarf,
         String foerderbedarfDetails,
         String gesundheitsHinweise,
 
-        // ✅ Adresse (wie Bezugsperson)
-        String strasse,
-        String hausnummer,
-        String plz,
-        String ort,
+        // ✅ Adresse (Pflicht)
+        @NotBlank String strasse,
+        @NotBlank String hausnummer,
+        @NotBlank String plz,
+        @NotBlank String ort,
 
-        // ✅ Einrichtung beim Anlegen (optional)
-        // - null => nimmt aktive Einrichtung aus dem Context
-        // - != null => muss == aktive Einrichtung sein, sonst 403 CONTEXT_REQUIRED
         Long ownerEinrichtungOrgUnitId
-) {}
+) {
+    @AssertTrue(message = "Geschlecht darf nicht UNBEKANNT sein")
+    public boolean isGenderNotUnknown() {
+        return gender != null && gender != Gender.UNBEKANNT;
+    }
+
+    @AssertTrue(message = "Förderbedarf-Details müssen angegeben werden, wenn Förderbedarf aktiv ist")
+    public boolean isFoerderbedarfDetailsValid() {
+        if (!foerderbedarf) return true;
+        return foerderbedarfDetails != null && !foerderbedarfDetails.trim().isEmpty();
+    }
+}

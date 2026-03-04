@@ -416,4 +416,20 @@ public class KindService {
                 l.isEnabled()
         );
     }
+    public KindDuplicateResponse findDuplicates(String vorname, String nachname, LocalDate geburtsdatum) {
+        var hits = kindRepo.findByVornameIgnoreCaseAndNachnameIgnoreCaseAndGeburtsdatum(
+                vorname.trim(), nachname.trim(), geburtsdatum
+        );
+
+        var items = hits.stream()
+                .limit(10)
+                .map(k -> new DuplicateItem(
+                        k.getId(),
+                        (k.getVorname() + " " + k.getNachname()).trim(),
+                        k.getGeburtsdatum()
+                ))
+                .toList();
+
+        return new KindDuplicateResponse(items);
+    }
 }
