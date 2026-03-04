@@ -1426,7 +1426,7 @@ export default function KindWizardPage() {
                                     <DialogContent
                                         className={[
                                             "p-0",
-                                            "w-[calc(100vw-1.5rem)] sm:w-auto",
+                                            "w-[min(96vw,64rem)]",
                                             "sm:max-w-4xl",
                                             "max-h-[90vh]",
                                             "overflow-hidden",

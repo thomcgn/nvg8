@@ -31,6 +31,16 @@ export type MeldungChangeResponse = {
 export type MeldungResponse = {
     id: number;
     fallId: number;
+
+    /**
+     * ✅ NEU: Ziel für Redirect nach /dashboard/akten/[id]
+     * - ideal: Backend liefert aktenId direkt
+     * - optional kompatibel: kindId/akteId (falls Backend so heißt)
+     */
+    aktenId?: number | null;
+    kindId?: number | null;
+    akteId?: number | null;
+
     versionNo: number;
     current: boolean;
     status: string;
@@ -75,13 +85,15 @@ export type MeldungResponse = {
 
     // Sections
     anlassCodes: string[];
-    jugendamt: {
+    jugendamt:
+        | {
         informiert: string | null;
         kontaktAm: string | null; // Instant
         kontaktart: string | null;
         aktenzeichen: string | null;
         begruendung: string | null;
-    } | null;
+    }
+        | null;
 
     contacts: Array<{
         id: number;
@@ -205,13 +217,15 @@ export type MeldungDraftRequest = {
         }>;
     }>;
 
-    jugendamt?: {
+    jugendamt?:
+        | {
         informiert?: string | null;
         kontaktAm?: string | null; // Instant
         kontaktart?: string | null;
         aktenzeichen?: string | null;
         begruendung?: string | null;
-    } | null;
+    }
+        | null;
 
     contacts?: Array<{
         kontaktMit?: string | null;
@@ -247,7 +261,6 @@ export type MeldungSubmitRequest = {
 };
 
 function extractHttpStatus(err: unknown): number | null {
-    // apiFetch wirft bei euch ein Error-Objekt, das häufig `.status` oder `.problem.status` hat.
     const e = err as any;
     const s = e?.status ?? e?.problem?.status;
     return typeof s === "number" ? s : null;
@@ -261,9 +274,7 @@ function extractHttpStatus(err: unknown): number | null {
  */
 async function ensureCurrentMeldung(fallId: number): Promise<MeldungResponse> {
     try {
-        return await apiFetch<MeldungResponse>(`/falloeffnungen/${fallId}/meldungen/current`, {
-            method: "GET",
-        });
+        return await apiFetch<MeldungResponse>(`/falloeffnungen/${fallId}/meldungen/current`, { method: "GET" });
     } catch (e: any) {
         const st = extractHttpStatus(e);
         if (st !== 404) throw e;
@@ -276,9 +287,7 @@ async function ensureCurrentMeldung(fallId: number): Promise<MeldungResponse> {
         } catch (e2: any) {
             const st2 = extractHttpStatus(e2);
             if (st2 === 409) {
-                return await apiFetch<MeldungResponse>(`/falloeffnungen/${fallId}/meldungen/current`, {
-                    method: "GET",
-                });
+                return await apiFetch<MeldungResponse>(`/falloeffnungen/${fallId}/meldungen/current`, { method: "GET" });
             }
             throw e2;
         }
@@ -319,6 +328,5 @@ export const meldungApi = {
             body: req ?? null,
         }),
 
-    // ✅ neu: robustes "lade current oder lege an"
     ensureCurrent: (fallId: number) => ensureCurrentMeldung(fallId),
 };

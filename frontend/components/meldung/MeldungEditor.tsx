@@ -199,24 +199,13 @@ const INDICATORS: { id: string; label: string }[] = [
     { id: "DISCLOSURE", label: "Offenbarung/Aussage Kind" },
 ];
 
-/* ---------------- Risk scoring (Auto-Ampel) ----------------
-   Ziel: nachvollziehbare Vorbewertung aus Observations/Tags (+ Akutflags).
-   - severity 0..3, max over all tags is strongest signal
-   - repeated observations increase weight slightly
-   - akute Flags add bonus
-------------------------------------------------------------- */
+/* ---------------- Risk scoring (Auto-Ampel) ---------------- */
 
 function ampToRank(a: string | null | undefined): number {
     if (a === "GRUEN") return 0;
     if (a === "GELB") return 1;
     if (a === "ROT") return 2;
     return -1;
-}
-
-function rankToAmpel(rank: number): (typeof AMPEL)[number] {
-    if (rank <= 0) return "GRUEN";
-    if (rank === 1) return "GELB";
-    return "ROT";
 }
 
 function computeAutoAssessment(form: MeldungDraftRequest) {
@@ -235,28 +224,16 @@ function computeAutoAssessment(form: MeldungDraftRequest) {
     }
 
     const avgSeverity = tagCount ? sumSeverity / tagCount : 0;
-
     const repeatedCount = obs.filter((o: any) => o?.zeitraum === "WIEDERHOLT").length;
-    const akutBonus =
-        (form.akutGefahrImVerzug ? 1.25 : 0) + (form.akutNotrufErforderlich ? 0.75 : 0);
 
-    // Score design (simple + explainable):
-    // - baseline from maxSeverity (dominant)
-    // - avgSeverity contributes mildly
-    // - repeated observations add small increment
-    // - akut flags add bonus
-    const score =
-        maxSeverity * 2.0 + avgSeverity * 1.0 + Math.min(2, repeatedCount) * 0.5 + akutBonus;
+    const akutBonus = (form.akutGefahrImVerzug ? 1.25 : 0) + (form.akutNotrufErforderlich ? 0.75 : 0);
 
-    // Thresholds tuned for 0..3 severity:
-    // score < 2.0 => GRUEN
-    // score < 4.5 => GELB
-    // else ROT
+    const score = maxSeverity * 2.0 + avgSeverity * 1.0 + Math.min(2, repeatedCount) * 0.5 + akutBonus;
+
     let autoAmpel: (typeof AMPEL)[number] = "GRUEN";
     if (score >= 4.5) autoAmpel = "ROT";
     else if (score >= 2.0) autoAmpel = "GELB";
 
-    // Human-readable rationale (short)
     const rationaleParts: string[] = [];
     if (tagCount === 0) rationaleParts.push("Keine Tags/Severity angegeben");
     else {
@@ -548,10 +525,12 @@ export function MeldungEditor(props: {
     // ✅ Auto assessment + auto-derivation of abweichungZurAuto (kept in sync)
     const auto = React.useMemo(() => computeAutoAssessment(form), [form]);
     const fachAmpel = (form as any).fachAmpel as string | null;
-    const abwComputed = React.useMemo(() => computeAbweichungZurAuto(fachAmpel, auto.autoAmpel), [fachAmpel, auto.autoAmpel]);
+    const abwComputed = React.useMemo(
+        () => computeAbweichungZurAuto(fachAmpel, auto.autoAmpel),
+        [fachAmpel, auto.autoAmpel]
+    );
 
     React.useEffect(() => {
-        // Keep draft field aligned unless user already has a value (we treat it as derived anyway)
         const cur = (form as any).abweichungZurAuto as string | null | undefined;
         if (!cur || cur !== abwComputed) {
             set("abweichungZurAuto" as any, abwComputed as any);
@@ -568,30 +547,25 @@ export function MeldungEditor(props: {
         if (obs.length === 0) return "Mindestens eine Beobachtung (Observation) ist erforderlich.";
         if (obs.some((o) => String(o?.text ?? "").trim().length === 0)) return "Es gibt Beobachtungen ohne Text.";
 
-        // If Gefahr im Verzug => Akutbegründung required
         if ((form as any).akutGefahrImVerzug && String((form as any).akutBegruendung ?? "").trim().length === 0) {
             return "Akut-Begründung ist erforderlich, wenn Gefahr im Verzug gesetzt ist.";
         }
 
-        // Final risk: prefer fachAmpel if set, else autoAmpel
         const finalAmpel = (fachAmpel ?? auto.autoAmpel) as string;
 
-        // For submit we require fach fields always (transparent §8a)
         if (!fachAmpel) return "Fachliche Ampel fehlt (Pflicht bei Submit).";
-        if (String((form as any).fachText ?? "").trim().length === 0) return "Fachliche Begründung (Text) fehlt (Pflicht bei Submit).";
+        if (String((form as any).fachText ?? "").trim().length === 0)
+            return "Fachliche Begründung (Text) fehlt (Pflicht bei Submit).";
 
-        // If ROT (high risk) => Jugendamt decision required + reason if not informed
         if (finalAmpel === "ROT") {
             const jug = (form as any).jugendamt;
             if (!jug?.informiert) return "Jugendamt-Entscheidung fehlt (bei ROT erforderlich).";
             if (jug.informiert !== "JA" && String(jug.begruendung ?? "").trim().length === 0) {
                 return "Begründung beim Jugendamt ist erforderlich, wenn nicht informiert (bei ROT).";
             }
-            // Also require akutKindSicherUntergebracht to be explicitly set (not null)
             if (!(form as any).akutKindSicherUntergebracht) {
                 return "Angabe 'Kind sicher untergebracht' ist erforderlich (bei ROT).";
             }
-            // Encourage at least one contact/external clarification (hard requirement here)
             const contacts = ((form as any).contacts || []) as any[];
             const extern = ((form as any).extern || []) as any[];
             if (contacts.length + extern.length === 0) {
@@ -599,7 +573,6 @@ export function MeldungEditor(props: {
             }
         }
 
-        // If GELB (medium) => Jugendamt decision recommended; require if akute flags
         if (finalAmpel === "GELB") {
             const jug = (form as any).jugendamt;
             if ((form as any).akutGefahrImVerzug && !jug?.informiert) {
@@ -607,7 +580,6 @@ export function MeldungEditor(props: {
             }
         }
 
-        // Abweichung justification if deviating
         if ((form as any).abweichungZurAuto && (form as any).abweichungZurAuto !== "GLEICH") {
             if (String((form as any).abweichungsBegruendung ?? "").trim().length === 0) {
                 return "Begründung der Abweichung ist erforderlich, wenn von der Vorbewertung abgewichen wird.";
@@ -662,21 +634,48 @@ export function MeldungEditor(props: {
 
                 <Separator className="mx-2 hidden sm:block" />
 
-                {/* ✅ Auto assessment UI */}
                 <Badge tone={riskTone(auto.autoAmpel)}>Auto: {AMPEL_LABEL[auto.autoAmpel]}</Badge>
                 <Badge variant="secondary">Score: {auto.score}</Badge>
                 <span className="text-xs text-muted-foreground hidden sm:inline">{auto.rationale}</span>
             </div>
 
             <Tabs defaultValue="basis">
-                <TabsList className="grid w-full grid-cols-4 lg:grid-cols-7">
-                    <TabsTrigger value="basis">Basis</TabsTrigger>
-                    <TabsTrigger value="anlass">Anlässe</TabsTrigger>
-                    <TabsTrigger value="obs">Beobachtungen</TabsTrigger>
-                    <TabsTrigger value="fach">Fachbewertung</TabsTrigger>
-                    <TabsTrigger value="akut">Akut / Schutz</TabsTrigger>
-                    <TabsTrigger value="planung">Planung</TabsTrigger>
-                    <TabsTrigger value="doku">Dokumentation</TabsTrigger>
+                {/* ✅ iPad-friendly: “schicke Buttons” statt enger Grid-Reihe */}
+                <TabsList
+                    className={[
+                        "w-full",
+                        "flex flex-wrap gap-2",
+                        "overflow-x-auto",
+                        "rounded-2xl bg-muted/40 p-2",
+                    ].join(" ")}
+                >
+                    {[
+                        ["basis", "Basis"],
+                        ["anlass", "Anlässe"],
+                        ["obs", "Beobachtungen"],
+                        ["fach", "Fachbewertung"],
+                        ["akut", "Akut / Schutz"],
+                        ["planung", "Planung"],
+                        ["doku", "Dokumentation"],
+                        ["save", "Speichern"],
+                    ].map(([val, label]) => (
+                        <TabsTrigger
+                            key={val}
+                            value={val}
+                            className={[
+                                "whitespace-nowrap",
+                                "rounded-full px-4 py-2",
+                                "text-sm",
+                                "border border-border/60",
+                                "data-[state=active]:bg-background",
+                                "data-[state=active]:shadow-sm",
+                                "data-[state=active]:border-border",
+                                "min-h-10",
+                            ].join(" ")}
+                        >
+                            {label}
+                        </TabsTrigger>
+                    ))}
                 </TabsList>
 
                 {/* BASIS */}
@@ -1208,7 +1207,7 @@ export function MeldungEditor(props: {
                     </Card>
                 </TabsContent>
 
-                {/* AKUT / SCHUTZ + JUGENDAMT */}
+                {/* AKUT / SCHUTZ + JUGENDAMT (ohne Speichern-Card) */}
                 <TabsContent value="akut" className="mt-4 space-y-4">
                     {validationErr ? (
                         <Alert>
@@ -1260,10 +1259,7 @@ export function MeldungEditor(props: {
                                         className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
                                         value={String((form as any).akutKindSicherUntergebracht ?? "UNKLAR")}
                                         onChange={(e) =>
-                                            set(
-                                                "akutKindSicherUntergebracht" as any,
-                                                pick(e.target.value, JANEINUNKLAR, "UNKLAR") as any
-                                            )
+                                            set("akutKindSicherUntergebracht" as any, pick(e.target.value, JANEINUNKLAR, "UNKLAR") as any)
                                         }
                                         disabled={disabled || statusIsDone}
                                     >
@@ -1393,36 +1389,6 @@ export function MeldungEditor(props: {
                             </div>
                         </CardContent>
                     </Card>
-
-                    <Card>
-                        <CardHeader>
-                            <CardTitle className="text-base">Speichern / Abschließen</CardTitle>
-                        </CardHeader>
-                        <CardContent className="space-y-3">
-                            <div className="flex flex-wrap items-center gap-3">
-                                <Button onClick={doSave} disabled={disabled || statusIsDone || saving} type="button">
-                                    {saving ? "Speichere…" : "Draft speichern"}
-                                </Button>
-                                {saveMsg ? <span className="text-sm text-muted-foreground">{saveMsg}</span> : null}
-                            </div>
-
-                            <Separator />
-
-                            <div className="flex flex-col gap-3 rounded-xl border border-border p-3">
-                                <div className="flex items-center justify-between">
-                                    <div>
-                                        <div className="font-medium">Observations → Notizen spiegeln</div>
-                                        <div className="text-xs text-muted-foreground">Empfohlen</div>
-                                    </div>
-                                    <Switch checked={submitMirror} onCheckedChange={setSubmitMirror} disabled={disabled || statusIsDone} />
-                                </div>
-
-                                <Button onClick={doSubmit} disabled={disabled || statusIsDone || saving} type="button">
-                                    Abschließen (Submit)
-                                </Button>
-                            </div>
-                        </CardContent>
-                    </Card>
                 </TabsContent>
 
                 {/* PLANUNG */}
@@ -1471,7 +1437,7 @@ export function MeldungEditor(props: {
                     </div>
                 </TabsContent>
 
-                {/* DOKU: contacts / extern / attachments / sectionReasons */}
+                {/* DOKU */}
                 <TabsContent value="doku" className="mt-4 space-y-6">
                     <Alert>
                         <AlertTitle>Dokumentation / Nachvollziehbarkeit</AlertTitle>
@@ -1798,6 +1764,53 @@ export function MeldungEditor(props: {
                                     </div>
                                 ))
                             )}
+                        </CardContent>
+                    </Card>
+                </TabsContent>
+
+                {/* ✅ NEU: eigener Tab “Speichern” (hinter Dokumentation) */}
+                <TabsContent value="save" className="mt-4 space-y-4">
+                    {validationErr ? (
+                        <Alert>
+                            <AlertTitle>Unvollständig</AlertTitle>
+                            <AlertDescription>{validationErr}</AlertDescription>
+                        </Alert>
+                    ) : null}
+
+                    <Alert>
+                        <AlertTitle>Speichern & Abschließen</AlertTitle>
+                        <AlertDescription>
+                            Draft speichern oder Meldung abschließen (Submit). Nach Submit erfolgt die Rückkehr zur Akte.
+                        </AlertDescription>
+                    </Alert>
+
+                    <Card>
+                        <CardHeader>
+                            <CardTitle className="text-base">Speichern</CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-3">
+                            <div className="flex flex-wrap items-center gap-3">
+                                <Button onClick={doSave} disabled={disabled || statusIsDone || saving} type="button">
+                                    {saving ? "Speichere…" : "Draft speichern"}
+                                </Button>
+                                {saveMsg ? <span className="text-sm text-muted-foreground">{saveMsg}</span> : null}
+                            </div>
+
+                            <Separator />
+
+                            <div className="flex flex-col gap-3 rounded-xl border border-border p-3">
+                                <div className="flex items-center justify-between gap-3">
+                                    <div>
+                                        <div className="font-medium">Observations → Notizen spiegeln</div>
+                                        <div className="text-xs text-muted-foreground">Empfohlen</div>
+                                    </div>
+                                    <Switch checked={submitMirror} onCheckedChange={setSubmitMirror} disabled={disabled || statusIsDone} />
+                                </div>
+
+                                <Button onClick={doSubmit} disabled={disabled || statusIsDone || saving} type="button">
+                                    Abschließen (Submit)
+                                </Button>
+                            </div>
                         </CardContent>
                     </Card>
                 </TabsContent>
