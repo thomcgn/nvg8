@@ -35,21 +35,20 @@ const navSections: NavSection[] = [
         items: [{ href: "/dashboard/akten", label: "Akten", icon: ClipboardList, description: "Übersicht & Suche" }],
     },
     {
-        title: "Kinder",
-        items: [{ href: "/dashboard/kinder", label: "Kinder", icon: Users, description: "Stammdaten & Verlauf" }],
+        title: "Kinder & Bezugspersonen",
+        items: [
+            { href: "/dashboard/kinder", label: "Kinder", icon: Users, description: "Stammdaten & Verlauf" },
+            { href: "/dashboard/bezugspersonen", label: "Bezugspersonen", icon: Users, description: "Stamm- und Kontaktdaten" },
+        ],
     },
     {
         title: "Personal",
         items: [
             { href: "/dashboard/mitarbeiter", label: "Mitarbeiter", icon: UserCog, description: "Rollen & Zugänge" },
+            { href: "/dashboard/teams", label: "Teams", icon: UsersRound, description: "Struktur & Zuständigkeit" }
         ],
     },
-    {
-        title: "Teams",
-        items: [
-            { href: "/dashboard/teams", label: "Teams", icon: UsersRound, description: "Struktur & Zuständigkeit" },
-        ],
-    },
+
 ];
 
 function NavItem({
@@ -73,22 +72,32 @@ function NavItem({
             href={href}
             onClick={onNavigate}
             className={
-                "group flex items-start gap-3 rounded-2xl px-3 py-2 transition " +
+                "group relative flex items-start gap-3 rounded-2xl px-3 py-2.5 transition-all duration-150 " +
                 (active
-                    ? "bg-brand-teal/12 text-brand-blue border border-brand-teal/20"
-                    : "text-brand-text2 hover:bg-white hover:text-brand-blue border border-transparent")
+                    ? "bg-brand-teal/15 text-brand-blue border border-brand-teal/30 shadow-sm"
+                    : "text-brand-text2 border border-transparent hover:bg-white/80 hover:shadow-sm hover:border-brand-border hover:text-brand-blue")
             }
         >
-            <div className="mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-white/60 group-hover:bg-white">
+            <div
+                className={
+                    "mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-xl transition " +
+                    (active ? "bg-brand-teal/15 text-brand-teal" : "bg-white/70 text-brand-text2 group-hover:bg-white group-hover:text-brand-blue")
+                }
+            >
                 <Icon className="h-4 w-4" />
             </div>
 
             <div className="min-w-0">
-                <div className="text-sm font-semibold whitespace-normal wrap-break-word">{label}</div>
+                <div className="text-sm font-semibold whitespace-normal break-words">{label}</div>
                 {description ? (
-                    <div className="mt-0.5 text-xs text-brand-text2 whitespace-normal break-words">{description}</div>
+                    <div className={"mt-0.5 text-xs whitespace-normal break-words " + (active ? "text-brand-blue/80" : "text-brand-text2")}>
+                        {description}
+                    </div>
                 ) : null}
             </div>
+
+            {/* subtle right accent on hover */}
+            <div className="pointer-events-none absolute right-2 top-1/2 h-8 w-1 -translate-y-1/2 rounded-full bg-brand-teal/0 transition group-hover:bg-brand-teal/20" />
         </Link>
     );
 }
@@ -100,28 +109,20 @@ function formatMmSs(totalSeconds: number) {
     return `${mm}:${ss}`;
 }
 
-function SidebarContent({
-                            onClose,
-                            className = "",
-                        }: {
-    onClose?: () => void;
-    className?: string;
-}) {
+function SidebarContent({ onClose, className = "" }: { onClose?: () => void; className?: string }) {
     const router = useRouter();
     const { me, loading, signOut } = useAuth();
 
     const [traegerName, setTraegerName] = useState<string | null>(null);
     const [einrichtungName, setEinrichtungName] = useState<string | null>(null);
 
-    // ✅ immer default: geschlossen (ohne persistenz)
+    // default: collapsed (no persistence)
     const [collapsed, setCollapsed] = useState(true);
 
     const displayName = useMemo(() => me?.displayName || me?.email || "—", [me?.displayName, me?.email]);
     const roleText = useMemo(() => (me?.roles?.length ? me.roles.join(", ") : "Keine Rolle"), [me?.roles]);
 
-    // ---------------------------
     // Session timeout (Idle) UI
-    // ---------------------------
     const idleMinutes = Number(process.env.NEXT_PUBLIC_IDLE_TIMEOUT_MINUTES || "60");
     const idleSeconds = Math.max(5, idleMinutes) * 60;
 
@@ -154,7 +155,6 @@ function SidebarContent({
     }, []);
 
     useEffect(() => {
-        // Auto logout when idle timer hits zero
         if (!me) return;
         if (remainingSeconds > 0) return;
 
@@ -199,13 +199,24 @@ function SidebarContent({
     }, [me?.contextActive, me?.orgUnitId]);
 
     return (
-        <div className={"flex h-full flex-col border-r border-brand-border bg-brand-bg p-4 " + className}>
+        <div
+            className={
+                "flex h-full flex-col border-r border-brand-border bg-brand-bg/80 backdrop-blur p-4 " + className
+            }
+        >
+            {/* Header */}
             <div className="mb-4 flex items-center justify-between">
                 <BrandMark />
                 {onClose ? (
                     <button
                         onClick={onClose}
-                        className="rounded-xl p-2 text-brand-text2 hover:bg-white hover:text-brand-blue"
+                        className="
+              rounded-xl p-2 text-brand-text2
+              transition
+              hover:bg-white/80 hover:text-brand-blue
+              focus:outline-none focus:ring-2 focus:ring-brand-teal/25
+              active:scale-[0.98]
+            "
                         aria-label="Menü schließen"
                     >
                         <X className="h-5 w-5" />
@@ -213,28 +224,33 @@ function SidebarContent({
                 ) : null}
             </div>
 
-            {/* Collapsible user/context card */}
-            <div className="mb-3 rounded-2xl border border-brand-border bg-white overflow-hidden">
-                <button type="button" onClick={() => setCollapsed((c) => !c)} className="w-full p-4 text-left">
+            {/* User / Context card (SaaS style) */}
+            <div className="mb-3 overflow-hidden rounded-2xl border border-brand-border bg-white/80 backdrop-blur shadow-sm">
+                <button
+                    type="button"
+                    onClick={() => setCollapsed((c) => !c)}
+                    className="w-full p-4 text-left transition hover:bg-white"
+                >
                     <div className="flex items-center gap-3">
-                        <div className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-brand-teal/12 text-brand-teal">
+                        <div className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-brand-teal/15 text-brand-teal">
                             <UserRoundIcon className="h-5 w-5" />
                         </div>
 
-                        {/* Collapsed: NUR Name */}
                         <div className="min-w-0 flex-1">
-                            <div className="text-sm font-semibold text-brand-text whitespace-normal break-words">
-                                {loading ? "…" : displayName}
-                            </div>
+                            <div className="text-sm font-semibold text-brand-text truncate">{loading ? "…" : displayName}</div>
+                            <div className="mt-0.5 text-xs text-brand-text2 truncate">{loading ? "…" : traegerName ?? "—"}</div>
                         </div>
 
                         <ChevronDown
-                            className={"h-4 w-4 shrink-0 text-brand-text2 transition-transform duration-200 " + (collapsed ? "" : "rotate-180")}
+                            className={
+                                "h-4 w-4 shrink-0 text-brand-text2 transition-transform duration-200 " +
+                                (collapsed ? "" : "rotate-180")
+                            }
                         />
                     </div>
                 </button>
 
-                {/* ✅ Smooth accordion */}
+                {/* Smooth accordion */}
                 <div
                     className={
                         "grid transition-[grid-template-rows] duration-200 ease-out " +
@@ -245,7 +261,6 @@ function SidebarContent({
                         <div
                             className={
                                 "px-4 pb-4 border-t border-brand-border pt-3 text-xs space-y-3 " +
-                                // zusätzlich: weiches ausblenden, ohne die height-animation zu killen
                                 (collapsed ? "opacity-0" : "opacity-100")
                             }
                             style={{ transition: "opacity 160ms ease-out" }}
@@ -254,11 +269,6 @@ function SidebarContent({
                             <div className="flex items-start gap-2 text-brand-text2">
                                 <ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                                 <span className="whitespace-normal break-words leading-snug">{loading ? "…" : roleText}</span>
-                            </div>
-
-                            <div className="flex items-start gap-2 text-brand-text2">
-                                <Home className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                                <span className="whitespace-normal break-words leading-snug">{loading ? "…" : traegerName ?? "—"}</span>
                             </div>
 
                             <div className="flex items-start gap-2 text-brand-text2">
@@ -271,7 +281,7 @@ function SidebarContent({
                                     "rounded-xl border px-3 py-2 " +
                                     (isExpiringSoon
                                         ? "border-brand-warning/30 bg-brand-warning/10 text-brand-text"
-                                        : "border-brand-border bg-brand-bg text-brand-text2")
+                                        : "border-brand-border bg-brand-bg/60 text-brand-text2")
                                 }
                             >
                                 <div className="flex items-center gap-2">
@@ -289,7 +299,16 @@ function SidebarContent({
                                 <Link
                                     href="/dashboard/account"
                                     onClick={onClose}
-                                    className="inline-flex items-center justify-center gap-2 rounded-xl border border-brand-border bg-white px-3 py-2 text-xs font-semibold text-brand-text2 hover:bg-brand-bg"
+                                    className="
+                    inline-flex items-center justify-center gap-2 rounded-xl
+                    border border-brand-border bg-white
+                    px-3 py-2 text-xs font-semibold text-brand-text2
+                    shadow-sm
+                    transition
+                    hover:bg-brand-teal/10 hover:border-brand-teal/30 hover:text-brand-blue
+                    focus:outline-none focus:ring-2 focus:ring-brand-teal/25
+                    active:scale-[0.98]
+                  "
                                 >
                                     <Settings className="h-4 w-4" />
                                     Account Einstellungen
@@ -297,7 +316,7 @@ function SidebarContent({
 
                                 <Button
                                     variant="ghost"
-                                    className="w-full justify-center gap-2"
+                                    className="w-full justify-center gap-2 rounded-xl border border-transparent hover:border-brand-border hover:bg-white"
                                     onClick={async () => {
                                         await signOut();
                                         onClose?.();
@@ -313,7 +332,7 @@ function SidebarContent({
                 </div>
             </div>
 
-            {/* Dashboard Home */}
+            {/* Dashboard Home (single primary item) */}
             <div className="mb-4">
                 <NavItem href="/dashboard" label="Übersicht" icon={LayoutDashboard} description="Start & Kennzahlen" onNavigate={onClose} />
             </div>
@@ -322,7 +341,9 @@ function SidebarContent({
             <nav className="flex flex-1 flex-col gap-4 overflow-y-auto pr-1">
                 {navSections.map((sec) => (
                     <div key={sec.title}>
-                        <div className="px-1 text-[11px] font-extrabold uppercase tracking-wide text-brand-text2">{sec.title}</div>
+                        <div className="px-1 text-[11px] font-extrabold uppercase tracking-wide text-brand-text2/80">
+                            {sec.title}
+                        </div>
                         <div className="mt-2 flex flex-col gap-2">
                             {sec.items.map((i) => (
                                 <NavItem key={i.href} {...i} onNavigate={onClose} />
@@ -393,13 +414,19 @@ export function Sidebar() {
 
     return (
         <>
-            {/* Topbar for mobile + iPad (until lg) */}
-            <div className="lg:hidden sticky top-0 z-40 border-b border-brand-border bg-brand-bg">
+            {/* Mobile topbar */}
+            <div className="lg:hidden sticky top-0 z-40 border-b border-brand-border bg-brand-bg/80 backdrop-blur">
                 <div className="flex items-center justify-between px-4 py-3">
                     <BrandMark compact />
                     <button
                         onClick={() => setOpen(true)}
-                        className="rounded-xl p-2 text-brand-text2 hover:bg-white hover:text-brand-blue"
+                        className="
+              rounded-xl p-2 text-brand-text2
+              transition
+              hover:bg-white/80 hover:text-brand-blue
+              focus:outline-none focus:ring-2 focus:ring-brand-teal/25
+              active:scale-[0.98]
+            "
                         aria-label="Menü öffnen"
                     >
                         <Menu className="h-5 w-5" />
@@ -407,19 +434,19 @@ export function Sidebar() {
                 </div>
             </div>
 
-            {/* Desktop sidebar only on lg+ */}
+            {/* Desktop sidebar */}
             <aside className="hidden lg:flex h-screen w-72">
                 <SidebarContent className="w-72" />
             </aside>
 
-            {/* Drawer on mobile + iPad */}
+            {/* Drawer on mobile */}
             {open ? (
                 <div className="lg:hidden fixed inset-0 z-50">
                     <button className="absolute inset-0 bg-black/40" aria-label="Overlay schließen" onClick={close} />
 
                     <div
                         className="
-              absolute left-0 top-0 h-full shadow-xl
+              absolute left-0 top-0 h-full shadow-2xl
               w-[min(320px,85vw)]
               md:w-[min(360px,55vw)]
               overscroll-contain touch-pan-y

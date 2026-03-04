@@ -3,6 +3,7 @@ package org.thomcgn.backend.people.repo;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import org.thomcgn.backend.people.dto.BpKindRow;
 import org.thomcgn.backend.people.model.KindBezugsperson;
 
 import java.time.LocalDate;
@@ -61,4 +62,32 @@ public interface KindBezugspersonRepository extends JpaRepository<KindBezugspers
     List<KindBezugsperson> findAllForKind(@Param("kindId") Long kindId);
 
     boolean existsByKindIdAndBezugspersonId(Long kindId, Long bezugspersonId);
+
+    @Query("""
+        select new org.thomcgn.backend.people.dto.BpKindRow(
+            link.bezugsperson.id,
+            link.kind.id,
+            link.kind.vorname,
+            link.kind.nachname,
+            link.kind.geburtsdatum)
+        from KindBezugsperson link
+        where link.bezugsperson.id in :bpIds
+          and link.enabled = true
+          and link.validTo is null
+    """)
+    List<BpKindRow> findActiveKinderForBezugspersonen(@Param("bpIds") List<Long> bpIds);
+
+    @Query("""
+        select new org.thomcgn.backend.people.dto.BpKindRow(
+            link.bezugsperson.id,
+            link.kind.id,
+            link.kind.vorname,
+            link.kind.nachname,
+            link.kind.geburtsdatum
+        )
+        from KindBezugsperson link
+        where link.bezugsperson.id in :bpIds
+          and link.enabled = true
+    """)
+    List<BpKindRow> findAllKinderForBezugspersonen(@Param("bpIds") List<Long> bpIds);
 }

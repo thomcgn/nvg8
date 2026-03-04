@@ -14,260 +14,20 @@ import { Switch } from "@/components/ui/switch";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
-import { FileText, X } from "lucide-react";
-
 function clampSeverity(n: number): number {
     if (!Number.isFinite(n)) return 0;
     return Math.max(0, Math.min(3, Math.round(n)));
 }
 
-function formatBytes(bytes: number): string {
-    if (!Number.isFinite(bytes) || bytes <= 0) return "0 B";
-    const units = ["B", "KB", "MB", "GB", "TB"];
-    let idx = 0;
-    let v = bytes;
-    while (v >= 1024 && idx < units.length - 1) {
-        v = v / 1024;
-        idx++;
-    }
-    const rounded = idx === 0 ? Math.round(v) : Math.round(v * 10) / 10;
-    return `${rounded} ${units[idx]}`;
+function pick<T extends string>(value: string, allowed: readonly T[], fallback: T): T {
+    return (allowed as readonly string[]).includes(value) ? (value as T) : fallback;
 }
 
-function formatFileType(file: File): string {
-    // "application/pdf" => "PDF", etc.
-    const t = (file.type || "").toLowerCase();
-    if (!t) return "Datei";
-    if (t === "application/pdf") return "PDF";
-    if (t.startsWith("image/")) return "Bild";
-    if (t.startsWith("text/")) return "Text";
-    return t;
-}
+/* ---------------- Backend Enums (Frontend mirrors) ----------------
+   ✅ These MUST match Java enums exactly
+------------------------------------------------------------------- */
 
-type UploadInfoListProps = {
-    title?: string;
-    files: File[];
-    onUploadClick: () => void;
-    onRemoveAt: (idx: number) => void;
-    disabled?: boolean;
-};
-
-function UploadInfoList({
-                            title = "Unterlagen",
-                            files,
-                            onUploadClick,
-                            onRemoveAt,
-                            disabled = false,
-                        }: UploadInfoListProps) {
-    return (
-        <div className="space-y-2">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="text-xs text-muted-foreground">{title}</div>
-                <Button type="button" variant="outline" size="sm" onClick={onUploadClick} disabled={disabled}>
-                    Unterlagen hochladen
-                </Button>
-            </div>
-
-            {files.length === 0 ? (
-                <div className="rounded-md border border-dashed border-border px-3 py-2 text-xs text-muted-foreground">
-                    Keine Unterlagen ausgewählt.
-                </div>
-            ) : (
-                <div className="space-y-2">
-                    <div className="text-xs text-muted-foreground">{files.length} Datei(en) ausgewählt</div>
-
-                    <div className="space-y-1">
-                        {files.map((file, idx) => (
-                            <div
-                                key={`${file.name}-${file.size}-${file.lastModified}-${idx}`}
-                                className="flex items-center justify-between gap-2 rounded-md border border-border bg-background px-2 py-2"
-                            >
-                                <div className="flex min-w-0 items-start gap-2">
-                                    <FileText className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-                                    <div className="min-w-0">
-                                        <div className="truncate text-sm">{file.name}</div>
-                                        <div className="mt-0.5 text-xs text-muted-foreground">
-                                            {formatFileType(file)} · {formatBytes(file.size)}
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="icon"
-                                    onClick={() => onRemoveAt(idx)}
-                                    disabled={disabled}
-                                    className="h-8 w-8 text-destructive hover:text-destructive"
-                                    title="Entfernen"
-                                >
-                                    <X className="h-4 w-4" />
-                                </Button>
-                            </div>
-                        ))}
-                    </div>
-
-                    <div className="text-[11px] leading-snug text-muted-foreground">
-                        Hinweis: Upload ist aktuell nur eine UI-Info (keine Speicherung).
-                    </div>
-                </div>
-            )}
-        </div>
-    );
-}
-
-type AnlassCategory = {
-    key: string;
-    title: string;
-    items: Array<{ code: string; label: string }>;
-};
-
-export const ANLASS_CATALOG: AnlassCategory[] = [
-    {
-        key: "BODY",
-        title: "Körperbezogene Anlässe",
-        items: [
-            { code: "BODY_INJURY_VISIBLE", label: "Sichtbare Verletzungen" },
-            { code: "BODY_INJURY_REPEATED", label: "Wiederholte Verletzungen" },
-            { code: "BODY_INJURY_EXPLANATION_ODD", label: "Unplausible Erklärung für Verletzungen" },
-            { code: "BODY_PUNISHMENT_HINT", label: "Hinweis auf körperliche Bestrafung" },
-            { code: "BODY_MALNUTRITION", label: "Mangelernährung" },
-            { code: "BODY_MEDICAL_NEGLECT", label: "Medizinische Vernachlässigung" },
-            { code: "BODY_NEGLECT_APPEARANCE", label: "Vernachlässigtes Erscheinungsbild" },
-            { code: "BODY_PSYCHOSOMATIC", label: "Psychosomatische Beschwerden" },
-            { code: "BODY_SELF_HARM", label: "Selbstverletzendes Verhalten" },
-            { code: "BODY_ACUTE_HEALTH", label: "Akute gesundheitliche Gefährdung" },
-        ],
-    },
-    {
-        key: "PSY",
-        title: "Psychische / emotionale Anlässe",
-        items: [
-            { code: "PSY_WITHDRAWAL", label: "Sozialer Rückzug" },
-            { code: "PSY_ANXIETY", label: "Ausgeprägte Ängstlichkeit" },
-            { code: "PSY_DEPRESSIVE", label: "Depressive Symptome" },
-            { code: "PSY_DISSOCIATION", label: "Dissoziatives Verhalten" },
-            { code: "PSY_PARENTIFICATION", label: "Parentifizierung (Übernahme elterlicher Rolle)" },
-            { code: "PSY_AGGRESSION", label: "Aggressives Verhalten" },
-            { code: "PSY_MOOD_SWINGS", label: "Starke Stimmungsschwankungen" },
-            { code: "PSY_SELF_DEVALUATION", label: "Selbstabwertung" },
-            { code: "PSY_FEAR_OF_PERSON", label: "Angst vor bestimmter Person" },
-            { code: "PSY_ATTACHMENT", label: "Bindungsauffälligkeiten" },
-        ],
-    },
-    {
-        key: "VIO",
-        title: "Hinweise auf Gewalt",
-        items: [
-            { code: "VIO_CHILD_STATEMENT", label: "Aussage des Kindes zu Gewalt" },
-            { code: "VIO_DV_STATEMENT", label: "Hinweis auf häusliche Gewalt" },
-            { code: "VIO_THREATS", label: "Bedrohungen" },
-            { code: "VIO_PSYCH", label: "Psychische Gewalt" },
-            { code: "VIO_SEXUALIZED_BEHAVIOR", label: "Sexualisiertes Verhalten" },
-            { code: "VIO_SEXUAL_STATEMENT", label: "Aussage zu sexualisierter Gewalt" },
-            { code: "VIO_DIGITAL_SEX", label: "Digitale sexualisierte Übergriffe" },
-        ],
-    },
-    {
-        key: "NEG",
-        title: "Vernachlässigungsanzeichen",
-        items: [
-            { code: "NEG_ABSENCE", label: "Auffällige Fehlzeiten" },
-            { code: "NEG_UNPUNCTUAL", label: "Häufige Unpünktlichkeit" },
-            { code: "NEG_NO_SUPERVISION", label: "Fehlende Aufsicht" },
-            { code: "NEG_BASIC_NEEDS", label: "Grundbedürfnisse nicht gedeckt" },
-            { code: "NEG_PARENT_OVERLOAD", label: "Überforderung der Eltern" },
-            { code: "NEG_HOUSING", label: "Unzureichende Wohnsituation" },
-            { code: "NEG_DEV_DELAY", label: "Entwicklungsverzögerung" },
-        ],
-    },
-    {
-        key: "CTX",
-        title: "Kontextbezogene Anlässe (Eltern / Haushalt)",
-        items: [
-            { code: "CTX_SUBSTANCE", label: "Suchtproblematik im Haushalt" },
-            { code: "CTX_MENTAL_ILLNESS", label: "Psychische Erkrankung im Haushalt" },
-            { code: "CTX_SEPARATION_CONFLICT", label: "Trennungs-/Scheidungskonflikt" },
-            { code: "CTX_POLICE", label: "Polizeieinsatz im Kontext" },
-            { code: "CTX_PRIOR_CASES", label: "Frühere Jugendhilfefälle" },
-            { code: "CTX_CHANGING_CARE", label: "Wechselnde Betreuungssituationen" },
-            { code: "CTX_PARENT_CONFLICT", label: "Elternkonflikte" },
-        ],
-    },
-    {
-        key: "EXT",
-        title: "Externe Mitteilungen",
-        items: [
-            { code: "EXT_BY_PEER", label: "Mitteilung durch Mitschüler/in" },
-            { code: "EXT_BY_PARENTS", label: "Mitteilung durch Eltern" },
-            { code: "EXT_BY_POLICE", label: "Mitteilung durch Polizei" },
-            { code: "EXT_BY_MEDICAL", label: "Mitteilung durch medizinische Stelle" },
-            { code: "EXT_BY_YOUTH_OFFICE", label: "Mitteilung durch Jugendamt" },
-            { code: "EXT_BY_COUNSELING", label: "Mitteilung durch Beratungsstelle" },
-            { code: "EXT_ANON", label: "Anonyme Mitteilung" },
-            { code: "EXT_SELF", label: "Selbstmeldung des Kindes" },
-        ],
-    },
-    {
-        key: "EDU",
-        title: "Schul-/Kita-spezifische Anlässe",
-        items: [
-            { code: "EDU_PERFORMANCE_DROP", label: "Leistungsabfall" },
-            { code: "EDU_BEHAVIOR_CHANGE", label: "Verhaltensveränderung" },
-            { code: "EDU_SEXUAL_PLAY", label: "Sexualisiertes Spielverhalten" },
-            { code: "EDU_AGGRESSION_OTHERS", label: "Aggression gegenüber anderen" },
-            { code: "EDU_EXHAUSTION", label: "Erschöpfung" },
-            { code: "EDU_NO_MATERIALS", label: "Fehlende Lernmaterialien" },
-            { code: "EDU_HUNGER", label: "Hungeranzeichen" },
-            { code: "EDU_DEV_UNCLARIFIED", label: "Unklare Entwicklungsauffälligkeit" },
-        ],
-    },
-    {
-        key: "ACUTE",
-        title: "Akutindikatoren",
-        items: [
-            { code: "ACUTE_CURRENT_ABUSE", label: "Aktuelle Misshandlung" },
-            { code: "ACUTE_THREAT", label: "Konkrete Bedrohung" },
-            { code: "ACUTE_FEAR_RETURN", label: "Angst vor Rückkehr nach Hause" },
-            { code: "ACUTE_SEVERE_INJURY", label: "Schwere Verletzung" },
-            { code: "ACUTE_SUICIDALITY", label: "Suizidalität" },
-        ],
-    },
-    {
-        key: "OTHER",
-        title: "Sonstiges",
-        items: [{ code: "OTHER", label: "Sonstiges" }],
-    },
-];
-
-const ANLASS_CODES: string[] = ANLASS_CATALOG.flatMap((c) => c.items.map((i) => i.code));
-const ANLASS_LABELS: Record<string, string> = Object.fromEntries(
-    ANLASS_CATALOG.flatMap((c) => c.items.map((i) => [i.code, i.label]))
-);
-
-// Demo-Indikatoren (später aus Backend laden)
-const INDICATORS: { id: string; label: string }[] = [
-    { id: "INJURY_UNEXPLAINED", label: "Unerklärte Verletzungen" },
-    { id: "FEAR_OF_CAREGIVER", label: "Angst vor Bezugsperson" },
-    { id: "NEGLECT_HYGIENE", label: "Vernachlässigung/Hygiene" },
-    { id: "ABSENCE_PATTERN", label: "Auffälliges Fehlzeitenmuster" },
-    { id: "DISCLOSURE", label: "Offenbarung/Aussage Kind" },
-];
-
-/**
- * Backend-Enums (falloeffnungen/meldung/model):
- * - Meldeweg: TELEFON, EMAIL, PERSOENLICH, BRIEF, SONSTIGES
- * - Dringlichkeit: AKUT_HEUTE, ZEITNAH_24_48H, BEOBACHTEN, UNKLAR
- * - Datenbasis: BEOBACHTUNG, ERZAEHLUNG, DOKUMENT, UNKLAR
- * - AmpelStatus: GRUEN, GELB, ROT
- * - JugendamtInformiert: JA, NEIN, UNKLAR
- * - JugendamtKontaktart: TELEFON, EMAIL, SCHRIFTLICH, PERSOENLICH
- * - ObservationQuelle: EIGENE_WAHRNEHMUNG, KIND, DRITTE, UNBEKANNT
- * - ObservationOrt: ZUHAUSE, SCHULE_KITA, OEFFENTLICH, SONSTIGES
- * - ObservationZeitraum: EINMALIG, WIEDERHOLT, UNBEKANNT
- * - Sichtbarkeit: INTERN, EXTERN
- */
-
+// Meldeweg / Dringlichkeit / Datenbasis / AmpelStatus / JugendamtInformiert / JugendamtKontaktart
 const MELDEWEG = ["TELEFON", "EMAIL", "PERSOENLICH", "BRIEF", "SONSTIGES"] as const;
 const MELDEWEG_LABEL: Record<(typeof MELDEWEG)[number], string> = {
     TELEFON: "Telefon",
@@ -280,7 +40,7 @@ const MELDEWEG_LABEL: Record<(typeof MELDEWEG)[number], string> = {
 const DRING = ["AKUT_HEUTE", "ZEITNAH_24_48H", "BEOBACHTEN", "UNKLAR"] as const;
 const DRING_LABEL: Record<(typeof DRING)[number], string> = {
     AKUT_HEUTE: "Akut (heute)",
-    ZEITNAH_24_48H: "Zeitnah 24-48h",
+    ZEITNAH_24_48H: "Zeitnah (24–48h)",
     BEOBACHTEN: "Beobachten",
     UNKLAR: "Unklar",
 };
@@ -315,6 +75,7 @@ const JUG_KONTAKTART_LABEL: Record<(typeof JUG_KONTAKTART)[number], string> = {
     PERSOENLICH: "Persönlich",
 };
 
+// Observation enums
 const OBS_QUELLE = ["EIGENE_WAHRNEHMUNG", "KIND", "DRITTE", "UNBEKANNT"] as const;
 const OBS_QUELLE_LABEL: Record<(typeof OBS_QUELLE)[number], string> = {
     EIGENE_WAHRNEHMUNG: "Eigene Wahrnehmung",
@@ -344,41 +105,221 @@ const SICHT_LABEL: Record<(typeof SICHT)[number], string> = {
     EXTERN: "Extern",
 };
 
-function pick<T extends string>(value: string, allowed: readonly T[], fallback: T): T {
-    return (allowed as readonly string[]).includes(value) ? (value as T) : fallback;
+// ✅ AbweichungZurAutoAmpel (Java): NIEDRIGER | HOEHER | GLEICH
+const ABW_AUTO = ["GLEICH", "NIEDRIGER", "HOEHER"] as const;
+const ABW_AUTO_LABEL: Record<(typeof ABW_AUTO)[number], string> = {
+    GLEICH: "Keine Abweichung (entspricht Vorbewertung)",
+    NIEDRIGER: "Abweichung: niedriger als Vorbewertung",
+    HOEHER: "Abweichung: höher als Vorbewertung",
+};
+
+// ✅ JaNeinUnklar (used by akutKindSicherUntergebracht)
+const JANEINUNKLAR = ["JA", "NEIN", "UNKLAR"] as const;
+const JNU_LABEL: Record<(typeof JANEINUNKLAR)[number], string> = {
+    JA: "Ja",
+    NEIN: "Nein",
+    UNKLAR: "Unklar",
+};
+
+// ✅ Contacts
+const KONTAKT_MIT = ["KIND", "MUTTER", "VATER", "BEZUGSPERSON", "SONSTIGE"] as const;
+const KONTAKT_MIT_LABEL: Record<(typeof KONTAKT_MIT)[number], string> = {
+    KIND: "Kind",
+    MUTTER: "Mutter",
+    VATER: "Vater",
+    BEZUGSPERSON: "Bezugsperson",
+    SONSTIGE: "Sonstige Person",
+};
+
+const KONTAKT_STATUS = ["GEPLANT", "ERREICHT", "NICHT_ERREICHT", "ABGEBROCHEN"] as const;
+const KONTAKT_STATUS_LABEL: Record<(typeof KONTAKT_STATUS)[number], string> = {
+    GEPLANT: "Geplant",
+    ERREICHT: "Erreicht",
+    NICHT_ERREICHT: "Nicht erreicht",
+    ABGEBROCHEN: "Abgebrochen",
+};
+
+// ✅ Extern
+const EXTERN_STELLE = ["POLIZEI", "SCHULE_KITA", "ARZT_KLINIK", "SONSTIGE"] as const;
+const EXTERN_STELLE_LABEL: Record<(typeof EXTERN_STELLE)[number], string> = {
+    POLIZEI: "Polizei",
+    SCHULE_KITA: "Schule/Kita",
+    ARZT_KLINIK: "Ärztliche Stelle/Klinik",
+    SONSTIGE: "Sonstige Stelle",
+};
+
+// ✅ Attachments
+const ATTACH_TYP = ["DOKUMENT", "FOTO", "AUDIO", "VIDEO", "SONSTIGES"] as const;
+const ATTACH_TYP_LABEL: Record<(typeof ATTACH_TYP)[number], string> = {
+    DOKUMENT: "Dokument",
+    FOTO: "Foto",
+    AUDIO: "Audio",
+    VIDEO: "Video",
+    SONSTIGES: "Sonstiges",
+};
+
+/* ---------------- Anlass / Indikatoren (Demo) ---------------- */
+
+type AnlassCategory = {
+    key: string;
+    title: string;
+    items: Array<{ code: string; label: string }>;
+};
+
+export const ANLASS_CATALOG: AnlassCategory[] = [
+    {
+        key: "BODY",
+        title: "Körperbezogene Anlässe",
+        items: [
+            { code: "BODY_INJURY_VISIBLE", label: "Sichtbare Verletzungen" },
+            { code: "BODY_INJURY_REPEATED", label: "Wiederholte Verletzungen" },
+            { code: "BODY_INJURY_EXPLANATION_ODD", label: "Unplausible Erklärung für Verletzungen" },
+            { code: "BODY_PUNISHMENT_HINT", label: "Hinweis auf körperliche Bestrafung" },
+            { code: "BODY_MALNUTRITION", label: "Mangelernährung" },
+            { code: "BODY_MEDICAL_NEGLECT", label: "Medizinische Vernachlässigung" },
+            { code: "BODY_NEGLECT_APPEARANCE", label: "Vernachlässigtes Erscheinungsbild" },
+            { code: "BODY_PSYCHOSOMATIC", label: "Psychosomatische Beschwerden" },
+            { code: "BODY_SELF_HARM", label: "Selbstverletzendes Verhalten" },
+            { code: "BODY_ACUTE_HEALTH", label: "Akute gesundheitliche Gefährdung" },
+        ],
+    },
+    { key: "OTHER", title: "Sonstiges", items: [{ code: "OTHER", label: "Sonstiges" }] },
+];
+
+const ANLASS_CODES: string[] = ANLASS_CATALOG.flatMap((c) => c.items.map((i) => i.code));
+const ANLASS_LABELS: Record<string, string> = Object.fromEntries(
+    ANLASS_CATALOG.flatMap((c) => c.items.map((i) => [i.code, i.label]))
+);
+
+const INDICATORS: { id: string; label: string }[] = [
+    { id: "INJURY_UNEXPLAINED", label: "Unerklärte Verletzungen" },
+    { id: "FEAR_OF_CAREGIVER", label: "Angst vor Bezugsperson" },
+    { id: "NEGLECT_HYGIENE", label: "Vernachlässigung/Hygiene" },
+    { id: "ABSENCE_PATTERN", label: "Auffälliges Fehlzeitenmuster" },
+    { id: "DISCLOSURE", label: "Offenbarung/Aussage Kind" },
+];
+
+/* ---------------- Risk scoring (Auto-Ampel) ----------------
+   Ziel: nachvollziehbare Vorbewertung aus Observations/Tags (+ Akutflags).
+   - severity 0..3, max over all tags is strongest signal
+   - repeated observations increase weight slightly
+   - akute Flags add bonus
+------------------------------------------------------------- */
+
+function ampToRank(a: string | null | undefined): number {
+    if (a === "GRUEN") return 0;
+    if (a === "GELB") return 1;
+    if (a === "ROT") return 2;
+    return -1;
 }
+
+function rankToAmpel(rank: number): (typeof AMPEL)[number] {
+    if (rank <= 0) return "GRUEN";
+    if (rank === 1) return "GELB";
+    return "ROT";
+}
+
+function computeAutoAssessment(form: MeldungDraftRequest) {
+    const obs = (form as any).observations || [];
+    let maxSeverity = 0;
+    let sumSeverity = 0;
+    let tagCount = 0;
+
+    for (const o of obs) {
+        for (const t of o?.tags || []) {
+            const sev = clampSeverity(Number(t?.severity ?? 0));
+            maxSeverity = Math.max(maxSeverity, sev);
+            sumSeverity += sev;
+            tagCount += 1;
+        }
+    }
+
+    const avgSeverity = tagCount ? sumSeverity / tagCount : 0;
+
+    const repeatedCount = obs.filter((o: any) => o?.zeitraum === "WIEDERHOLT").length;
+    const akutBonus =
+        (form.akutGefahrImVerzug ? 1.25 : 0) + (form.akutNotrufErforderlich ? 0.75 : 0);
+
+    // Score design (simple + explainable):
+    // - baseline from maxSeverity (dominant)
+    // - avgSeverity contributes mildly
+    // - repeated observations add small increment
+    // - akut flags add bonus
+    const score =
+        maxSeverity * 2.0 + avgSeverity * 1.0 + Math.min(2, repeatedCount) * 0.5 + akutBonus;
+
+    // Thresholds tuned for 0..3 severity:
+    // score < 2.0 => GRUEN
+    // score < 4.5 => GELB
+    // else ROT
+    let autoAmpel: (typeof AMPEL)[number] = "GRUEN";
+    if (score >= 4.5) autoAmpel = "ROT";
+    else if (score >= 2.0) autoAmpel = "GELB";
+
+    // Human-readable rationale (short)
+    const rationaleParts: string[] = [];
+    if (tagCount === 0) rationaleParts.push("Keine Tags/Severity angegeben");
+    else {
+        rationaleParts.push(`Max-Severity ${maxSeverity}`);
+        rationaleParts.push(`Ø-Severity ${avgSeverity.toFixed(1)}`);
+        if (repeatedCount) rationaleParts.push(`${repeatedCount}× wiederholt`);
+    }
+    if (form.akutGefahrImVerzug) rationaleParts.push("Gefahr im Verzug");
+    if (form.akutNotrufErforderlich) rationaleParts.push("Notruf");
+
+    return {
+        score: Number.isFinite(score) ? Math.round(score * 10) / 10 : 0,
+        autoAmpel,
+        rationale: rationaleParts.join(" · "),
+        maxSeverity,
+        tagCount,
+    };
+}
+
+function computeAbweichungZurAuto(fachAmpel: string | null | undefined, autoAmpel: string) {
+    const f = ampToRank(fachAmpel);
+    const a = ampToRank(autoAmpel);
+    if (f < 0 || a < 0) return "GLEICH" as const;
+    if (f === a) return "GLEICH" as const;
+    return f > a ? ("HOEHER" as const) : ("NIEDRIGER" as const);
+}
+
+/* ---------------- DTO mapping ---------------- */
 
 function toDraftFromResponse(v: MeldungResponse): MeldungDraftRequest {
     return {
-        erfasstVonRolle: v.erfasstVonRolle ?? "",
-        meldeweg: v.meldeweg,
-        meldewegSonstiges: v.meldewegSonstiges ?? null,
-        meldendeStelleKontakt: v.meldendeStelleKontakt ?? null,
-        dringlichkeit: v.dringlichkeit,
-        datenbasis: v.datenbasis,
-        // Einwilligung obsolet: wird hier nicht mehr als UI gerendert, Feld kann aber im Draft weiter existieren
-        einwilligungVorhanden: v.einwilligungVorhanden ?? null,
-        schweigepflichtentbindungVorhanden: v.schweigepflichtentbindungVorhanden ?? null,
+        erfasstVonRolle: (v as any).erfasstVonRolle ?? "",
 
-        kurzbeschreibung: v.kurzbeschreibung ?? "",
+        meldeweg: (v as any).meldeweg ?? "TELEFON",
+        meldewegSonstiges: (v as any).meldewegSonstiges ?? null,
+        meldendeStelleKontakt: (v as any).meldendeStelleKontakt ?? null,
 
-        fachAmpel: v.fachAmpel ?? null,
-        fachText: v.fachText ?? null,
-        abweichungZurAuto: v.abweichungZurAuto ?? null,
-        abweichungsBegruendung: v.abweichungsBegruendung ?? null,
+        dringlichkeit: (v as any).dringlichkeit ?? "UNKLAR",
+        datenbasis: (v as any).datenbasis ?? "UNKLAR",
 
-        akutGefahrImVerzug: v.akutGefahrImVerzug ?? false,
-        akutBegruendung: v.akutBegruendung ?? null,
-        akutNotrufErforderlich: v.akutNotrufErforderlich ?? null,
-        akutKindSicherUntergebracht: v.akutKindSicherUntergebracht ?? null,
+        einwilligungVorhanden: (v as any).einwilligungVorhanden ?? null,
+        schweigepflichtentbindungVorhanden: (v as any).schweigepflichtentbindungVorhanden ?? null,
 
-        verantwortlicheFachkraftUserId: v.verantwortlicheFachkraftUserId ?? null,
-        naechsteUeberpruefungAm: v.naechsteUeberpruefungAm ?? null,
-        zusammenfassung: v.zusammenfassung ?? null,
+        kurzbeschreibung: (v as any).kurzbeschreibung ?? "",
 
-        anlassCodes: v.anlassCodes ?? [],
+        fachAmpel: (v as any).fachAmpel ?? null,
+        fachText: (v as any).fachText ?? null,
 
-        observations: (v.observations || []).map((o) => ({
+        abweichungZurAuto: (v as any).abweichungZurAuto ?? "GLEICH",
+        abweichungsBegruendung: (v as any).abweichungsBegruendung ?? null,
+
+        akutGefahrImVerzug: (v as any).akutGefahrImVerzug ?? false,
+        akutBegruendung: (v as any).akutBegruendung ?? null,
+        akutNotrufErforderlich: (v as any).akutNotrufErforderlich ?? null,
+        akutKindSicherUntergebracht: (v as any).akutKindSicherUntergebracht ?? "UNKLAR",
+
+        verantwortlicheFachkraftUserId: (v as any).verantwortlicheFachkraftUserId ?? null,
+        naechsteUeberpruefungAm: (v as any).naechsteUeberpruefungAm ?? null,
+        zusammenfassung: (v as any).zusammenfassung ?? null,
+
+        anlassCodes: (v as any).anlassCodes ?? [],
+
+        observations: ((v as any).observations || []).map((o: any) => ({
             zeitpunkt: o.zeitpunkt ?? null,
             zeitraum: o.zeitraum ?? null,
             ort: o.ort ?? null,
@@ -390,7 +331,7 @@ function toDraftFromResponse(v: MeldungResponse): MeldungDraftRequest {
             verhaltenKind: o.verhaltenKind ?? null,
             verhaltenBezug: o.verhaltenBezug ?? null,
             sichtbarkeit: o.sichtbarkeit ?? "INTERN",
-            tags: (o.tags || []).map((t) => ({
+            tags: (o.tags || []).map((t: any) => ({
                 anlassCode: t.anlassCode ?? null,
                 indicatorId: t.indicatorId ?? null,
                 severity: t.severity ?? null,
@@ -398,17 +339,46 @@ function toDraftFromResponse(v: MeldungResponse): MeldungDraftRequest {
             })),
         })),
 
-        jugendamt: v.jugendamt
+        jugendamt: (v as any).jugendamt
             ? {
-                informiert: v.jugendamt.informiert,
-                kontaktAm: v.jugendamt.kontaktAm ?? null,
-                kontaktart: v.jugendamt.kontaktart ?? null,
-                aktenzeichen: v.jugendamt.aktenzeichen ?? null,
-                begruendung: v.jugendamt.begruendung ?? null,
+                informiert: (v as any).jugendamt.informiert ?? null,
+                kontaktAm: (v as any).jugendamt.kontaktAm ?? null,
+                kontaktart: (v as any).jugendamt.kontaktart ?? null,
+                aktenzeichen: (v as any).jugendamt.aktenzeichen ?? null,
+                begruendung: (v as any).jugendamt.begruendung ?? null,
             }
             : null,
-    };
+
+        contacts: ((v as any).contacts || []).map((c: any) => ({
+            kontaktMit: c.kontaktMit ?? "SONSTIGE",
+            kontaktAm: c.kontaktAm ?? null,
+            status: c.status ?? "GEPLANT",
+            notiz: c.notiz ?? null,
+            ergebnis: c.ergebnis ?? null,
+        })),
+
+        extern: ((v as any).extern || []).map((x: any) => ({
+            stelle: x.stelle ?? "SONSTIGE",
+            stelleSonstiges: x.stelleSonstiges ?? null,
+            am: x.am ?? null,
+            begruendung: x.begruendung ?? null,
+            ergebnis: x.ergebnis ?? null,
+        })),
+
+        attachments: ((v as any).attachments || []).map((a: any) => ({
+            fileId: a.fileId ?? null,
+            typ: a.typ ?? "DOKUMENT",
+            titel: a.titel ?? null,
+            beschreibung: a.beschreibung ?? null,
+            sichtbarkeit: a.sichtbarkeit ?? "INTERN",
+            rechtsgrundlageHinweis: a.rechtsgrundlageHinweis ?? null,
+        })),
+
+        sectionReasons: (v as any).sectionReasons ?? {},
+    } as any;
 }
+
+/* ---------------- Component ---------------- */
 
 export function MeldungEditor(props: {
     value: MeldungResponse;
@@ -424,38 +394,22 @@ export function MeldungEditor(props: {
     const [submitMirror, setSubmitMirror] = React.useState(true);
     const [validationErr, setValidationErr] = React.useState<string | null>(null);
 
-    // --- UI-only Upload "Info": Schweigepflichtentbindung ---
-    const waiverFileRef = React.useRef<HTMLInputElement | null>(null);
-    const [waiverFiles, setWaiverFiles] = React.useState<File[]>([]);
-
-    const openFileDialog = (ref: React.RefObject<HTMLInputElement | null>) => {
-        if (!ref.current) return;
-        ref.current.value = ""; // erlaubt erneut dieselbe Datei zu wählen
-        ref.current.click();
-    };
-
-    const onPickFilesAppend =
-        (setter: React.Dispatch<React.SetStateAction<File[]>>) => (e: React.ChangeEvent<HTMLInputElement>) => {
-            const incoming = Array.from(e.target.files ?? []);
-            if (incoming.length === 0) return;
-            setter((prev) => [...prev, ...incoming]);
-        };
-    // -------------------------------------------------------
-
     React.useEffect(() => {
         setForm(toDraftFromResponse(value));
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [value.id]);
+    }, [(value as any).id]);
 
-    const set = <K extends keyof MeldungDraftRequest>(k: K, v: MeldungDraftRequest[K]) => setForm((s) => ({ ...s, [k]: v }));
+    const set = <K extends keyof MeldungDraftRequest>(k: K, v: MeldungDraftRequest[K]) =>
+        setForm((s) => ({ ...s, [k]: v }));
 
     const toggleAnlass = (code: string) => {
-        const cur = new Set(form.anlassCodes || []);
+        const cur = new Set((form as any).anlassCodes || []);
         if (cur.has(code)) cur.delete(code);
         else cur.add(code);
-        set("anlassCodes", Array.from(cur));
+        set("anlassCodes" as any, Array.from(cur) as any);
     };
 
+    // Observations helpers
     const addObservation = () => {
         const obs = {
             zeitpunkt: new Date().toISOString(),
@@ -466,61 +420,200 @@ export function MeldungEditor(props: {
             text: "",
             tags: [],
         };
-        set("observations", [...(form.observations || []), obs]);
+        set("observations" as any, ([...(((form as any).observations || []) as any[]), obs] as any) as any);
     };
 
     const updateObs = (idx: number, patch: any) => {
-        const arr = [...(form.observations || [])];
+        const arr = [...(((form as any).observations || []) as any[])];
         arr[idx] = { ...arr[idx], ...patch };
-        set("observations", arr);
+        set("observations" as any, arr as any);
     };
 
     const removeObs = (idx: number) => {
-        const arr = [...(form.observations || [])];
+        const arr = [...(((form as any).observations || []) as any[])];
         arr.splice(idx, 1);
-        set("observations", arr);
+        set("observations" as any, arr as any);
     };
 
     const addObsTag = (idx: number) => {
-        const arr = [...(form.observations || [])];
-        const tags = [...(arr[idx].tags || [])];
+        const arr = [...(((form as any).observations || []) as any[])];
+        const tags = [...((arr[idx].tags || []) as any[])];
         tags.push({
-            anlassCode: (form.anlassCodes || [])[0] ?? null,
+            anlassCode: (((form as any).anlassCodes || [])[0] ?? null) as any,
             indicatorId: null,
             severity: 0,
             comment: null,
         });
         arr[idx] = { ...arr[idx], tags };
-        set("observations", arr);
+        set("observations" as any, arr as any);
     };
 
     const updateObsTag = (obsIdx: number, tagIdx: number, patch: any) => {
-        const arr = [...(form.observations || [])];
-        const tags = [...(arr[obsIdx].tags || [])];
+        const arr = [...(((form as any).observations || []) as any[])];
+        const tags = [...((arr[obsIdx].tags || []) as any[])];
         tags[tagIdx] = { ...tags[tagIdx], ...patch };
         arr[obsIdx] = { ...arr[obsIdx], tags };
-        set("observations", arr);
+        set("observations" as any, arr as any);
     };
 
     const removeObsTag = (obsIdx: number, tagIdx: number) => {
-        const arr = [...(form.observations || [])];
-        const tags = [...(arr[obsIdx].tags || [])];
+        const arr = [...(((form as any).observations || []) as any[])];
+        const tags = [...((arr[obsIdx].tags || []) as any[])];
         tags.splice(tagIdx, 1);
         arr[obsIdx] = { ...arr[obsIdx], tags };
-        set("observations", arr);
+        set("observations" as any, arr as any);
     };
 
-    const validateForSubmitUI = (): string | null => {
-        if (!form.kurzbeschreibung || String(form.kurzbeschreibung).trim().length === 0) return "Kurzbeschreibung fehlt.";
-        if (!form.fachAmpel) return "Fachliche Ampel fehlt.";
-        if (!form.fachText || String(form.fachText).trim().length === 0) return "Fachliche Einschätzung (Text) fehlt.";
-        if (!form.jugendamt?.informiert) return "Jugendamt-Entscheidung fehlt.";
-        if (form.jugendamt.informiert !== "JA" && (!form.jugendamt.begruendung || String(form.jugendamt.begruendung).trim().length === 0)) {
-            return "Begründung beim Jugendamt ist erforderlich, wenn nicht informiert.";
+    // Contacts / Extern / Attachments / sectionReasons
+    const addContact = () => {
+        const next = [...(((form as any).contacts || []) as any[])];
+        next.push({
+            kontaktMit: "SONSTIGE",
+            kontaktAm: new Date().toISOString(),
+            status: "GEPLANT",
+            notiz: null,
+            ergebnis: null,
+        });
+        set("contacts" as any, next as any);
+    };
+
+    const updateContact = (idx: number, patch: any) => {
+        const next = [...(((form as any).contacts || []) as any[])];
+        next[idx] = { ...next[idx], ...patch };
+        set("contacts" as any, next as any);
+    };
+
+    const removeContact = (idx: number) => {
+        const next = [...(((form as any).contacts || []) as any[])];
+        next.splice(idx, 1);
+        set("contacts" as any, next as any);
+    };
+
+    const addExtern = () => {
+        const next = [...(((form as any).extern || []) as any[])];
+        next.push({
+            stelle: "SONSTIGE",
+            stelleSonstiges: null,
+            am: new Date().toISOString(),
+            begruendung: null,
+            ergebnis: null,
+        });
+        set("extern" as any, next as any);
+    };
+
+    const updateExtern = (idx: number, patch: any) => {
+        const next = [...(((form as any).extern || []) as any[])];
+        next[idx] = { ...next[idx], ...patch };
+        set("extern" as any, next as any);
+    };
+
+    const removeExtern = (idx: number) => {
+        const next = [...(((form as any).extern || []) as any[])];
+        next.splice(idx, 1);
+        set("extern" as any, next as any);
+    };
+
+    const addAttachment = () => {
+        const next = [...(((form as any).attachments || []) as any[])];
+        next.push({
+            fileId: null,
+            typ: "DOKUMENT",
+            titel: null,
+            beschreibung: null,
+            sichtbarkeit: "INTERN",
+            rechtsgrundlageHinweis: null,
+        });
+        set("attachments" as any, next as any);
+    };
+
+    const updateAttachment = (idx: number, patch: any) => {
+        const next = [...(((form as any).attachments || []) as any[])];
+        next[idx] = { ...next[idx], ...patch };
+        set("attachments" as any, next as any);
+    };
+
+    const removeAttachment = (idx: number) => {
+        const next = [...(((form as any).attachments || []) as any[])];
+        next.splice(idx, 1);
+        set("attachments" as any, next as any);
+    };
+
+    const setSectionReason = (key: string, reason: string | null) => {
+        const cur = { ...(((form as any).sectionReasons || {}) as Record<string, string>) };
+        if (!reason || reason.trim().length === 0) delete cur[key];
+        else cur[key] = reason;
+        set("sectionReasons" as any, cur as any);
+    };
+
+    // ✅ Auto assessment + auto-derivation of abweichungZurAuto (kept in sync)
+    const auto = React.useMemo(() => computeAutoAssessment(form), [form]);
+    const fachAmpel = (form as any).fachAmpel as string | null;
+    const abwComputed = React.useMemo(() => computeAbweichungZurAuto(fachAmpel, auto.autoAmpel), [fachAmpel, auto.autoAmpel]);
+
+    React.useEffect(() => {
+        // Keep draft field aligned unless user already has a value (we treat it as derived anyway)
+        const cur = (form as any).abweichungZurAuto as string | null | undefined;
+        if (!cur || cur !== abwComputed) {
+            set("abweichungZurAuto" as any, abwComputed as any);
         }
-        const obs = form.observations || [];
-        if (obs.length === 0) return "Mindestens eine Observation ist erforderlich.";
-        if (obs.some((o) => !o.text || String(o.text).trim().length === 0)) return "Es gibt Observations ohne Text.";
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [abwComputed]);
+
+    // ✅ Risk-based Pflichtfeldlogik (Submit)
+    const validateForSubmitUI = (): string | null => {
+        const kd = String((form as any).kurzbeschreibung ?? "").trim();
+        if (kd.length === 0) return "Kurzbeschreibung fehlt.";
+
+        const obs = (((form as any).observations || []) as any[]).filter(Boolean);
+        if (obs.length === 0) return "Mindestens eine Beobachtung (Observation) ist erforderlich.";
+        if (obs.some((o) => String(o?.text ?? "").trim().length === 0)) return "Es gibt Beobachtungen ohne Text.";
+
+        // If Gefahr im Verzug => Akutbegründung required
+        if ((form as any).akutGefahrImVerzug && String((form as any).akutBegruendung ?? "").trim().length === 0) {
+            return "Akut-Begründung ist erforderlich, wenn Gefahr im Verzug gesetzt ist.";
+        }
+
+        // Final risk: prefer fachAmpel if set, else autoAmpel
+        const finalAmpel = (fachAmpel ?? auto.autoAmpel) as string;
+
+        // For submit we require fach fields always (transparent §8a)
+        if (!fachAmpel) return "Fachliche Ampel fehlt (Pflicht bei Submit).";
+        if (String((form as any).fachText ?? "").trim().length === 0) return "Fachliche Begründung (Text) fehlt (Pflicht bei Submit).";
+
+        // If ROT (high risk) => Jugendamt decision required + reason if not informed
+        if (finalAmpel === "ROT") {
+            const jug = (form as any).jugendamt;
+            if (!jug?.informiert) return "Jugendamt-Entscheidung fehlt (bei ROT erforderlich).";
+            if (jug.informiert !== "JA" && String(jug.begruendung ?? "").trim().length === 0) {
+                return "Begründung beim Jugendamt ist erforderlich, wenn nicht informiert (bei ROT).";
+            }
+            // Also require akutKindSicherUntergebracht to be explicitly set (not null)
+            if (!(form as any).akutKindSicherUntergebracht) {
+                return "Angabe 'Kind sicher untergebracht' ist erforderlich (bei ROT).";
+            }
+            // Encourage at least one contact/external clarification (hard requirement here)
+            const contacts = ((form as any).contacts || []) as any[];
+            const extern = ((form as any).extern || []) as any[];
+            if (contacts.length + extern.length === 0) {
+                return "Mindestens ein Kontakt oder eine externe Abklärung ist erforderlich (bei ROT).";
+            }
+        }
+
+        // If GELB (medium) => Jugendamt decision recommended; require if akute flags
+        if (finalAmpel === "GELB") {
+            const jug = (form as any).jugendamt;
+            if ((form as any).akutGefahrImVerzug && !jug?.informiert) {
+                return "Jugendamt-Entscheidung ist erforderlich, wenn Gefahr im Verzug gesetzt ist (auch bei GELB).";
+            }
+        }
+
+        // Abweichung justification if deviating
+        if ((form as any).abweichungZurAuto && (form as any).abweichungZurAuto !== "GLEICH") {
+            if (String((form as any).abweichungsBegruendung ?? "").trim().length === 0) {
+                return "Begründung der Abweichung ist erforderlich, wenn von der Vorbewertung abgewichen wird.";
+            }
+        }
+
         return null;
     };
 
@@ -545,7 +638,13 @@ export function MeldungEditor(props: {
         await onSubmit(submitMirror);
     };
 
-    const statusIsDone = String(value.status || "").toUpperCase().includes("ABGESCHLOSSEN");
+    const statusIsDone = String((value as any).status || "").toUpperCase().includes("ABGESCHLOSSEN");
+
+    const riskTone = (a: string) => {
+        if (a === "ROT") return "danger";
+        if (a === "GELB") return "warning";
+        return "success";
+    };
 
     return (
         <div className="space-y-4">
@@ -557,27 +656,44 @@ export function MeldungEditor(props: {
             )}
 
             <div className="flex flex-wrap items-center gap-2">
-                <Badge variant="secondary">v{value.versionNo}</Badge>
-                {value.current ? <Badge tone="info">current</Badge> : null}
-                <Badge tone={statusIsDone ? "success" : "info"}>{value.status}</Badge>
+                <Badge variant="secondary">v{(value as any).versionNo}</Badge>
+                {(value as any).current ? <Badge tone="info">current</Badge> : null}
+                <Badge tone={statusIsDone ? "success" : "info"}>{String((value as any).status ?? "")}</Badge>
+
+                <Separator className="mx-2 hidden sm:block" />
+
+                {/* ✅ Auto assessment UI */}
+                <Badge tone={riskTone(auto.autoAmpel)}>Auto: {AMPEL_LABEL[auto.autoAmpel]}</Badge>
+                <Badge variant="secondary">Score: {auto.score}</Badge>
+                <span className="text-xs text-muted-foreground hidden sm:inline">{auto.rationale}</span>
             </div>
 
             <Tabs defaultValue="basis">
-                <TabsList className="grid w-full grid-cols-4">
+                <TabsList className="grid w-full grid-cols-4 lg:grid-cols-7">
                     <TabsTrigger value="basis">Basis</TabsTrigger>
                     <TabsTrigger value="anlass">Anlässe</TabsTrigger>
-                    <TabsTrigger value="obs">Observations</TabsTrigger>
-                    <TabsTrigger value="bewertung">Bewertung</TabsTrigger>
+                    <TabsTrigger value="obs">Beobachtungen</TabsTrigger>
+                    <TabsTrigger value="fach">Fachbewertung</TabsTrigger>
+                    <TabsTrigger value="akut">Akut / Schutz</TabsTrigger>
+                    <TabsTrigger value="planung">Planung</TabsTrigger>
+                    <TabsTrigger value="doku">Dokumentation</TabsTrigger>
                 </TabsList>
 
                 {/* BASIS */}
                 <TabsContent value="basis" className="mt-4 space-y-4">
+                    <Alert>
+                        <AlertTitle>Erfassung / Eingangshinweis</AlertTitle>
+                        <AlertDescription>
+                            Dokumentation im Kontext des Schutzauftrags nach § 8a SGB VIII: sachlich, nachvollziehbar, fallbezogen.
+                        </AlertDescription>
+                    </Alert>
+
                     <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
                         <div className="space-y-2">
-                            <Label>Erfasst von:</Label>
+                            <Label>Erfasst von (Rolle)</Label>
                             <Input
-                                value={form.erfasstVonRolle ?? ""}
-                                onChange={(e) => set("erfasstVonRolle", e.target.value)}
+                                value={String((form as any).erfasstVonRolle ?? "")}
+                                onChange={(e) => set("erfasstVonRolle" as any, e.target.value as any)}
                                 disabled={disabled || statusIsDone}
                                 placeholder="z. B. Lehrkraft, Schulsozialarbeit…"
                             />
@@ -587,8 +703,8 @@ export function MeldungEditor(props: {
                             <Label>Meldeweg</Label>
                             <select
                                 className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
-                                value={(form.meldeweg ?? "TELEFON") as string}
-                                onChange={(e) => set("meldeweg", pick(e.target.value, MELDEWEG, "TELEFON"))}
+                                value={String((form as any).meldeweg ?? "TELEFON")}
+                                onChange={(e) => set("meldeweg" as any, pick(e.target.value, MELDEWEG, "TELEFON") as any)}
                                 disabled={disabled || statusIsDone}
                             >
                                 {MELDEWEG.map((m) => (
@@ -597,10 +713,11 @@ export function MeldungEditor(props: {
                                     </option>
                                 ))}
                             </select>
-                            {form.meldeweg === "SONSTIGES" ? (
+
+                            {String((form as any).meldeweg) === "SONSTIGES" ? (
                                 <Input
-                                    value={form.meldewegSonstiges ?? ""}
-                                    onChange={(e) => set("meldewegSonstiges", e.target.value)}
+                                    value={String((form as any).meldewegSonstiges ?? "")}
+                                    onChange={(e) => set("meldewegSonstiges" as any, (e.target.value || null) as any)}
                                     disabled={disabled || statusIsDone}
                                     placeholder="Bitte spezifizieren…"
                                 />
@@ -611,8 +728,8 @@ export function MeldungEditor(props: {
                             <Label>Dringlichkeit</Label>
                             <select
                                 className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
-                                value={(form.dringlichkeit ?? "UNKLAR") as string}
-                                onChange={(e) => set("dringlichkeit", pick(e.target.value, DRING, "UNKLAR"))}
+                                value={String((form as any).dringlichkeit ?? "UNKLAR")}
+                                onChange={(e) => set("dringlichkeit" as any, pick(e.target.value, DRING, "UNKLAR") as any)}
                                 disabled={disabled || statusIsDone}
                             >
                                 {DRING.map((d) => (
@@ -627,8 +744,8 @@ export function MeldungEditor(props: {
                             <Label>Datenbasis</Label>
                             <select
                                 className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
-                                value={(form.datenbasis ?? "UNKLAR") as string}
-                                onChange={(e) => set("datenbasis", pick(e.target.value, DATENB, "UNKLAR"))}
+                                value={String((form as any).datenbasis ?? "UNKLAR")}
+                                onChange={(e) => set("datenbasis" as any, pick(e.target.value, DATENB, "UNKLAR") as any)}
                                 disabled={disabled || statusIsDone}
                             >
                                 {DATENB.map((d) => (
@@ -642,40 +759,34 @@ export function MeldungEditor(props: {
                         <div className="space-y-2">
                             <Label>Informationsquelle / Kontakt (optional)</Label>
                             <Input
-                                value={form.meldendeStelleKontakt ?? ""}
-                                onChange={(e) => set("meldendeStelleKontakt", e.target.value)}
+                                value={String((form as any).meldendeStelleKontakt ?? "")}
+                                onChange={(e) => set("meldendeStelleKontakt" as any, (e.target.value || null) as any)}
                                 disabled={disabled || statusIsDone}
                                 placeholder="Name / Telefon / Institution…"
                             />
                         </div>
 
-                        {/* SCHWEIGEPFLICHTENTBINDUNG: Upload-Info + Switch */}
-                        <div className="flex items-start justify-between gap-4 rounded-xl border border-border p-3">
-                            <div className="flex-1 space-y-2">
-                                <div className="font-medium">Schweigepflichtentbindung</div>
-
-                                <input
-                                    ref={waiverFileRef}
-                                    type="file"
-                                    className="hidden"
-                                    multiple
-                                    onChange={onPickFilesAppend(setWaiverFiles)}
-                                    disabled={disabled || statusIsDone}
-                                />
-
-                                <UploadInfoList
-                                    title="Angehängte Unterlagen (UI)"
-                                    files={waiverFiles}
-                                    onUploadClick={() => openFileDialog(waiverFileRef)}
-                                    onRemoveAt={(idx) => setWaiverFiles((prev) => prev.filter((_, i) => i !== idx))}
+                        <div className="grid grid-cols-1 gap-3">
+                            <div className="flex items-center justify-between rounded-xl border border-border p-3">
+                                <div>
+                                    <div className="font-medium">Einwilligung vorhanden</div>
+                                    <div className="text-xs text-muted-foreground">Optional, je nach Lage/Erforderlichkeit</div>
+                                </div>
+                                <Switch
+                                    checked={!!(form as any).einwilligungVorhanden}
+                                    onCheckedChange={(v) => set("einwilligungVorhanden" as any, v as any)}
                                     disabled={disabled || statusIsDone}
                                 />
                             </div>
 
-                            <div className="pt-1">
+                            <div className="flex items-center justify-between rounded-xl border border-border p-3">
+                                <div>
+                                    <div className="font-medium">Schweigepflichtentbindung vorhanden</div>
+                                    <div className="text-xs text-muted-foreground">Dokumentationshinweis; Upload separat</div>
+                                </div>
                                 <Switch
-                                    checked={!!form.schweigepflichtentbindungVorhanden}
-                                    onCheckedChange={(v) => set("schweigepflichtentbindungVorhanden", v)}
+                                    checked={!!(form as any).schweigepflichtentbindungVorhanden}
+                                    onCheckedChange={(v) => set("schweigepflichtentbindungVorhanden" as any, v as any)}
                                     disabled={disabled || statusIsDone}
                                 />
                             </div>
@@ -685,8 +796,8 @@ export function MeldungEditor(props: {
                     <div className="space-y-2">
                         <Label>Kurzbeschreibung (Pflicht)</Label>
                         <Textarea
-                            value={String(form.kurzbeschreibung ?? "")}
-                            onChange={(e) => set("kurzbeschreibung", e.target.value)}
+                            value={String((form as any).kurzbeschreibung ?? "")}
+                            onChange={(e) => set("kurzbeschreibung" as any, e.target.value as any)}
                             disabled={disabled || statusIsDone}
                             placeholder="Was ist passiert / was wurde beobachtet / warum wird gemeldet?"
                             rows={5}
@@ -698,7 +809,7 @@ export function MeldungEditor(props: {
                 <TabsContent value="anlass" className="mt-4 space-y-4">
                     <Alert>
                         <AlertTitle>Anlass-Katalog</AlertTitle>
-                        <AlertDescription>Auswahl wird als Codes gespeichert.</AlertDescription>
+                        <AlertDescription>Auswahl wird als Codes dokumentiert und in Tags/Beobachtungen referenziert.</AlertDescription>
                     </Alert>
 
                     <div className="space-y-5">
@@ -707,7 +818,7 @@ export function MeldungEditor(props: {
                                 <div className="text-sm font-semibold">{cat.title}</div>
                                 <div className="flex flex-wrap gap-2">
                                     {cat.items.map(({ code, label }) => {
-                                        const active = (form.anlassCodes || []).includes(code);
+                                        const active = (((form as any).anlassCodes || []) as string[]).includes(code);
                                         return (
                                             <button
                                                 key={code}
@@ -718,6 +829,7 @@ export function MeldungEditor(props: {
                                                     "rounded-full border px-3 py-1 text-sm transition",
                                                     active ? "border-primary bg-accent" : "border-border hover:bg-accent/60",
                                                 ].join(" ")}
+                                                type="button"
                                             >
                                                 {label}
                                             </button>
@@ -729,7 +841,7 @@ export function MeldungEditor(props: {
                     </div>
 
                     <div className="text-sm text-muted-foreground">
-                        Ausgewählt: <Badge variant="secondary">{(form.anlassCodes || []).length}</Badge>
+                        Ausgewählt: <Badge variant="secondary">{(((form as any).anlassCodes || []) as any[]).length}</Badge>
                     </div>
                 </TabsContent>
 
@@ -737,9 +849,9 @@ export function MeldungEditor(props: {
                 <TabsContent value="obs" className="mt-4 space-y-4">
                     <div className="flex items-center justify-between">
                         <div>
-                            <div className="font-medium">Observations</div>
+                            <div className="font-medium">Beobachtungen (Observations)</div>
                             <div className="text-sm text-muted-foreground">
-                                Jede Observation kann mehrere Tags (Anlass/Indikator/Severity) haben.
+                                Jede Beobachtung kann Tags (Anlass/Indikator/Severity) enthalten – Grundlage für Auto-Vorbewertung.
                             </div>
                         </div>
                         <Button onClick={addObservation} disabled={disabled || statusIsDone}>
@@ -748,7 +860,7 @@ export function MeldungEditor(props: {
                     </div>
 
                     <div className="space-y-3">
-                        {(form.observations || []).map((o: any, idx: number) => (
+                        {((((form as any).observations || []) as any[]) || []).map((o: any, idx: number) => (
                             <Card key={idx} className="rounded-2xl">
                                 <CardHeader className="flex-row items-start justify-between gap-4">
                                     <div>
@@ -758,10 +870,22 @@ export function MeldungEditor(props: {
                                         </div>
                                     </div>
                                     <div className="flex items-center gap-2">
-                                        <Button variant="outline" size="sm" onClick={() => addObsTag(idx)} disabled={disabled || statusIsDone}>
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => addObsTag(idx)}
+                                            disabled={disabled || statusIsDone}
+                                            type="button"
+                                        >
                                             + Tag
                                         </Button>
-                                        <Button variant="destructive" size="sm" onClick={() => removeObs(idx)} disabled={disabled || statusIsDone}>
+                                        <Button
+                                            variant="destructive"
+                                            size="sm"
+                                            onClick={() => removeObs(idx)}
+                                            disabled={disabled || statusIsDone}
+                                            type="button"
+                                        >
                                             Entfernen
                                         </Button>
                                     </div>
@@ -774,9 +898,7 @@ export function MeldungEditor(props: {
                                             <select
                                                 className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
                                                 value={o.zeitraum ?? "UNBEKANNT"}
-                                                onChange={(e) =>
-                                                    updateObs(idx, { zeitraum: pick(e.target.value, OBS_ZEITRAUM, "UNBEKANNT") })
-                                                }
+                                                onChange={(e) => updateObs(idx, { zeitraum: pick(e.target.value, OBS_ZEITRAUM, "UNBEKANNT") })}
                                                 disabled={disabled || statusIsDone}
                                             >
                                                 {OBS_ZEITRAUM.map((z) => (
@@ -804,7 +926,7 @@ export function MeldungEditor(props: {
                                             {o.ort === "SONSTIGES" ? (
                                                 <Input
                                                     value={o.ortSonstiges ?? ""}
-                                                    onChange={(e) => updateObs(idx, { ortSonstiges: e.target.value })}
+                                                    onChange={(e) => updateObs(idx, { ortSonstiges: e.target.value || null })}
                                                     disabled={disabled || statusIsDone}
                                                     placeholder="Ort spezifizieren…"
                                                 />
@@ -816,9 +938,7 @@ export function MeldungEditor(props: {
                                             <select
                                                 className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
                                                 value={o.quelle ?? "UNBEKANNT"}
-                                                onChange={(e) =>
-                                                    updateObs(idx, { quelle: pick(e.target.value, OBS_QUELLE, "UNBEKANNT") })
-                                                }
+                                                onChange={(e) => updateObs(idx, { quelle: pick(e.target.value, OBS_QUELLE, "UNBEKANNT") })}
                                                 disabled={disabled || statusIsDone}
                                             >
                                                 {OBS_QUELLE.map((q) => (
@@ -846,7 +966,7 @@ export function MeldungEditor(props: {
                                             <Label>Wörtliches Zitat</Label>
                                             <Textarea
                                                 value={o.woertlichesZitat ?? ""}
-                                                onChange={(e) => updateObs(idx, { woertlichesZitat: e.target.value })}
+                                                onChange={(e) => updateObs(idx, { woertlichesZitat: e.target.value || null })}
                                                 disabled={disabled || statusIsDone}
                                                 rows={2}
                                             />
@@ -855,7 +975,7 @@ export function MeldungEditor(props: {
                                             <Label>Körperbefund (optional)</Label>
                                             <Textarea
                                                 value={o.koerperbefund ?? ""}
-                                                onChange={(e) => updateObs(idx, { koerperbefund: e.target.value })}
+                                                onChange={(e) => updateObs(idx, { koerperbefund: e.target.value || null })}
                                                 disabled={disabled || statusIsDone}
                                                 rows={2}
                                             />
@@ -867,7 +987,7 @@ export function MeldungEditor(props: {
                                             <Label>Verhalten Kind</Label>
                                             <Textarea
                                                 value={o.verhaltenKind ?? ""}
-                                                onChange={(e) => updateObs(idx, { verhaltenKind: e.target.value })}
+                                                onChange={(e) => updateObs(idx, { verhaltenKind: e.target.value || null })}
                                                 disabled={disabled || statusIsDone}
                                                 rows={2}
                                             />
@@ -876,7 +996,7 @@ export function MeldungEditor(props: {
                                             <Label>Verhalten Bezugsperson</Label>
                                             <Textarea
                                                 value={o.verhaltenBezug ?? ""}
-                                                onChange={(e) => updateObs(idx, { verhaltenBezug: e.target.value })}
+                                                onChange={(e) => updateObs(idx, { verhaltenBezug: e.target.value || null })}
                                                 disabled={disabled || statusIsDone}
                                                 rows={2}
                                             />
@@ -925,7 +1045,7 @@ export function MeldungEditor(props: {
                                                                     disabled={disabled || statusIsDone}
                                                                 >
                                                                     <option value="">—</option>
-                                                                    {(form.anlassCodes || ANLASS_CODES).map((c) => (
+                                                                    {(((form as any).anlassCodes || ANLASS_CODES) as string[]).map((c) => (
                                                                         <option key={c} value={c}>
                                                                             {ANLASS_LABELS[c] ?? c}
                                                                         </option>
@@ -957,9 +1077,7 @@ export function MeldungEditor(props: {
                                                                     min={0}
                                                                     max={3}
                                                                     value={t.severity ?? 0}
-                                                                    onChange={(e) =>
-                                                                        updateObsTag(idx, tIdx, { severity: clampSeverity(Number(e.target.value)) })
-                                                                    }
+                                                                    onChange={(e) => updateObsTag(idx, tIdx, { severity: clampSeverity(Number(e.target.value)) })}
                                                                     disabled={disabled || statusIsDone}
                                                                 />
                                                             </div>
@@ -971,7 +1089,7 @@ export function MeldungEditor(props: {
                                                                 <Textarea
                                                                     rows={2}
                                                                     value={t.comment ?? ""}
-                                                                    onChange={(e) => updateObsTag(idx, tIdx, { comment: e.target.value })}
+                                                                    onChange={(e) => updateObsTag(idx, tIdx, { comment: e.target.value || null })}
                                                                     disabled={disabled || statusIsDone}
                                                                 />
                                                             </div>
@@ -979,6 +1097,7 @@ export function MeldungEditor(props: {
                                                                 variant="outline"
                                                                 onClick={() => removeObsTag(idx, tIdx)}
                                                                 disabled={disabled || statusIsDone}
+                                                                type="button"
                                                             >
                                                                 Entfernen
                                                             </Button>
@@ -994,26 +1113,34 @@ export function MeldungEditor(props: {
                     </div>
                 </TabsContent>
 
-                {/* BEWERTUNG / SUBMIT */}
-                <TabsContent value="bewertung" className="mt-4 space-y-4">
-                    {validationErr ? (
-                        <Alert>
-                            <AlertTitle>Unvollständig</AlertTitle>
-                            <AlertDescription>{validationErr}</AlertDescription>
-                        </Alert>
-                    ) : null}
+                {/* FACHBEWERTUNG */}
+                <TabsContent value="fach" className="mt-4 space-y-4">
+                    <Alert>
+                        <AlertTitle>Fachliche Bewertung nach § 8a SGB VIII</AlertTitle>
+                        <AlertDescription>
+                            Die Auto-Vorbewertung ist eine Orientierung. Maßgeblich ist die begründete fachliche Einschätzung.
+                        </AlertDescription>
+                    </Alert>
 
                     <Card>
                         <CardHeader>
-                            <CardTitle className="text-base">Fachliche Einschätzung</CardTitle>
+                            <CardTitle className="text-base">Vorbewertung & Abweichung</CardTitle>
                         </CardHeader>
                         <CardContent className="space-y-3">
+                            <div className="flex flex-wrap items-center gap-2">
+                                <Badge tone={riskTone(auto.autoAmpel)}>Auto: {AMPEL_LABEL[auto.autoAmpel]}</Badge>
+                                <Badge variant="secondary">Score: {auto.score}</Badge>
+                                <span className="text-xs text-muted-foreground">{auto.rationale}</span>
+                            </div>
+
+                            <Separator />
+
                             <div className="space-y-1">
-                                <Label>Fach-Ampel</Label>
+                                <Label>Fach-Ampel (Pflicht bei Submit)</Label>
                                 <select
                                     className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
-                                    value={form.fachAmpel ?? ""}
-                                    onChange={(e) => set("fachAmpel", e.target.value ? pick(e.target.value, AMPEL, "GRUEN") : null)}
+                                    value={(form as any).fachAmpel ?? ""}
+                                    onChange={(e) => set("fachAmpel" as any, e.target.value ? pick(e.target.value, AMPEL, "GRUEN") : null)}
                                     disabled={disabled || statusIsDone}
                                 >
                                     <option value="">—</option>
@@ -1026,27 +1153,91 @@ export function MeldungEditor(props: {
                             </div>
 
                             <div className="space-y-1">
-                                <Label>Begründung (Pflicht bei Submit)</Label>
+                                <Label>Fachliche Begründung (Pflicht bei Submit)</Label>
                                 <Textarea
                                     rows={5}
-                                    value={form.fachText ?? ""}
-                                    onChange={(e) => set("fachText", e.target.value)}
+                                    value={(form as any).fachText ?? ""}
+                                    onChange={(e) => set("fachText" as any, e.target.value as any)}
                                     disabled={disabled || statusIsDone}
-                                    placeholder="Warum diese Ampel? Welche Indikatoren/Beobachtungen sind maßgeblich?"
+                                    placeholder="Fallbezogene Herleitung: welche Beobachtungen/Indikatoren sind maßgeblich?"
                                 />
                             </div>
 
                             <Separator />
 
-                            <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+                            <div className="space-y-1">
+                                <Label>Abweichung zur Auto-Vorbewertung (automatisch abgeleitet)</Label>
+                                <select
+                                    className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+                                    value={String((form as any).abweichungZurAuto ?? "GLEICH")}
+                                    onChange={(e) => set("abweichungZurAuto" as any, pick(e.target.value, ABW_AUTO, "GLEICH") as any)}
+                                    disabled={disabled || statusIsDone}
+                                >
+                                    {ABW_AUTO.map((x) => (
+                                        <option key={x} value={x}>
+                                            {ABW_AUTO_LABEL[x]}
+                                        </option>
+                                    ))}
+                                </select>
+
+                                {(form as any).abweichungZurAuto !== "GLEICH" ? (
+                                    <div className="space-y-1 mt-2">
+                                        <Label>Begründung der Abweichung (Pflicht bei Abweichung)</Label>
+                                        <Textarea
+                                            rows={3}
+                                            value={(form as any).abweichungsBegruendung ?? ""}
+                                            onChange={(e) => set("abweichungsBegruendung" as any, e.target.value || null)}
+                                            disabled={disabled || statusIsDone}
+                                            placeholder="Warum weicht die fachliche Einschätzung ab?"
+                                        />
+                                    </div>
+                                ) : (
+                                    <div className="space-y-1 mt-2">
+                                        <Label>Begründung der Abweichung (optional)</Label>
+                                        <Textarea
+                                            rows={2}
+                                            value={(form as any).abweichungsBegruendung ?? ""}
+                                            onChange={(e) => set("abweichungsBegruendung" as any, e.target.value || null)}
+                                            disabled={disabled || statusIsDone}
+                                            placeholder="Optional"
+                                        />
+                                    </div>
+                                )}
+                            </div>
+                        </CardContent>
+                    </Card>
+                </TabsContent>
+
+                {/* AKUT / SCHUTZ + JUGENDAMT */}
+                <TabsContent value="akut" className="mt-4 space-y-4">
+                    {validationErr ? (
+                        <Alert>
+                            <AlertTitle>Unvollständig</AlertTitle>
+                            <AlertDescription>{validationErr}</AlertDescription>
+                        </Alert>
+                    ) : null}
+
+                    <Alert>
+                        <AlertTitle>Akutprüfung / Schutzauftrag</AlertTitle>
+                        <AlertDescription>
+                            Sofortige Schutzaspekte (Gefahr im Verzug, Notruf, Unterbringung). Bei hoher Gefährdung: Jugendamt-Entscheidung dokumentieren.
+                        </AlertDescription>
+                    </Alert>
+
+                    <Card>
+                        <CardHeader>
+                            <CardTitle className="text-base">Akutindikatoren</CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-3">
+                            <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
                                 <div className="flex items-center justify-between rounded-xl border border-border p-3">
                                     <div>
                                         <div className="font-medium">Gefahr im Verzug</div>
-                                        <div className="text-xs text-muted-foreground">Akutcheck</div>
+                                        <div className="text-xs text-muted-foreground">Unmittelbarer Handlungsbedarf</div>
                                     </div>
                                     <Switch
-                                        checked={!!form.akutGefahrImVerzug}
-                                        onCheckedChange={(v) => set("akutGefahrImVerzug", v)}
+                                        checked={!!(form as any).akutGefahrImVerzug}
+                                        onCheckedChange={(v) => set("akutGefahrImVerzug" as any, v as any)}
                                         disabled={disabled || statusIsDone}
                                     />
                                 </div>
@@ -1057,24 +1248,45 @@ export function MeldungEditor(props: {
                                         <div className="text-xs text-muted-foreground">Optional</div>
                                     </div>
                                     <Switch
-                                        checked={!!form.akutNotrufErforderlich}
-                                        onCheckedChange={(v) => set("akutNotrufErforderlich", v)}
+                                        checked={!!(form as any).akutNotrufErforderlich}
+                                        onCheckedChange={(v) => set("akutNotrufErforderlich" as any, v as any)}
                                         disabled={disabled || statusIsDone}
                                     />
+                                </div>
+
+                                <div className="space-y-1 rounded-xl border border-border p-3">
+                                    <Label>Kind sicher untergebracht</Label>
+                                    <select
+                                        className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+                                        value={String((form as any).akutKindSicherUntergebracht ?? "UNKLAR")}
+                                        onChange={(e) =>
+                                            set(
+                                                "akutKindSicherUntergebracht" as any,
+                                                pick(e.target.value, JANEINUNKLAR, "UNKLAR") as any
+                                            )
+                                        }
+                                        disabled={disabled || statusIsDone}
+                                    >
+                                        {JANEINUNKLAR.map((x) => (
+                                            <option key={x} value={x}>
+                                                {JNU_LABEL[x]}
+                                            </option>
+                                        ))}
+                                    </select>
+                                    <div className="text-xs text-muted-foreground">Aktuelle Schutz-/Betreuungslage</div>
                                 </div>
                             </div>
 
-                            {!!form.akutGefahrImVerzug ? (
-                                <div className="space-y-1">
-                                    <Label>Akut-Begründung</Label>
-                                    <Textarea
-                                        rows={3}
-                                        value={form.akutBegruendung ?? ""}
-                                        onChange={(e) => set("akutBegruendung", e.target.value)}
-                                        disabled={disabled || statusIsDone}
-                                    />
-                                </div>
-                            ) : null}
+                            <div className="space-y-1">
+                                <Label>Akut-Begründung{(form as any).akutGefahrImVerzug ? " (Pflicht bei Gefahr im Verzug)" : " (optional)"}</Label>
+                                <Textarea
+                                    rows={3}
+                                    value={(form as any).akutBegruendung ?? ""}
+                                    onChange={(e) => set("akutBegruendung" as any, e.target.value || null)}
+                                    disabled={disabled || statusIsDone}
+                                    placeholder="Kurz: warum akut? welche Sofortmaßnahmen wurden/wären eingeleitet?"
+                                />
+                            </div>
                         </CardContent>
                     </Card>
 
@@ -1084,13 +1296,13 @@ export function MeldungEditor(props: {
                         </CardHeader>
                         <CardContent className="space-y-3">
                             <div className="space-y-1">
-                                <Label>Informiert?</Label>
+                                <Label>Informiert?{((form as any).fachAmpel === "ROT" ? " (Pflicht bei ROT)" : " (optional)")} </Label>
                                 <select
                                     className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
-                                    value={form.jugendamt?.informiert ?? ""}
+                                    value={(form as any).jugendamt?.informiert ?? ""}
                                     onChange={(e) =>
-                                        set("jugendamt", {
-                                            ...(form.jugendamt || { informiert: "UNKLAR" }),
+                                        set("jugendamt" as any, {
+                                            ...((form as any).jugendamt || { informiert: "UNKLAR" }),
                                             informiert: pick(e.target.value, JUG_INF, "UNKLAR"),
                                         })
                                     }
@@ -1110,10 +1322,10 @@ export function MeldungEditor(props: {
                                     <Label>Kontaktart</Label>
                                     <select
                                         className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
-                                        value={form.jugendamt?.kontaktart ?? ""}
+                                        value={(form as any).jugendamt?.kontaktart ?? ""}
                                         onChange={(e) =>
-                                            set("jugendamt", {
-                                                ...(form.jugendamt || { informiert: "UNKLAR" }),
+                                            set("jugendamt" as any, {
+                                                ...((form as any).jugendamt || { informiert: "UNKLAR" }),
                                                 kontaktart: e.target.value ? pick(e.target.value, JUG_KONTAKTART, "TELEFON") : null,
                                             })
                                         }
@@ -1129,28 +1341,28 @@ export function MeldungEditor(props: {
                                 </div>
 
                                 <div className="space-y-1">
-                                    <Label>Kontakt am (ISO, optional)</Label>
+                                    <Label>Kontakt am (Instant/ISO)</Label>
                                     <Input
-                                        value={form.jugendamt?.kontaktAm ?? ""}
+                                        value={(form as any).jugendamt?.kontaktAm ?? ""}
                                         onChange={(e) =>
-                                            set("jugendamt", {
-                                                ...(form.jugendamt || { informiert: "UNKLAR" }),
+                                            set("jugendamt" as any, {
+                                                ...((form as any).jugendamt || { informiert: "UNKLAR" }),
                                                 kontaktAm: e.target.value || null,
                                             })
                                         }
                                         disabled={disabled || statusIsDone}
-                                        placeholder="2026-02-27T10:30:00Z"
+                                        placeholder="2026-03-04T10:30:00Z"
                                     />
                                 </div>
                             </div>
 
                             <div className="space-y-1">
-                                <Label>Aktenzeichen (optional)</Label>
+                                <Label>Aktenzeichen</Label>
                                 <Input
-                                    value={form.jugendamt?.aktenzeichen ?? ""}
+                                    value={(form as any).jugendamt?.aktenzeichen ?? ""}
                                     onChange={(e) =>
-                                        set("jugendamt", {
-                                            ...(form.jugendamt || { informiert: "UNKLAR" }),
+                                        set("jugendamt" as any, {
+                                            ...((form as any).jugendamt || { informiert: "UNKLAR" }),
                                             aktenzeichen: e.target.value || null,
                                         })
                                     }
@@ -1158,37 +1370,27 @@ export function MeldungEditor(props: {
                                 />
                             </div>
 
-                            {form.jugendamt?.informiert && form.jugendamt.informiert !== "JA" ? (
-                                <div className="space-y-1">
-                                    <Label>Begründung (Pflicht wenn nicht JA)</Label>
-                                    <Textarea
-                                        rows={3}
-                                        value={form.jugendamt?.begruendung ?? ""}
-                                        onChange={(e) =>
-                                            set("jugendamt", {
-                                                ...(form.jugendamt || { informiert: "UNKLAR" }),
-                                                begruendung: e.target.value || null,
-                                            })
-                                        }
-                                        disabled={disabled || statusIsDone}
-                                    />
-                                </div>
-                            ) : (
-                                <div className="space-y-1">
-                                    <Label>Begründung (optional)</Label>
-                                    <Textarea
-                                        rows={3}
-                                        value={form.jugendamt?.begruendung ?? ""}
-                                        onChange={(e) =>
-                                            set("jugendamt", {
-                                                ...(form.jugendamt || { informiert: "UNKLAR" }),
-                                                begruendung: e.target.value || null,
-                                            })
-                                        }
-                                        disabled={disabled || statusIsDone}
-                                    />
-                                </div>
-                            )}
+                            <div className="space-y-1">
+                                <Label>
+                                    Begründung
+                                    {(String((form as any).jugendamt?.informiert || "") !== "JA" &&
+                                    String((form as any).jugendamt?.informiert || "") !== ""
+                                        ? " (Pflicht wenn nicht JA)"
+                                        : " (optional)")}
+                                </Label>
+                                <Textarea
+                                    rows={3}
+                                    value={(form as any).jugendamt?.begruendung ?? ""}
+                                    onChange={(e) =>
+                                        set("jugendamt" as any, {
+                                            ...((form as any).jugendamt || { informiert: "UNKLAR" }),
+                                            begruendung: e.target.value || null,
+                                        })
+                                    }
+                                    disabled={disabled || statusIsDone}
+                                    placeholder="Kurz: warum (nicht) informiert / welche Abwägung?"
+                                />
+                            </div>
                         </CardContent>
                     </Card>
 
@@ -1198,7 +1400,7 @@ export function MeldungEditor(props: {
                         </CardHeader>
                         <CardContent className="space-y-3">
                             <div className="flex flex-wrap items-center gap-3">
-                                <Button onClick={doSave} disabled={disabled || statusIsDone || saving}>
+                                <Button onClick={doSave} disabled={disabled || statusIsDone || saving} type="button">
                                     {saving ? "Speichere…" : "Draft speichern"}
                                 </Button>
                                 {saveMsg ? <span className="text-sm text-muted-foreground">{saveMsg}</span> : null}
@@ -1215,10 +1417,387 @@ export function MeldungEditor(props: {
                                     <Switch checked={submitMirror} onCheckedChange={setSubmitMirror} disabled={disabled || statusIsDone} />
                                 </div>
 
-                                <Button onClick={doSubmit} disabled={disabled || statusIsDone || saving}>
+                                <Button onClick={doSubmit} disabled={disabled || statusIsDone || saving} type="button">
                                     Abschließen (Submit)
                                 </Button>
                             </div>
+                        </CardContent>
+                    </Card>
+                </TabsContent>
+
+                {/* PLANUNG */}
+                <TabsContent value="planung" className="mt-4 space-y-4">
+                    <Alert>
+                        <AlertTitle>Weiteres Vorgehen / Verlaufssicherung</AlertTitle>
+                        <AlertDescription>
+                            Zuständigkeit und nächste Überprüfung zur fallbezogenen Steuerung (Schutzauftrag nach § 8a SGB VIII).
+                        </AlertDescription>
+                    </Alert>
+
+                    <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                        <div className="space-y-2">
+                            <Label>Verantwortliche Fachkraft (UserId)</Label>
+                            <Input
+                                value={(form as any).verantwortlicheFachkraftUserId ?? ""}
+                                onChange={(e) => {
+                                    const raw = e.target.value.trim();
+                                    set("verantwortlicheFachkraftUserId" as any, raw ? Number(raw) : null);
+                                }}
+                                disabled={disabled || statusIsDone}
+                                placeholder="z. B. 12345"
+                            />
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label>Nächste Überprüfung am (LocalDate)</Label>
+                            <Input
+                                type="date"
+                                value={String((form as any).naechsteUeberpruefungAm ?? "").slice(0, 10)}
+                                onChange={(e) => set("naechsteUeberpruefungAm" as any, e.target.value ? e.target.value : null)}
+                                disabled={disabled || statusIsDone}
+                            />
+                        </div>
+                    </div>
+
+                    <div className="space-y-2">
+                        <Label>Zusammenfassung</Label>
+                        <Textarea
+                            rows={4}
+                            value={(form as any).zusammenfassung ?? ""}
+                            onChange={(e) => set("zusammenfassung" as any, e.target.value || null)}
+                            disabled={disabled || statusIsDone}
+                            placeholder="Kurz, sachlich: Kernaussagen, Bewertung, nächste Schritte."
+                        />
+                    </div>
+                </TabsContent>
+
+                {/* DOKU: contacts / extern / attachments / sectionReasons */}
+                <TabsContent value="doku" className="mt-4 space-y-6">
+                    <Alert>
+                        <AlertTitle>Dokumentation / Nachvollziehbarkeit</AlertTitle>
+                        <AlertDescription>
+                            Kontakte, externe Abklärungen und Unterlagen sind zentrale Belege/Herleitung. Zusätzlich: Begründungen je Sektion (sectionReasons).
+                        </AlertDescription>
+                    </Alert>
+
+                    <Card>
+                        <CardHeader>
+                            <CardTitle className="text-base">Begründungen je Sektion (sectionReasons)</CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                            {[
+                                ["basis", "Basis / Meldedaten"],
+                                ["anlass", "Anlässe"],
+                                ["obs", "Beobachtungen"],
+                                ["fach", "Fachbewertung"],
+                                ["akut", "Akut / Jugendamt"],
+                                ["planung", "Planung"],
+                                ["doku", "Dokumentation"],
+                            ].map(([key, label]) => (
+                                <div key={key} className="space-y-1">
+                                    <Label>{label}: Dokumentationsbegründung</Label>
+                                    <Textarea
+                                        rows={2}
+                                        value={(((form as any).sectionReasons || {}) as Record<string, string>)[key] ?? ""}
+                                        onChange={(e) => setSectionReason(key, e.target.value)}
+                                        disabled={disabled || statusIsDone}
+                                        placeholder="Warum ist die Dokumentation so/ggf. warum fehlen Informationen?"
+                                    />
+                                </div>
+                            ))}
+                        </CardContent>
+                    </Card>
+
+                    {/* Contacts */}
+                    <Card>
+                        <CardHeader className="flex-row items-center justify-between">
+                            <CardTitle className="text-base">Kontakte</CardTitle>
+                            <Button onClick={addContact} disabled={disabled || statusIsDone} type="button">
+                                + Kontakt
+                            </Button>
+                        </CardHeader>
+                        <CardContent className="space-y-3">
+                            {((((form as any).contacts || []) as any[]) || []).length === 0 ? (
+                                <div className="text-sm text-muted-foreground">Keine Kontakte erfasst.</div>
+                            ) : (
+                                (((form as any).contacts || []) as any[]).map((c: any, idx: number) => (
+                                    <div key={idx} className="rounded-xl border border-border p-3 space-y-3">
+                                        <div className="flex items-center justify-between">
+                                            <div className="font-medium">Kontakt #{idx + 1}</div>
+                                            <Button
+                                                variant="destructive"
+                                                size="sm"
+                                                onClick={() => removeContact(idx)}
+                                                disabled={disabled || statusIsDone}
+                                                type="button"
+                                            >
+                                                Entfernen
+                                            </Button>
+                                        </div>
+
+                                        <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+                                            <div className="space-y-1">
+                                                <Label>Kontakt mit</Label>
+                                                <select
+                                                    className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+                                                    value={c.kontaktMit ?? "SONSTIGE"}
+                                                    onChange={(e) => updateContact(idx, { kontaktMit: pick(e.target.value, KONTAKT_MIT, "SONSTIGE") })}
+                                                    disabled={disabled || statusIsDone}
+                                                >
+                                                    {KONTAKT_MIT.map((k) => (
+                                                        <option key={k} value={k}>
+                                                            {KONTAKT_MIT_LABEL[k]}
+                                                        </option>
+                                                    ))}
+                                                </select>
+                                            </div>
+
+                                            <div className="space-y-1">
+                                                <Label>Kontakt am (Instant/ISO)</Label>
+                                                <Input
+                                                    value={c.kontaktAm ?? ""}
+                                                    onChange={(e) => updateContact(idx, { kontaktAm: e.target.value || null })}
+                                                    disabled={disabled || statusIsDone}
+                                                    placeholder="2026-03-04T10:30:00Z"
+                                                />
+                                            </div>
+
+                                            <div className="space-y-1">
+                                                <Label>Status</Label>
+                                                <select
+                                                    className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+                                                    value={c.status ?? "GEPLANT"}
+                                                    onChange={(e) => updateContact(idx, { status: pick(e.target.value, KONTAKT_STATUS, "GEPLANT") })}
+                                                    disabled={disabled || statusIsDone}
+                                                >
+                                                    {KONTAKT_STATUS.map((k) => (
+                                                        <option key={k} value={k}>
+                                                            {KONTAKT_STATUS_LABEL[k]}
+                                                        </option>
+                                                    ))}
+                                                </select>
+                                            </div>
+
+                                            <div className="space-y-1">
+                                                <Label>Ergebnis</Label>
+                                                <Input
+                                                    value={c.ergebnis ?? ""}
+                                                    onChange={(e) => updateContact(idx, { ergebnis: e.target.value || null })}
+                                                    disabled={disabled || statusIsDone}
+                                                    placeholder="Kernresultat"
+                                                />
+                                            </div>
+                                        </div>
+
+                                        <div className="space-y-1">
+                                            <Label>Notiz / Kurzprotokoll</Label>
+                                            <Textarea
+                                                rows={3}
+                                                value={c.notiz ?? ""}
+                                                onChange={(e) => updateContact(idx, { notiz: e.target.value || null })}
+                                                disabled={disabled || statusIsDone}
+                                                placeholder="Sachlich: relevante Aussagen, Vereinbarungen, Beobachtungen."
+                                            />
+                                        </div>
+                                    </div>
+                                ))
+                            )}
+                        </CardContent>
+                    </Card>
+
+                    {/* Extern */}
+                    <Card>
+                        <CardHeader className="flex-row items-center justify-between">
+                            <CardTitle className="text-base">Externe Abklärungen</CardTitle>
+                            <Button onClick={addExtern} disabled={disabled || statusIsDone} type="button">
+                                + Extern
+                            </Button>
+                        </CardHeader>
+                        <CardContent className="space-y-3">
+                            {((((form as any).extern || []) as any[]) || []).length === 0 ? (
+                                <div className="text-sm text-muted-foreground">Keine externen Abklärungen erfasst.</div>
+                            ) : (
+                                (((form as any).extern || []) as any[]).map((x: any, idx: number) => (
+                                    <div key={idx} className="rounded-xl border border-border p-3 space-y-3">
+                                        <div className="flex items-center justify-between">
+                                            <div className="font-medium">Extern #{idx + 1}</div>
+                                            <Button
+                                                variant="destructive"
+                                                size="sm"
+                                                onClick={() => removeExtern(idx)}
+                                                disabled={disabled || statusIsDone}
+                                                type="button"
+                                            >
+                                                Entfernen
+                                            </Button>
+                                        </div>
+
+                                        <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+                                            <div className="space-y-1">
+                                                <Label>Stelle</Label>
+                                                <select
+                                                    className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+                                                    value={x.stelle ?? "SONSTIGE"}
+                                                    onChange={(e) => updateExtern(idx, { stelle: pick(e.target.value, EXTERN_STELLE, "SONSTIGE") })}
+                                                    disabled={disabled || statusIsDone}
+                                                >
+                                                    {EXTERN_STELLE.map((s) => (
+                                                        <option key={s} value={s}>
+                                                            {EXTERN_STELLE_LABEL[s]}
+                                                        </option>
+                                                    ))}
+                                                </select>
+
+                                                {x.stelle === "SONSTIGE" ? (
+                                                    <Input
+                                                        value={x.stelleSonstiges ?? ""}
+                                                        onChange={(e) => updateExtern(idx, { stelleSonstiges: e.target.value || null })}
+                                                        disabled={disabled || statusIsDone}
+                                                        placeholder="Stelle spezifizieren"
+                                                    />
+                                                ) : null}
+                                            </div>
+
+                                            <div className="space-y-1">
+                                                <Label>Am (Instant/ISO)</Label>
+                                                <Input
+                                                    value={x.am ?? ""}
+                                                    onChange={(e) => updateExtern(idx, { am: e.target.value || null })}
+                                                    disabled={disabled || statusIsDone}
+                                                />
+                                            </div>
+
+                                            <div className="space-y-1">
+                                                <Label>Ergebnis</Label>
+                                                <Input
+                                                    value={x.ergebnis ?? ""}
+                                                    onChange={(e) => updateExtern(idx, { ergebnis: e.target.value || null })}
+                                                    disabled={disabled || statusIsDone}
+                                                />
+                                            </div>
+
+                                            <div className="space-y-1">
+                                                <Label>Begründung / Anlass</Label>
+                                                <Textarea
+                                                    rows={2}
+                                                    value={x.begruendung ?? ""}
+                                                    onChange={(e) => updateExtern(idx, { begruendung: e.target.value || null })}
+                                                    disabled={disabled || statusIsDone}
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))
+                            )}
+                        </CardContent>
+                    </Card>
+
+                    {/* Attachments */}
+                    <Card>
+                        <CardHeader className="flex-row items-center justify-between">
+                            <CardTitle className="text-base">Unterlagen / Anhänge</CardTitle>
+                            <Button onClick={addAttachment} disabled={disabled || statusIsDone} type="button">
+                                + Anhang
+                            </Button>
+                        </CardHeader>
+                        <CardContent className="space-y-3">
+                            {((((form as any).attachments || []) as any[]) || []).length === 0 ? (
+                                <div className="text-sm text-muted-foreground">Keine Anhänge erfasst.</div>
+                            ) : (
+                                (((form as any).attachments || []) as any[]).map((a: any, idx: number) => (
+                                    <div key={idx} className="rounded-xl border border-border p-3 space-y-3">
+                                        <div className="flex items-center justify-between">
+                                            <div className="font-medium">Anhang #{idx + 1}</div>
+                                            <Button
+                                                variant="destructive"
+                                                size="sm"
+                                                onClick={() => removeAttachment(idx)}
+                                                disabled={disabled || statusIsDone}
+                                                type="button"
+                                            >
+                                                Entfernen
+                                            </Button>
+                                        </div>
+
+                                        <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+                                            <div className="space-y-1">
+                                                <Label>FileId (Long)</Label>
+                                                <Input
+                                                    value={a.fileId ?? ""}
+                                                    onChange={(e) => {
+                                                        const raw = e.target.value.trim();
+                                                        updateAttachment(idx, { fileId: raw ? Number(raw) : null });
+                                                    }}
+                                                    disabled={disabled || statusIsDone}
+                                                    placeholder="Backend-Datei-ID"
+                                                />
+                                            </div>
+
+                                            <div className="space-y-1">
+                                                <Label>Typ</Label>
+                                                <select
+                                                    className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+                                                    value={a.typ ?? "DOKUMENT"}
+                                                    onChange={(e) => updateAttachment(idx, { typ: pick(e.target.value, ATTACH_TYP, "DOKUMENT") })}
+                                                    disabled={disabled || statusIsDone}
+                                                >
+                                                    {ATTACH_TYP.map((t) => (
+                                                        <option key={t} value={t}>
+                                                            {ATTACH_TYP_LABEL[t]}
+                                                        </option>
+                                                    ))}
+                                                </select>
+                                            </div>
+
+                                            <div className="space-y-1">
+                                                <Label>Titel</Label>
+                                                <Input
+                                                    value={a.titel ?? ""}
+                                                    onChange={(e) => updateAttachment(idx, { titel: e.target.value || null })}
+                                                    disabled={disabled || statusIsDone}
+                                                />
+                                            </div>
+
+                                            <div className="space-y-1">
+                                                <Label>Sichtbarkeit</Label>
+                                                <select
+                                                    className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+                                                    value={a.sichtbarkeit ?? "INTERN"}
+                                                    onChange={(e) => updateAttachment(idx, { sichtbarkeit: pick(e.target.value, SICHT, "INTERN") })}
+                                                    disabled={disabled || statusIsDone}
+                                                >
+                                                    {SICHT.map((s) => (
+                                                        <option key={s} value={s}>
+                                                            {SICHT_LABEL[s]}
+                                                        </option>
+                                                    ))}
+                                                </select>
+                                            </div>
+                                        </div>
+
+                                        <div className="space-y-1">
+                                            <Label>Beschreibung</Label>
+                                            <Textarea
+                                                rows={2}
+                                                value={a.beschreibung ?? ""}
+                                                onChange={(e) => updateAttachment(idx, { beschreibung: e.target.value || null })}
+                                                disabled={disabled || statusIsDone}
+                                            />
+                                        </div>
+
+                                        <div className="space-y-1">
+                                            <Label>Rechtsgrundlage / Hinweis (Sozialdatenschutz, § 8a SGB VIII)</Label>
+                                            <Textarea
+                                                rows={2}
+                                                value={a.rechtsgrundlageHinweis ?? ""}
+                                                onChange={(e) => updateAttachment(idx, { rechtsgrundlageHinweis: e.target.value || null })}
+                                                disabled={disabled || statusIsDone}
+                                                placeholder="Zweckbindung/Erforderlichkeit, Zugriff/Sichtbarkeit"
+                                            />
+                                        </div>
+                                    </div>
+                                ))
+                            )}
                         </CardContent>
                     </Card>
                 </TabsContent>

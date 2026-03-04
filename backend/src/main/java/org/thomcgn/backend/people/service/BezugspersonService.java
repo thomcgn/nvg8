@@ -14,17 +14,22 @@ import org.thomcgn.backend.people.dto.*;
 import org.thomcgn.backend.people.model.Bezugsperson;
 import org.thomcgn.backend.people.model.Gender;
 import org.thomcgn.backend.people.repo.BezugspersonRepository;
+import org.thomcgn.backend.people.repo.KindBezugspersonRepository;
 
 import java.time.LocalDate;
+import java.util.*;
+import java.util.stream.Collectors;
 
 @Service
 public class BezugspersonService {
 
     private final BezugspersonRepository repo;
+    private final KindBezugspersonRepository kindBezugRepo;
     private final AccessControlService access;
 
-    public BezugspersonService(BezugspersonRepository repo, AccessControlService access) {
+    public BezugspersonService(BezugspersonRepository repo, KindBezugspersonRepository kindBezugRepo, AccessControlService access) {
         this.repo = repo;
+        this.kindBezugRepo = kindBezugRepo;
         this.access = access;
     }
 
@@ -65,9 +70,13 @@ public class BezugspersonService {
     }
 
     // ---------------------------------------------------------
-    // SEARCH (für Wizard Step "bestehende Bezugspersonen anhängen")
-    // Default: pro Träger (alle)
-    // Optional: per Einrichtung, falls du das willst (query param)
+    // SEARCH (Wizard + Liste)
+    //
+    // OPTIMIERUNG:
+    // - Seite Bezugspersonen paged laden
+    // - dann NUR für diese IDs Kinder in EINEM Query als Projection (BpKindRow) holen
+    // - gruppieren in Map<bpId, List<KindMini>>
+    // -> kein N+1, kein JOIN-FETCH Paging-Problem
     // ---------------------------------------------------------
     @Transactional(readOnly = true)
     public BezugspersonSearchResponse search(String q, int page, int size, Long einrichtungIdOrNull) {
@@ -86,8 +95,46 @@ public class BezugspersonService {
             res = repo.searchByTraeger(traegerId, q, pageable);
         }
 
+        List<Bezugsperson> bps = res.getContent();
+        if (bps.isEmpty()) {
+            return new BezugspersonSearchResponse(
+                    List.of(),
+                    res.getTotalElements(),
+                    safePage,
+                    safeSize
+            );
+        }
+
+        // IDs der aktuellen Seite
+        List<Long> bpIds = bps.stream()
+                .map(Bezugsperson::getId)
+                .filter(Objects::nonNull)
+                .toList();
+
+        // 🔥 OPTIMIERUNG #1: keine mutable Map + kein "not effectively final" Problem
+        // 🔥 OPTIMIERUNG #2: Projection (BpKindRow) ist bereits "nur benötigte Spalten"
+        final Map<Long, List<KindMini>> kinderByBpId =
+                bpIds.isEmpty()
+                        ? Map.of()
+                        : kindBezugRepo.findActiveKinderForBezugspersonen(bpIds)
+                        .stream()
+                        .collect(Collectors.groupingBy(
+                                BpKindRow::bezugspersonId,
+                                // LinkedHashMap ist optional; hilft wenn dein Repo-Query ein order by hat
+                                LinkedHashMap::new,
+                                Collectors.mapping(
+                                        r -> new KindMini(r.kindId(), r.kindVorname(),r.kindNachname(), r.kindGeburtsdatum()),
+                                        Collectors.toList()
+                                )
+                        ));
+
+        // DTOs bauen
+        List<BezugspersonListItem> items = bps.stream()
+                .map(bp -> toListItem(bp, kinderByBpId.getOrDefault(bp.getId(), List.of())))
+                .toList();
+
         return new BezugspersonSearchResponse(
-                res.getContent().stream().map(this::toListItem).toList(),
+                items,
                 res.getTotalElements(),
                 safePage,
                 safeSize
@@ -95,7 +142,7 @@ public class BezugspersonService {
     }
 
     // ---------------------------------------------------------
-    // GET (optional)
+    // GET
     // ---------------------------------------------------------
     @Transactional(readOnly = true)
     public BezugspersonResponse get(Long id) {
@@ -104,7 +151,6 @@ public class BezugspersonService {
         Bezugsperson b = repo.findById(id)
                 .orElseThrow(() -> DomainException.notFound(ErrorCode.NOT_FOUND, "Bezugsperson not found"));
 
-        // Tenant-Check (minimal)
         Long traegerId = SecurityUtils.currentTraegerIdRequired();
         if (!traegerId.equals(b.getTraegerId())) {
             throw DomainException.forbidden(ErrorCode.ACCESS_DENIED, "No access.");
@@ -116,19 +162,18 @@ public class BezugspersonService {
     // ---------------------------------------------------------
     // Mapping
     // ---------------------------------------------------------
-    private BezugspersonListItem toListItem(Bezugsperson b) {
+    private BezugspersonListItem toListItem(Bezugsperson b, List<KindMini> kinder) {
         return new BezugspersonListItem(
                 b.getId(),
                 b.getDisplayName(),
                 b.getGeburtsdatum(),
                 b.getTelefon(),
-                b.getKontaktEmail()
+                b.getKontaktEmail(),
+                kinder
         );
     }
 
     private BezugspersonResponse toDto(Bezugsperson b) {
-        // Bezug (beziehung) gehört NICHT in Bezugsperson, sondern in KindBezugsperson Link.
-        // Deshalb hier null – Beziehung kommt aus KindBezugspersonResponse.
         return new BezugspersonResponse(
                 b.getId(),
                 b.getVorname(),
@@ -145,14 +190,21 @@ public class BezugspersonService {
         );
     }
 
+    // ---------------------------------------------------------
+    // DUPLICATES (Name+Nachname+Geburtsdatum)
+    // ---------------------------------------------------------
+    @Transactional(readOnly = true)
     public BezugspersonDuplicateResponse findDuplicates(String vorname, String nachname, LocalDate geburtsdatum, Long einrichtungId) {
+        // einrichtungId wird hier aktuell NICHT verwendet, weil dein Bezugsperson-Model offenbar
+        // kein bp.einrichtung-Feld hat (du hattest bereits UnknownPathException).
+        // Wenn du später pro Einrichtung filtern willst: bitte über ownerEinrichtungOrgUnitId o.ä.
         var hits = repo.findDuplicates(vorname.trim(), nachname.trim(), geburtsdatum);
 
         var items = hits.stream()
                 .limit(10)
                 .map(bp -> new DuplicateItem(
                         bp.getId(),
-                        bp.getDisplayName(),   // ✅ passt zu deinem DTO
+                        bp.getDisplayName(),
                         bp.getGeburtsdatum()
                 ))
                 .toList();
