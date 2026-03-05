@@ -7,15 +7,16 @@ WORKDIR /app
 COPY pom.xml ./
 
 RUN --mount=type=cache,target=/root/.m2 \
-    mvn -B -e -DskipTests dependency:go-offline
+    mvn -B -e -DskipTests package \
+    -Dorg.slf4j.simpleLogger.defaultLogLevel=warn
 
 # Source Code kopieren
 COPY src ./src
 
 # Build mit vollständigen Logs
 RUN --mount=type=cache,target=/root/.m2 \
-    mvn -B -e -DskipTests package
-
+    mvn -B -e -DskipTests package \
+    -Dorg.slf4j.simpleLogger.defaultLogLevel=warn
 # Runtime Image
 FROM eclipse-temurin:21-jre
 WORKDIR /app
