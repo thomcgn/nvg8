@@ -3,9 +3,8 @@
 import * as React from "react";
 import { useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
-
 import { AuthGate } from "@/components/AuthGate";
-import { Topbar } from "@/components/layout/Topbar";
+import { TopbarConnected as Topbar } from "@/components/layout/TopbarConnected";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -155,7 +154,7 @@ export default function AkteDetailPage() {
     const loadContext = React.useCallback(async () => {
         try {
             // ✅ bewusst OHNE /api, falls auth endpoints nicht unter /api sind
-            const ctx = await apiFetch<ContextResponse>(`/auth/context`, { method: "GET" });
+            const ctx = await apiFetch<ContextResponse>(`/auth/contexts`, { method: "GET" });
             setContext(ctx?.active ?? null);
         } catch {
             setContext(null);

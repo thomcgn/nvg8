@@ -1,43 +1,59 @@
 package org.thomcgn.backend.auth.controller;
 
-import jakarta.validation.Valid;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import org.thomcgn.backend.auth.model.AuthCookies;
-import org.thomcgn.backend.auth.dto.AuthContextOverviewResponse;
+import org.thomcgn.backend.auth.dto.SelectContextRequest;
+import org.thomcgn.backend.auth.dto.SelectContextResponse;
 import org.thomcgn.backend.auth.dto.SwitchContextRequest;
 import org.thomcgn.backend.auth.dto.SwitchContextResponse;
-import org.thomcgn.backend.auth.service.AuthContextService;
+import org.thomcgn.backend.auth.model.AuthCookies;
+import org.thomcgn.backend.auth.service.ContextService;
 import org.thomcgn.backend.common.security.JwtProperties;
+import org.thomcgn.backend.common.security.SecurityUtils;
 
 @RestController
-@RequestMapping("/auth")
+@RequestMapping("/auth/context")
 public class AuthContextController {
 
-    private final AuthContextService ctx;
+    private final ContextService contextService;
     private final JwtProperties jwtProperties;
+    private final boolean cookieSecure;
 
-    private final boolean cookieSecure = false;
-
-    public AuthContextController(AuthContextService ctx, JwtProperties jwtProperties) {
-        this.ctx = ctx;
+    public AuthContextController(
+            ContextService contextService,
+            JwtProperties jwtProperties,
+            @Value("${kidoc.cookies.secure:true}") boolean cookieSecure
+    ) {
+        this.contextService = contextService;
         this.jwtProperties = jwtProperties;
+        this.cookieSecure = cookieSecure;
     }
 
-    @GetMapping("/context")
-    public ResponseEntity<AuthContextOverviewResponse> context() {
-        return ResponseEntity.ok(ctx.getContextOverview());
-    }
+    /**
+     * Dein Frontend ruft aktuell POST /auth/context/switch mit SwitchContextRequest auf.
+     * Intern mappen wir auf ContextService.selectContext(...)
+     * und setzen den Context/Access Token als HttpOnly Cookie (kidoc_access).
+     */
+    @PostMapping("/switch")
+    public ResponseEntity<?> switchContext(@RequestBody SwitchContextRequest req) {
 
-    @PostMapping("/context/switch")
-    public ResponseEntity<SwitchContextResponse> switchContext(@Valid @RequestBody SwitchContextRequest req) {
-        SwitchContextResponse res = ctx.switchContext(req);
+        Long userId = SecurityUtils.currentUserId(); // aus Base Token
+
+        // ✅ Wir bauen daraus den Request-Typ, den dein Service erwartet
+        SelectContextRequest mapped = new SelectContextRequest(req.einrichtungOrgUnitId());
+
+        SelectContextResponse res = contextService.selectContext(userId, mapped);
 
         long accessMaxAge = jwtProperties.getAccessTtlMinutes() * 60L;
 
+        // ✅ Cookie setzen
         return ResponseEntity.ok()
-                .header(HttpHeaders.SET_COOKIE, AuthCookies.accessCookie(res.token(), accessMaxAge, cookieSecure).toString())
-                .body(res);
+                .header(HttpHeaders.SET_COOKIE,
+                        AuthCookies.accessCookie(res.accessToken(), accessMaxAge, cookieSecure).toString()
+                )
+                // Body kompatibel lassen: du bekommst weiterhin "token" zurück, falls dein FE das liest
+                .body(new SwitchContextResponse(res.accessToken()));
     }
 }

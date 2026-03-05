@@ -16,15 +16,14 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
 import org.springframework.web.filter.OncePerRequestFilter;
 import org.thomcgn.backend.auth.model.AuthCookies;
 import org.thomcgn.backend.common.errors.ErrorCode;
 
 import java.io.IOException;
 import java.time.Instant;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.List;
+import java.util.*;
 
 public class JwtAuthFilter extends OncePerRequestFilter {
 
@@ -57,9 +56,13 @@ public class JwtAuthFilter extends OncePerRequestFilter {
 
             Collection<? extends GrantedAuthority> authorities = toAuthorities(c);
 
-            var auth = new UsernamePasswordAuthenticationToken(email, null, authorities);
-            auth.setDetails(new JwtPrincipal(userId, email, c));
+            // ✅ principal wieder JwtPrincipal (damit ContextRequiredFilter etc. funktionieren)
+            JwtPrincipal principal = new JwtPrincipal(userId, email, c);
 
+            UsernamePasswordAuthenticationToken auth =
+                    new UsernamePasswordAuthenticationToken(principal, null, authorities);
+
+            auth.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
             SecurityContextHolder.getContext().setAuthentication(auth);
 
             filterChain.doFilter(request, response);
@@ -110,7 +113,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             Object rolesObj = c.get(JwtService.CLAIM_ROLES);
             if (rolesObj instanceof List<?> list) {
                 for (Object r : list) {
-                    if (r != null) out.add(new SimpleGrantedAuthority("ROLE_" + r.toString()));
+                    if (r != null) out.add(new SimpleGrantedAuthority("ROLE_" + r));
                 }
             }
             out.add(new SimpleGrantedAuthority("ROLE_AUTHENTICATED"));

@@ -14,6 +14,15 @@ import { Switch } from "@/components/ui/switch";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
+// ✅ Shadcn Carousel Tabs (Embla)
+import {
+    Carousel,
+    CarouselContent,
+    CarouselItem,
+    CarouselNext,
+    CarouselPrevious,
+} from "@/components/ui/carousel";
+
 function clampSeverity(n: number): number {
     if (!Number.isFinite(n)) return 0;
     return Math.max(0, Math.min(3, Math.round(n)));
@@ -365,6 +374,26 @@ export function MeldungEditor(props: {
 }) {
     const { value, disabled = false, onSaveDraft, onSubmit } = props;
 
+    // ✅ Central tab definition
+    const TAB_ITEMS = React.useMemo(
+        () =>
+            [
+                ["basis", "Basis"],
+                ["anlass", "Anlässe"],
+                ["obs", "Beobachtungen"],
+                ["fach", "Fachbewertung"],
+                ["akut", "Akut / Schutz"],
+                ["planung", "Planung"],
+                ["doku", "Dokumentation"],
+                ["save", "Speichern"],
+            ] as const,
+        []
+    );
+
+    // ✅ Controlled Tabs so we can auto-scroll carousel to active tab
+    const [activeTab, setActiveTab] = React.useState<(typeof TAB_ITEMS)[number][0]>("basis");
+    const [tabsCarouselApi, setTabsCarouselApi] = React.useState<any>(null);
+
     const [form, setForm] = React.useState<MeldungDraftRequest>(() => toDraftFromResponse(value));
     const [saving, setSaving] = React.useState(false);
     const [saveMsg, setSaveMsg] = React.useState<string | null>(null);
@@ -375,6 +404,13 @@ export function MeldungEditor(props: {
         setForm(toDraftFromResponse(value));
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [(value as any).id]);
+
+    // ✅ keep active tab visible inside the carousel
+    React.useEffect(() => {
+        if (!tabsCarouselApi) return;
+        const idx = TAB_ITEMS.findIndex(([key]) => key === activeTab);
+        if (idx >= 0) tabsCarouselApi.scrollTo(idx);
+    }, [tabsCarouselApi, activeTab, TAB_ITEMS]);
 
     const set = <K extends keyof MeldungDraftRequest>(k: K, v: MeldungDraftRequest[K]) =>
         setForm((s) => ({ ...s, [k]: v }));
@@ -525,10 +561,7 @@ export function MeldungEditor(props: {
     // ✅ Auto assessment + auto-derivation of abweichungZurAuto (kept in sync)
     const auto = React.useMemo(() => computeAutoAssessment(form), [form]);
     const fachAmpel = (form as any).fachAmpel as string | null;
-    const abwComputed = React.useMemo(
-        () => computeAbweichungZurAuto(fachAmpel, auto.autoAmpel),
-        [fachAmpel, auto.autoAmpel]
-    );
+    const abwComputed = React.useMemo(() => computeAbweichungZurAuto(fachAmpel, auto.autoAmpel), [fachAmpel, auto.autoAmpel]);
 
     React.useEffect(() => {
         const cur = (form as any).abweichungZurAuto as string | null | undefined;
@@ -619,7 +652,8 @@ export function MeldungEditor(props: {
     };
 
     return (
-        <div className="space-y-4">
+        // ✅ iPad fix: bottom padding + safe-area so buttons never sit under Safari toolbar/home indicator
+        <div className="space-y-4 pb-24 [padding-bottom:calc(env(safe-area-inset-bottom)+6rem)]">
             {statusIsDone && (
                 <Alert>
                     <AlertTitle>Abgeschlossen</AlertTitle>
@@ -639,44 +673,42 @@ export function MeldungEditor(props: {
                 <span className="text-xs text-muted-foreground hidden sm:inline">{auto.rationale}</span>
             </div>
 
-            <Tabs defaultValue="basis">
-                {/* ✅ iPad-friendly: “schicke Buttons” statt enger Grid-Reihe */}
-                <TabsList
-                    className={[
-                        "w-full",
-                        "flex flex-wrap gap-2",
-                        "overflow-x-auto",
-                        "rounded-2xl bg-muted/40 p-2",
-                    ].join(" ")}
-                >
-                    {[
-                        ["basis", "Basis"],
-                        ["anlass", "Anlässe"],
-                        ["obs", "Beobachtungen"],
-                        ["fach", "Fachbewertung"],
-                        ["akut", "Akut / Schutz"],
-                        ["planung", "Planung"],
-                        ["doku", "Dokumentation"],
-                        ["save", "Speichern"],
-                    ].map(([val, label]) => (
-                        <TabsTrigger
-                            key={val}
-                            value={val}
-                            className={[
-                                "whitespace-nowrap",
-                                "rounded-full px-4 py-2",
-                                "text-sm",
-                                "border border-border/60",
-                                "data-[state=active]:bg-background",
-                                "data-[state=active]:shadow-sm",
-                                "data-[state=active]:border-border",
-                                "min-h-10",
-                            ].join(" ")}
-                        >
-                            {label}
-                        </TabsTrigger>
-                    ))}
-                </TabsList>
+            <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)}>
+                {/* ✅ iPad-friendly TabsList via Shadcn Carousel */}
+                <div className="relative">
+                    <Carousel setApi={setTabsCarouselApi} opts={{ align: "start", dragFree: true }} className="w-full">
+                        <div className="rounded-2xl bg-muted/40 p-2">
+                            <TabsList className="w-full bg-transparent p-0">
+                                <CarouselContent className="-ml-2">
+                                    {TAB_ITEMS.map(([val, label]) => (
+                                        <CarouselItem key={val} className="pl-2 basis-auto">
+                                            <TabsTrigger
+                                                value={val}
+                                                className={[
+                                                    "whitespace-nowrap",
+                                                    "rounded-full px-4 py-2",
+                                                    "text-sm",
+                                                    "border border-border/60",
+                                                    "data-[state=active]:bg-background",
+                                                    "data-[state=active]:shadow-sm",
+                                                    "data-[state=active]:border-border",
+                                                    "min-h-10",
+                                                    "select-none",
+                                                ].join(" ")}
+                                            >
+                                                {label}
+                                            </TabsTrigger>
+                                        </CarouselItem>
+                                    ))}
+                                </CarouselContent>
+                            </TabsList>
+                        </div>
+
+                        {/* optional: arrows (tablet helpful) */}
+                        <CarouselPrevious className="left-1 top-1/2 -translate-y-1/2 hidden sm:flex" />
+                        <CarouselNext className="right-1 top-1/2 -translate-y-1/2 hidden sm:flex" />
+                    </Carousel>
+                </div>
 
                 {/* BASIS */}
                 <TabsContent value="basis" className="mt-4 space-y-4">
@@ -1207,7 +1239,7 @@ export function MeldungEditor(props: {
                     </Card>
                 </TabsContent>
 
-                {/* AKUT / SCHUTZ + JUGENDAMT (ohne Speichern-Card) */}
+                {/* AKUT / SCHUTZ + JUGENDAMT */}
                 <TabsContent value="akut" className="mt-4 space-y-4">
                     {validationErr ? (
                         <Alert>
@@ -1292,7 +1324,7 @@ export function MeldungEditor(props: {
                         </CardHeader>
                         <CardContent className="space-y-3">
                             <div className="space-y-1">
-                                <Label>Informiert?{((form as any).fachAmpel === "ROT" ? " (Pflicht bei ROT)" : " (optional)")} </Label>
+                                <Label>Informiert?{(form as any).fachAmpel === "ROT" ? " (Pflicht bei ROT)" : " (optional)"} </Label>
                                 <select
                                     className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
                                     value={(form as any).jugendamt?.informiert ?? ""}
@@ -1768,7 +1800,7 @@ export function MeldungEditor(props: {
                     </Card>
                 </TabsContent>
 
-                {/* ✅ NEU: eigener Tab “Speichern” (hinter Dokumentation) */}
+                {/* ✅ Speichern */}
                 <TabsContent value="save" className="mt-4 space-y-4">
                     {validationErr ? (
                         <Alert>

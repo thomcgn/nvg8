@@ -3,7 +3,7 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { AuthGate } from "@/components/AuthGate";
-import { Topbar } from "@/components/layout/Topbar";
+import { TopbarConnected as Topbar } from "@/components/layout/TopbarConnected";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -121,7 +121,7 @@ export default function AktenPage() {
                     <div className="rounded-2xl border border-border bg-muted p-4 text-sm text-muted-foreground">
                       {q.trim()
                           ? "Keine Akten zu dieser Suche gefunden."
-                          : "Noch keine Akten vorhanden. Sobald ein Kind angelegt wird, erscheint die Akte hier."}
+                          : "Noch keine Akten vorhanden. Bitte nach anlegen des Kindes über Neue Akte eine eröffnen."}
                     </div>
                 ) : (
                     <div className="space-y-2">

@@ -128,11 +128,6 @@ export default function LoginPage() {
                     ))}
                   </div>
                 </div>
-
-                <div className="mt-10 text-xs text-white/60">
-                  Hinweis: Prototyp-Frontend · API-Base via{" "}
-                  <code className="rounded bg-white/10 px-1">NEXT_PUBLIC_API_BASE_URL</code>
-                </div>
               </div>
             </div>
           </div>

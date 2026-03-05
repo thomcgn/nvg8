@@ -12,24 +12,36 @@ import java.util.List;
 public class CorsConfig {
 
     @Bean
-    CorsConfigurationSource corsConfigurationSource() {
+    public CorsConfigurationSource corsConfigurationSource() {
 
         CorsConfiguration config = new CorsConfiguration();
 
-        // ✅ Alle erlaubten Origins in EINER Liste
+        // ✅ http + https für localhost erlauben
         config.setAllowedOrigins(List.of(
                 "http://localhost:3000",
+                "https://localhost:3000",
                 "https://kidoc8a.de",
                 "https://www.kidoc8a.de"
         ));
 
         config.setAllowedMethods(List.of(
-                "GET","POST","PUT","PATCH","DELETE","OPTIONS"
+                "GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"
         ));
 
-        config.setAllowedHeaders(List.of("*"));
+        // ✅ besser explizit, weil allowCredentials=true
+        config.setAllowedHeaders(List.of(
+                "Content-Type",
+                "Authorization",
+                "X-Requested-With",
+                "Accept",
+                "Origin"
+        ));
+
+        // ✅ falls du Cookies setzt
+        config.setExposedHeaders(List.of("Set-Cookie"));
 
         config.setAllowCredentials(true);
+        config.setMaxAge(3600L);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", config);

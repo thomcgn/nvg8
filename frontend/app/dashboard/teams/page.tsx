@@ -1,7 +1,7 @@
 "use client";
 
 import { AuthGate } from "@/components/AuthGate";
-import { Topbar } from "@/components/layout/Topbar";
+import { TopbarConnected as Topbar } from "@/components/layout/TopbarConnected";;
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 
 export default function TeamsPage() {

@@ -27,4 +27,6 @@ public class AuthQueryController {
     public ResponseEntity<ContextsResponse> contexts() {
         return ResponseEntity.ok(authQueryService.contexts());
     }
+
+
 }

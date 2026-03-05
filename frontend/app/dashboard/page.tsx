@@ -5,7 +5,7 @@ import { AlertTriangle, CheckCircle2, FileText, ShieldAlert, Siren } from "lucid
 import { useRouter } from "next/navigation";
 
 import { AuthGate } from "@/components/AuthGate";
-import { Topbar } from "@/components/layout/Topbar";
+import { TopbarConnected as Topbar } from "@/components/layout/TopbarConnected";;
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { apiFetch } from "@/lib/api";

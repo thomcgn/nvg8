@@ -3,7 +3,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { AuthGate } from "@/components/AuthGate";
-import { Topbar } from "@/components/layout/Topbar";
+import { TopbarConnected as Topbar } from "@/components/layout/TopbarConnected";;
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";

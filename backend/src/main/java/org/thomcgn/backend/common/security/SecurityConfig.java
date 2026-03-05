@@ -56,11 +56,13 @@ public class SecurityConfig {
                         .requestMatchers("/auth/logout").permitAll()
                         .requestMatchers("/auth/accept-invite").permitAll()
                         .requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**").permitAll()
+                        .requestMatchers("/github/webhook").permitAll()
 
                         // Geschützte Bereiche
                         .requestMatchers("/auth/**").authenticated()
                         .requestMatchers("/external/**").authenticated()
                         .requestMatchers("/akten/**").authenticated()
+                        .requestMatchers("/messages/**").authenticated()
 
                         .anyRequest().authenticated()
                 )

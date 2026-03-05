@@ -1,11 +1,8 @@
-// lib/api.ts
-
 import { getCurrentEinrichtungId } from "@/lib/context-store";
 import { apiSwitchContext } from "@/lib/context";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || "";
-// lokal: http://localhost:8080
-// prod: "" → same-origin (Caddy leitet ans Backend)
+
 
 export type ProblemDetails = {
   status?: number;

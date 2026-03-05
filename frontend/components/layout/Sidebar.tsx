@@ -179,7 +179,7 @@ function SidebarContent({ onClose, className = "" }: { onClose?: () => void; cla
             if (!me?.contextActive || !me.orgUnitId) return;
 
             try {
-                const overview = await apiFetch<AuthContextOverviewResponse>("/auth/context", { method: "GET" });
+                const overview = await apiFetch<AuthContextOverviewResponse>("/auth/contexts", { method: "GET" });
                 if (!mounted) return;
 
                 const found = overview.available.find((c) => c.einrichtungOrgUnitId === me.orgUnitId);

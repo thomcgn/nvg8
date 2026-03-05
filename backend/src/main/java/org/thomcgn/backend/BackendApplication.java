@@ -9,7 +9,11 @@ import org.thomcgn.backend.common.security.JwtProperties;
 
 @EnableJpaAuditing
 @EnableScheduling
-@EnableConfigurationProperties(JwtProperties.class)
+@EnableConfigurationProperties({
+        JwtProperties.class,
+        org.thomcgn.backend.support.github.GithubProperties.class,
+        org.thomcgn.backend.config.SupportProperties.class
+})
 @SpringBootApplication(scanBasePackages = "org.thomcgn.backend")
 public class BackendApplication {
 

@@ -3,19 +3,45 @@
 import { useEffect, useMemo, useState } from "react";
 import { apiFetch } from "@/lib/api";
 import { AuthGate } from "@/components/AuthGate";
-import { Topbar } from "@/components/layout/Topbar";
+import { TopbarConnected as Topbar } from "@/components/layout/TopbarConnected";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
-type AuthContext = {
-    active: {
-        traegerId: number;
-        einrichtungOrgUnitId: number | null;
-        roles: string[];
-    };
+/**
+ * ✅ Backend liefert bei dir:
+ * - GET /auth/contexts -> ContextsResponse { contexts: [...] }
+ * - GET /auth/me       -> MeResponse { roles: [...] , ... }
+ *
+ * Dein ursprünglicher Code hat fälschlich erwartet:
+ * { active: { roles, ... } }
+ *
+ * → Fix: lade /auth/me für Rollen + aktive context IDs
+ *        und /auth/contexts für die Liste (falls du sie brauchst)
+ */
+
+type MeResponse = {
+    userId: number;
+    email: string;
+    displayName: string;
+    contextActive: boolean;
+    traegerId: number | null;
+    orgUnitId: number | null;
+    roles: string[];
+};
+
+type AvailableContextDto = {
+    traegerId: number;
+    traegerName: string;
+    orgUnitId: number;
+    orgUnitType: string;
+    orgUnitName: string;
+};
+
+type ContextsResponse = {
+    contexts: AvailableContextDto[];
 };
 
 type UserListItem = {
@@ -29,26 +55,33 @@ type UserListItem = {
 const ROLE_OPTIONS = ["FACHKRAFT", "TEAMLEITUNG", "ISEF", "LESEN", "SCHREIBEN", "FREIGEBEN"] as const;
 
 export default function TeamsPage() {
-    const [ctx, setCtx] = useState<AuthContext | null>(null);
+    const [me, setMe] = useState<MeResponse | null>(null);
+    const [contexts, setContexts] = useState<AvailableContextDto[]>([]);
     const [users, setUsers] = useState<UserListItem[]>([]);
     const [loading, setLoading] = useState(true);
 
     const [wizardOpen, setWizardOpen] = useState(false);
 
     const canCreate = useMemo(() => {
-        const roles = ctx?.active.roles ?? [];
+        const roles = me?.roles ?? [];
         return roles.includes("TRAEGER_ADMIN") || roles.includes("EINRICHTUNG_ADMIN");
-    }, [ctx]);
+    }, [me]);
 
-    const activeOrgUnitId = ctx?.active.einrichtungOrgUnitId ?? null;
+    const activeOrgUnitId = me?.orgUnitId ?? null;
 
     async function loadAll() {
         setLoading(true);
         try {
-            const c = await apiFetch<AuthContext>("/auth/context");
-            setCtx(c);
+            // ✅ Source of truth: roles + active ids
+            const meRes = await apiFetch<MeResponse>("/auth/me");
+            setMe(meRes);
 
-            const orgUnitId = c?.active?.einrichtungOrgUnitId;
+            // (Optional) contexts list (für future UI / debugging)
+            // Wenn du das nicht brauchst, kannst du diesen Call entfernen.
+            const ctxRes = await apiFetch<ContextsResponse>("/auth/contexts");
+            setContexts(ctxRes.contexts ?? []);
+
+            const orgUnitId = meRes?.orgUnitId;
             if (orgUnitId) {
                 const list = await apiFetch<UserListItem[]>(`/admin/org-units/${orgUnitId}/users`);
                 setUsers(list);
@@ -91,7 +124,9 @@ export default function TeamsPage() {
                             {loading && <div className="text-sm text-brand-text2">Lade...</div>}
 
                             {!loading && !activeOrgUnitId && (
-                                <div className="text-sm text-brand-text2">Keine aktive Einrichtung im Kontext.</div>
+                                <div className="text-sm text-brand-text2">
+                                    Keine aktive Einrichtung im Kontext. (orgUnitId ist leer)
+                                </div>
                             )}
 
                             {!loading && activeOrgUnitId && users.length === 0 && (
@@ -105,8 +140,11 @@ export default function TeamsPage() {
                                             <div className="text-sm font-medium text-brand-text">{u.displayName || u.email}</div>
                                             <div className="text-xs text-brand-text2">{u.email}</div>
                                             <div className="mt-1 flex flex-wrap gap-1">
-                                                {u.roles?.map((r) => (
-                                                    <span key={r} className="rounded bg-brand-border px-2 py-0.5 text-[11px] text-brand-text">
+                                                {(u.roles ?? []).map((r) => (
+                                                    <span
+                                                        key={r}
+                                                        className="rounded bg-brand-border px-2 py-0.5 text-[11px] text-brand-text"
+                                                    >
                             {r}
                           </span>
                                                 ))}
@@ -252,11 +290,7 @@ function CreateEmployeeWizard(props: {
 
                         <div>
                             <div className="mb-1 text-xs text-brand-text2">Initial-Passwort (min. 8 Zeichen)</div>
-                            <Input
-                                type="password"
-                                value={initialPassword}
-                                onChange={(e) => setInitialPassword(e.target.value)}
-                            />
+                            <Input type="password" value={initialPassword} onChange={(e) => setInitialPassword(e.target.value)} />
                         </div>
 
                         <div className="flex justify-end gap-2">

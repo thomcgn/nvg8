@@ -24,12 +24,15 @@ public class ContextRequiredFilter extends OncePerRequestFilter {
             "/auth/login",
             "/auth/logout",
             "/auth/accept-invite",
+            "/auth/me",              // ✅ wichtig: UI Session-Check darf ohne Context laufen
             "/auth/context",         // GET /auth/context
             "/auth/context/switch",  // POST /auth/context/switch
             "/actuator",
             "/swagger-ui",
             "/v3/api-docs",
             "/external",
+            "/github/webhook",
+            "/messages",
             "/error"
     );
 
@@ -50,10 +53,12 @@ public class ContextRequiredFilter extends OncePerRequestFilter {
             FilterChain filterChain
     ) throws ServletException, IOException {
 
-        var auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        var auth = org.springframework.security.core.context.SecurityContextHolder
+                .getContext()
+                .getAuthentication();
 
-        // Kein Auth -> 401 ProblemDetail
-        if (auth == null || auth.getDetails() == null) {
+        // Kein Auth -> 401
+        if (auth == null || !auth.isAuthenticated()) {
             writeProblem(response, request, HttpStatus.UNAUTHORIZED,
                     ErrorCode.AUTH_REQUIRED.name(),
                     "Authentication required.",
@@ -61,16 +66,31 @@ public class ContextRequiredFilter extends OncePerRequestFilter {
             return;
         }
 
-        if (!(auth.getDetails() instanceof JwtPrincipal principal)) {
+        // ✅ Kompatibel: Context kann bei dir im principal ODER in details liegen
+        JwtPrincipal principal = null;
+
+        Object p = auth.getPrincipal();
+        if (p instanceof JwtPrincipal jp) {
+            principal = jp;
+        } else {
+            Object d = auth.getDetails();
+            if (d instanceof JwtPrincipal jd) {
+                principal = jd;
+            }
+        }
+
+        if (principal == null) {
             writeProblem(response, request, HttpStatus.UNAUTHORIZED,
                     ErrorCode.AUTH_REQUIRED.name(),
                     "Invalid authentication context.",
-                    Map.of());
+                    Map.of(
+                            "principalClass", auth.getPrincipal() == null ? null : auth.getPrincipal().getClass().getName(),
+                            "detailsClass", auth.getDetails() == null ? null : auth.getDetails().getClass().getName()
+                    ));
             return;
         }
 
-        // Context fehlt -> 403 ProblemDetail (CONTEXT_REQUIRED)
-        // (Context-Token muss gesetzt sein + traegerId + orgUnitId)
+        // Context fehlt -> 403 (CONTEXT_REQUIRED)
         if (!principal.isContext() || principal.getTraegerId() == null || principal.getOrgUnitId() == null) {
 
             Map<String, Object> meta = Map.of(

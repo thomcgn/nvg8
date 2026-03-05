@@ -9,12 +9,15 @@ public final class AuthCookies {
     public static final String BASE_COOKIE = "kidoc_base";
     public static final String ACCESS_COOKIE = "kidoc_access";
 
+    // ✅ cross-origin fetch braucht None (+ Secure)
+    private static final String SAME_SITE = "None";
+
     public static ResponseCookie baseCookie(String token, long maxAgeSeconds, boolean secure) {
         return ResponseCookie.from(BASE_COOKIE, token)
                 .httpOnly(true)
                 .secure(secure)
                 .path("/")
-                .sameSite("Lax")
+                .sameSite(SAME_SITE)
                 .maxAge(maxAgeSeconds)
                 .build();
     }
@@ -24,7 +27,7 @@ public final class AuthCookies {
                 .httpOnly(true)
                 .secure(secure)
                 .path("/")
-                .sameSite("Lax")
+                .sameSite(SAME_SITE)
                 .maxAge(maxAgeSeconds)
                 .build();
     }
@@ -34,7 +37,7 @@ public final class AuthCookies {
                 .httpOnly(true)
                 .secure(secure)
                 .path("/")
-                .sameSite("Lax")
+                .sameSite(SAME_SITE)
                 .maxAge(0)
                 .build();
     }
@@ -44,7 +47,7 @@ public final class AuthCookies {
                 .httpOnly(true)
                 .secure(secure)
                 .path("/")
-                .sameSite("Lax")
+                .sameSite(SAME_SITE)
                 .maxAge(0)
                 .build();
     }

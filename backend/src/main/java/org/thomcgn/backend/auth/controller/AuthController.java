@@ -1,5 +1,6 @@
 package org.thomcgn.backend.auth.controller;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -17,14 +18,18 @@ public class AuthController {
     private final AuthService authService;
     private final ContextService contextService;
     private final JwtProperties jwtProperties;
+    private final boolean cookieSecure;
 
-    // DEV: auf localhost ohne https -> secure=false
-    private final boolean cookieSecure = false;
-
-    public AuthController(AuthService authService, ContextService contextService, JwtProperties jwtProperties) {
+    public AuthController(
+            AuthService authService,
+            ContextService contextService,
+            JwtProperties jwtProperties,
+            @Value("${kidoc.cookies.secure:true}") boolean cookieSecure
+    ) {
         this.authService = authService;
         this.contextService = contextService;
         this.jwtProperties = jwtProperties;
+        this.cookieSecure = cookieSecure;
     }
 
     @PostMapping("/login")
@@ -35,14 +40,14 @@ public class AuthController {
 
         return ResponseEntity.ok()
                 .header(HttpHeaders.SET_COOKIE, AuthCookies.baseCookie(res.baseToken(), baseMaxAge, cookieSecure).toString())
-                // optional: access cookie beim login leeren, damit keine "alten" Sessions kleben
+                // optional: access cookie beim login leeren
                 .header(HttpHeaders.SET_COOKIE, AuthCookies.clearAccess(cookieSecure).toString())
                 .body(res);
     }
 
     @PostMapping("/context")
     public ResponseEntity<SelectContextResponse> selectContext(@RequestBody SelectContextRequest req) {
-        Long userId = SecurityUtils.currentUserId(); // aus Base-JWT (Cookie oder Header)
+        Long userId = SecurityUtils.currentUserId(); // aus Base-JWT
 
         SelectContextResponse res = contextService.selectContext(userId, req);
 

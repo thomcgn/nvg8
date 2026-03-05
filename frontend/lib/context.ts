@@ -4,7 +4,7 @@ import { apiFetch } from "@/lib/api";
 import { setCurrentEinrichtungId } from "@/lib/context-store";
 
 export async function apiSwitchContext(einrichtungId: number): Promise<void> {
-    await apiFetch("/auth/context/switch", {
+    await apiFetch("/auth/context", {
         method: "POST",
         body: { einrichtungId },
     });

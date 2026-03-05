@@ -2,9 +2,8 @@ package org.thomcgn.backend.messenger.controller;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
-import org.thomcgn.backend.auth.dto.AuthPrincipal;
+import org.thomcgn.backend.common.security.SecurityUtils;
 import org.thomcgn.backend.messenger.dto.InboxItemDto;
 import org.thomcgn.backend.messenger.dto.MarkReadRequest;
 import org.thomcgn.backend.messenger.dto.SendMessageRequest;
@@ -22,31 +21,26 @@ public class MessageController {
     private final MessageService messageService;
 
     @GetMapping("/unread-count")
-    public Map<String, Long> unread(@AuthenticationPrincipal AuthPrincipal user) {
-        long count = messageService.getUnreadCount(user.id());
+    public Map<String, Long> unread() {
+        long count = messageService.getUnreadCount(SecurityUtils.currentUserId());
         return Map.of("count", count);
     }
 
     @GetMapping("/inbox")
-    public List<InboxItemDto> inbox(
-            @AuthenticationPrincipal AuthPrincipal user,
-            @RequestParam(defaultValue = "50") int limit
-    ) {
-        return messageService.getInbox(user.id(), limit);
+    public List<InboxItemDto> inbox(@RequestParam(defaultValue = "50") int limit) {
+        return messageService.getInbox(SecurityUtils.currentUserId(), limit);
     }
 
     @GetMapping("/recipient-options")
     public List<UserOptionDto> recipientOptions() {
+        // falls du den User brauchst, kannst du hier SecurityUtils.currentUserIdRequired() nutzen
         return messageService.getRecipientOptions();
     }
 
     @PostMapping("/send")
-    public ResponseEntity<?> send(
-            @AuthenticationPrincipal AuthPrincipal user,
-            @RequestBody SendMessageRequest request
-    ) {
+    public ResponseEntity<?> send(@RequestBody SendMessageRequest request) {
         messageService.sendMessage(
-                user.id(),
+                SecurityUtils.currentUserId(),
                 request.subject(),
                 request.body(),
                 request.recipientUserIds(),
@@ -56,13 +50,10 @@ public class MessageController {
     }
 
     @PostMapping("/mark-read")
-    public ResponseEntity<?> markRead(
-            @AuthenticationPrincipal AuthPrincipal user,
-            @RequestBody MarkReadRequest request
-    ) {
+    public ResponseEntity<?> markRead(@RequestBody MarkReadRequest request) {
         messageService.markRead(
                 request.recipientRowId(),
-                user.id(),
+                SecurityUtils.currentUserId(),
                 request.isRead()
         );
         return ResponseEntity.ok().build();

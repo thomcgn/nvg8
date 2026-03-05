@@ -1,12 +1,16 @@
 package org.thomcgn.backend.common.errors;
 
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Instant;
 import java.util.HashMap;
@@ -62,7 +66,7 @@ public class RestExceptionHandler {
 
         Map<String, String> fieldErrors = ex.getBindingResult().getFieldErrors().stream()
                 .collect(Collectors.toMap(
-                        fe -> fe.getField(),
+                        FieldError::getField,
                         fe -> fe.getDefaultMessage() == null ? "invalid" : fe.getDefaultMessage(),
                         (a, b) -> a, // keep first
                         HashMap::new
@@ -79,5 +83,23 @@ public class RestExceptionHandler {
                 "An unexpected error occurred.",
                 Map.of("exception", ex.getClass().getSimpleName())
         ));
+    }
+
+    @ExceptionHandler(ResponseStatusException.class)
+    public ResponseEntity<ProblemDetail> handleResponseStatus(
+            ResponseStatusException ex,
+            HttpServletRequest request
+    ) {
+        var status = ex.getStatusCode();
+        var pd = org.springframework.http.ProblemDetail.forStatus(status);
+        pd.setTitle(status.toString());
+        pd.setDetail(ex.getReason() != null ? ex.getReason() : status.toString());
+        pd.setProperty("code", status.value() == 401 ? "UNAUTHORIZED" : "ERROR");
+        pd.setProperty("timestamp", java.time.Instant.now());
+        pd.setProperty("path", request.getRequestURI());
+        pd.setProperty("meta", java.util.Map.of("exception", "ResponseStatusException"));
+        return org.springframework.http.ResponseEntity.status(status)
+                .contentType(org.springframework.http.MediaType.valueOf("application/problem+json"))
+                .body(pd);
     }
 }
