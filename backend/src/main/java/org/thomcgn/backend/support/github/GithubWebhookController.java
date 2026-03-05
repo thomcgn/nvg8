@@ -1,54 +1,42 @@
 package org.thomcgn.backend.support.github;
 
-import jakarta.servlet.http.HttpServletRequest;
+import com.fasterxml.jackson.databind.JsonNode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.util.ContentCachingRequestWrapper;
 import org.thomcgn.backend.support.tickets.service.SupportTicketService;
-
-import java.util.Map;
 
 @RestController
 @RequestMapping("/github")
 @RequiredArgsConstructor
 public class GithubWebhookController {
 
-    private final GithubProperties props;
-    private final SupportTicketService ticketService;
+    private final GithubWebhookVerifier verifier;
+    private final SupportTicketService supportTicketService;
 
     @PostMapping("/webhook")
     public ResponseEntity<Void> webhook(
-            HttpServletRequest request,
-            @RequestHeader(name = "X-GitHub-Event", required = false) String event,
-            @RequestHeader(name = "X-Hub-Signature-256", required = false) String signature,
-            @RequestBody Map<String, Object> payload
+            @RequestHeader(value = "X-GitHub-Event", required = false) String event,
+            @RequestHeader(value = "X-Hub-Signature-256", required = false) String signature,
+            @RequestBody byte[] rawBody
     ) {
-        byte[] rawBody = new byte[0];
-        if (request instanceof ContentCachingRequestWrapper w) {
-            rawBody = w.getContentAsByteArray();
-        }
+        verifier.verify(signature, rawBody);
 
-        if (!GithubWebhookVerifier.verify(props.webhookSecret(), rawBody, signature)) {
-            return ResponseEntity.status(401).build();
-        }
+        // parse once
+        JsonNode root = verifier.parse(rawBody);
 
-        if (!"issues".equals(event)) {
-            return ResponseEntity.ok().build();
-        }
+        // We only care about issue events
+        if (!"issues".equalsIgnoreCase(event)) return ResponseEntity.ok().build();
 
-        String action = (String) payload.get("action");
-        Map<String, Object> issue = (Map<String, Object>) payload.get("issue");
-        if (issue == null) return ResponseEntity.ok().build();
+        String action = root.path("action").asText("");
+        long issueNumber = root.path("issue").path("number").asLong(0);
 
-        Object numObj = issue.get("number");
-        if (!(numObj instanceof Number n)) return ResponseEntity.ok().build();
-        Integer issueNumber = n.intValue();
+        if (issueNumber <= 0) return ResponseEntity.ok().build();
 
-        if ("closed".equals(action)) {
-            ticketService.handleGithubIssueClosed(issueNumber);
-        } else if ("reopened".equals(action)) {
-            ticketService.handleGithubIssueReopened(issueNumber);
+        switch (action) {
+            case "closed" -> supportTicketService.handleGithubIssueClosed(issueNumber);
+            case "reopened" -> supportTicketService.handleGithubIssueReopened(issueNumber);
+            default -> { /* ignore */ }
         }
 
         return ResponseEntity.ok().build();

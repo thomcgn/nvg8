@@ -9,7 +9,6 @@ import {
     UserCog,
     UsersRound,
     UserRoundIcon,
-    Home,
     ShieldCheck,
     Menu,
     X,
@@ -22,7 +21,7 @@ import {
 import { BrandMark } from "@/components/BrandMark";
 import { useAuth } from "@/lib/useAuth";
 import { apiFetch } from "@/lib/api";
-import type { AuthContextOverviewResponse } from "@/lib/types";
+import type { AvailableContextDto } from "@/lib/types";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 
@@ -45,10 +44,9 @@ const navSections: NavSection[] = [
         title: "Personal",
         items: [
             { href: "/dashboard/mitarbeiter", label: "Mitarbeiter", icon: UserCog, description: "Rollen & Zugänge" },
-            { href: "/dashboard/teams", label: "Teams", icon: UsersRound, description: "Struktur & Zuständigkeit" }
+            { href: "/dashboard/teams", label: "Teams", icon: UsersRound, description: "Struktur & Zuständigkeit" },
         ],
     },
-
 ];
 
 function NavItem({
@@ -96,7 +94,6 @@ function NavItem({
                 ) : null}
             </div>
 
-            {/* subtle right accent on hover */}
             <div className="pointer-events-none absolute right-2 top-1/2 h-8 w-1 -translate-y-1/2 rounded-full bg-brand-teal/0 transition group-hover:bg-brand-teal/20" />
         </Link>
     );
@@ -109,6 +106,10 @@ function formatMmSs(totalSeconds: number) {
     return `${mm}:${ss}`;
 }
 
+type AuthContextsResponse = {
+    contexts: AvailableContextDto[];
+};
+
 function SidebarContent({ onClose, className = "" }: { onClose?: () => void; className?: string }) {
     const router = useRouter();
     const { me, loading, signOut } = useAuth();
@@ -116,7 +117,6 @@ function SidebarContent({ onClose, className = "" }: { onClose?: () => void; cla
     const [traegerName, setTraegerName] = useState<string | null>(null);
     const [einrichtungName, setEinrichtungName] = useState<string | null>(null);
 
-    // default: collapsed (no persistence)
     const [collapsed, setCollapsed] = useState(true);
 
     const displayName = useMemo(() => me?.displayName || me?.email || "—", [me?.displayName, me?.email]);
@@ -169,41 +169,39 @@ function SidebarContent({ onClose, className = "" }: { onClose?: () => void; cla
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [remainingSeconds]);
 
+    // ✅ Load traeger/einrichtung labels from /auth/contexts (the endpoint returns { contexts: [...] })
     useEffect(() => {
         let mounted = true;
 
-        async function loadContext() {
+        async function loadContextLabels() {
             setTraegerName(null);
             setEinrichtungName(null);
 
             if (!me?.contextActive || !me.orgUnitId) return;
 
             try {
-                const overview = await apiFetch<AuthContextOverviewResponse>("/auth/contexts", { method: "GET" });
+                const res = await apiFetch<AuthContextsResponse>("/auth/contexts", { method: "GET" });
                 if (!mounted) return;
 
-                const found = overview.available.find((c) => c.einrichtungOrgUnitId === me.orgUnitId);
+                const found = res.contexts.find((c) => c.orgUnitId === me.orgUnitId);
                 if (found) {
                     setTraegerName(found.traegerName);
-                    setEinrichtungName(found.einrichtungName);
+                    setEinrichtungName(found.orgUnitName);
                 }
             } catch {
-                // ignore
+                // ignore: keep "—"
             }
         }
 
-        loadContext();
+        loadContextLabels();
+
         return () => {
             mounted = false;
         };
     }, [me?.contextActive, me?.orgUnitId]);
 
     return (
-        <div
-            className={
-                "flex h-full flex-col border-r border-brand-border bg-brand-bg/80 backdrop-blur p-4 " + className
-            }
-        >
+        <div className={"flex h-full flex-col border-r border-brand-border bg-brand-bg/80 backdrop-blur p-4 " + className}>
             {/* Header */}
             <div className="mb-4 flex items-center justify-between">
                 <BrandMark />
@@ -224,13 +222,9 @@ function SidebarContent({ onClose, className = "" }: { onClose?: () => void; cla
                 ) : null}
             </div>
 
-            {/* User / Context card (SaaS style) */}
+            {/* User / Context card */}
             <div className="mb-3 overflow-hidden rounded-2xl border border-brand-border bg-white/80 backdrop-blur shadow-sm">
-                <button
-                    type="button"
-                    onClick={() => setCollapsed((c) => !c)}
-                    className="w-full p-4 text-left transition hover:bg-white"
-                >
+                <button type="button" onClick={() => setCollapsed((c) => !c)} className="w-full p-4 text-left transition hover:bg-white">
                     <div className="flex items-center gap-3">
                         <div className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-brand-teal/15 text-brand-teal">
                             <UserRoundIcon className="h-5 w-5" />
@@ -241,28 +235,15 @@ function SidebarContent({ onClose, className = "" }: { onClose?: () => void; cla
                             <div className="mt-0.5 text-xs text-brand-text2 truncate">{loading ? "…" : traegerName ?? "—"}</div>
                         </div>
 
-                        <ChevronDown
-                            className={
-                                "h-4 w-4 shrink-0 text-brand-text2 transition-transform duration-200 " +
-                                (collapsed ? "" : "rotate-180")
-                            }
-                        />
+                        <ChevronDown className={"h-4 w-4 shrink-0 text-brand-text2 transition-transform duration-200 " + (collapsed ? "" : "rotate-180")} />
                     </div>
                 </button>
 
                 {/* Smooth accordion */}
-                <div
-                    className={
-                        "grid transition-[grid-template-rows] duration-200 ease-out " +
-                        (collapsed ? "grid-rows-[0fr]" : "grid-rows-[1fr]")
-                    }
-                >
+                <div className={"grid transition-[grid-template-rows] duration-200 ease-out " + (collapsed ? "grid-rows-[0fr]" : "grid-rows-[1fr]")}>
                     <div className="min-h-0">
                         <div
-                            className={
-                                "px-4 pb-4 border-t border-brand-border pt-3 text-xs space-y-3 " +
-                                (collapsed ? "opacity-0" : "opacity-100")
-                            }
+                            className={"px-4 pb-4 border-t border-brand-border pt-3 text-xs space-y-3 " + (collapsed ? "opacity-0" : "opacity-100")}
                             style={{ transition: "opacity 160ms ease-out" }}
                             aria-hidden={collapsed}
                         >
@@ -279,9 +260,7 @@ function SidebarContent({ onClose, className = "" }: { onClose?: () => void; cla
                             <div
                                 className={
                                     "rounded-xl border px-3 py-2 " +
-                                    (isExpiringSoon
-                                        ? "border-brand-warning/30 bg-brand-warning/10 text-brand-text"
-                                        : "border-brand-border bg-brand-bg/60 text-brand-text2")
+                                    (isExpiringSoon ? "border-brand-warning/30 bg-brand-warning/10 text-brand-text" : "border-brand-border bg-brand-bg/60 text-brand-text2")
                                 }
                             >
                                 <div className="flex items-center gap-2">
@@ -332,7 +311,7 @@ function SidebarContent({ onClose, className = "" }: { onClose?: () => void; cla
                 </div>
             </div>
 
-            {/* Dashboard Home (single primary item) */}
+            {/* Dashboard Home */}
             <div className="mb-4">
                 <NavItem href="/dashboard" label="Übersicht" icon={LayoutDashboard} description="Start & Kennzahlen" onNavigate={onClose} />
             </div>
@@ -341,9 +320,7 @@ function SidebarContent({ onClose, className = "" }: { onClose?: () => void; cla
             <nav className="flex flex-1 flex-col gap-4 overflow-y-auto pr-1">
                 {navSections.map((sec) => (
                     <div key={sec.title}>
-                        <div className="px-1 text-[11px] font-extrabold uppercase tracking-wide text-brand-text2/80">
-                            {sec.title}
-                        </div>
+                        <div className="px-1 text-[11px] font-extrabold uppercase tracking-wide text-brand-text2/80">{sec.title}</div>
                         <div className="mt-2 flex flex-col gap-2">
                             {sec.items.map((i) => (
                                 <NavItem key={i.href} {...i} onNavigate={onClose} />

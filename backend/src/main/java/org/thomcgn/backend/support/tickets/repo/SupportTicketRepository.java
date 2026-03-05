@@ -8,11 +8,11 @@ import java.util.List;
 import java.util.Optional;
 
 public interface SupportTicketRepository extends JpaRepository<SupportTicket, Long> {
-    Optional<SupportTicket> findByGithubIssueNumber(Integer githubIssueNumber);
 
-    // ✅ neu: Liste "meine Tickets"
-    List<SupportTicket> findByCreatedByUserIdOrderByCreatedAtDesc(Long createdByUserId);
+    List<SupportTicket> findByCreatedByUserIdOrderByCreatedAtDesc(Long userId);
 
-    // ✅ neu: Count (z.B. OPEN)
-    long countByCreatedByUserIdAndStatus(Long createdByUserId, SupportTicketStatus status);
+    long countByCreatedByUserIdAndStatus(Long userId, SupportTicketStatus status);
+    Optional<SupportTicket> findByGithubIssueNumber(long githubIssueNumber);
+    // ✅ aus dem "github/repo" zusammengelegt
+    List<SupportTicket> findByGithubIssueNumberIsNotNull();
 }

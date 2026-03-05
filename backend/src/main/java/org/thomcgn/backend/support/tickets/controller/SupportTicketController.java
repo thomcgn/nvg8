@@ -2,7 +2,7 @@ package org.thomcgn.backend.support.tickets.controller;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
-import org.thomcgn.backend.auth.dto.AuthPrincipal;
+import org.thomcgn.backend.common.security.JwtPrincipal;
 import org.thomcgn.backend.support.tickets.dto.CountResponse;
 import org.thomcgn.backend.support.tickets.dto.CreateSupportTicketRequest;
 import org.thomcgn.backend.support.tickets.dto.SupportTicketResponse;
@@ -20,49 +20,39 @@ public class SupportTicketController {
     private final SupportTicketService supportTicketService;
     private final SupportTicketRepository supportTicketRepository;
 
-    // ✅ already have POST create
     @PostMapping
     public SupportTicketResponse create(
-            @org.springframework.security.core.annotation.AuthenticationPrincipal AuthPrincipal user,
+            @org.springframework.security.core.annotation.AuthenticationPrincipal JwtPrincipal user,
             @RequestBody CreateSupportTicketRequest request
     ) {
-        var ticket = supportTicketService.createTicket(user.id(), request);
+        var ticket = supportTicketService.createTicket(user.getUserId(), request);
         return SupportTicketResponse.from(ticket);
     }
 
     @GetMapping("/my")
     public List<SupportTicketResponse> myTickets(
-            @org.springframework.security.core.annotation.AuthenticationPrincipal(expression = "toAuthPrincipal()")
-            org.thomcgn.backend.auth.dto.AuthPrincipal user
+            @org.springframework.security.core.annotation.AuthenticationPrincipal JwtPrincipal user
     ) {
-        if (user == null) {
-            throw new org.springframework.web.server.ResponseStatusException(
-                    org.springframework.http.HttpStatus.UNAUTHORIZED,
-                    "Not authenticated"
-            );
-        }
-
         return supportTicketRepository
-                .findByCreatedByUserIdOrderByCreatedAtDesc(user.id())
+                .findByCreatedByUserIdOrderByCreatedAtDesc(user.getUserId())
                 .stream()
                 .map(SupportTicketResponse::from)
                 .toList();
     }
 
-    // ✅ neu: GET /support/tickets/my/count?status=OPEN
+    // ✅ GET /support/tickets/my/count?status=OPEN
     @GetMapping("/my/count")
     public CountResponse myTicketsCount(
-            @org.springframework.security.core.annotation.AuthenticationPrincipal AuthPrincipal user,
+            @org.springframework.security.core.annotation.AuthenticationPrincipal JwtPrincipal user,
             @RequestParam(name = "status", required = false) SupportTicketStatus status
     ) {
         if (status == null) {
-            // Optional: wenn kein Status angegeben: count OPEN + IN_PROGRESS
-            long open = supportTicketRepository.countByCreatedByUserIdAndStatus(user.id(), SupportTicketStatus.OPEN);
-            long inProgress = supportTicketRepository.countByCreatedByUserIdAndStatus(user.id(), SupportTicketStatus.IN_PROGRESS);
+            long open = supportTicketRepository.countByCreatedByUserIdAndStatus(user.getUserId(), SupportTicketStatus.OPEN);
+            long inProgress = supportTicketRepository.countByCreatedByUserIdAndStatus(user.getUserId(), SupportTicketStatus.IN_PROGRESS);
             return new CountResponse(open + inProgress);
         }
 
-        long c = supportTicketRepository.countByCreatedByUserIdAndStatus(user.id(), status);
+        long c = supportTicketRepository.countByCreatedByUserIdAndStatus(user.getUserId(), status);
         return new CountResponse(c);
     }
 }

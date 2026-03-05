@@ -1,137 +1,106 @@
 package org.thomcgn.backend.support.tickets.service;
 
-import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
-import org.thomcgn.backend.messenger.service.MessageService;
-import org.thomcgn.backend.config.SupportProperties;
-import org.thomcgn.backend.support.github.GithubService;
+import org.springframework.transaction.annotation.Transactional;
+import org.thomcgn.backend.support.github.GithubClient;
 import org.thomcgn.backend.support.tickets.dto.CreateSupportTicketRequest;
-import org.thomcgn.backend.support.tickets.model.*;
+import org.thomcgn.backend.support.tickets.model.SupportTicket;
+import org.thomcgn.backend.support.tickets.model.SupportTicketStatus;
 import org.thomcgn.backend.support.tickets.repo.SupportTicketRepository;
 
+import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
 public class SupportTicketService {
 
-    private final SupportTicketRepository ticketRepository;
-    private final GithubService githubService;
-
-    // optional (In-App Inbox Notifications)
-    private final MessageService messageService;
-    private final SupportProperties supportProperties;
+    private final SupportTicketRepository supportTicketRepository;
+    private final GithubClient githubClient;
 
     @Transactional
-    public SupportTicket createTicket(Long userId, CreateSupportTicketRequest req) {
+    public SupportTicket createTicket(Long createdByUserId, CreateSupportTicketRequest req) {
 
-        SupportTicket ticket = SupportTicket.builder()
-                .createdByUserId(userId)
-                .title(req.title())
-                .description(req.description())
-                .category(req.category() != null ? req.category() : SupportTicketCategory.OTHER)
-                .priority(req.priority() != null ? req.priority() : SupportTicketPriority.MEDIUM)
-                .status(SupportTicketStatus.OPEN)
-                .pageUrl(req.pageUrl())
-                .userAgent(req.userAgent())
-                .build();
+        SupportTicket t = new SupportTicket();
+        t.setTitle(req.title());
+        t.setDescription(req.description());
+        t.setCategory(req.category());
+        t.setPriority(req.priority());
+        t.setStatus(SupportTicketStatus.OPEN);
+        t.setPageUrl(req.pageUrl());
+        t.setUserAgent(req.userAgent());
+        t.setCreatedAt(OffsetDateTime.now());
+        t.setCreatedByUserId(createdByUserId);
 
-        // erst speichern -> ID im GitHub Issue Body referenzieren
-        ticket = ticketRepository.save(ticket);
+        // 1️⃣ zuerst speichern
+        t = supportTicketRepository.save(t);
 
-        String ghTitle = "[Support][" + ticket.getCategory() + "] " + ticket.getTitle();
-
-        String ghBody = """
-                ## Problem
-                %s
-
-                ## Seite
-                %s
-
-                ## User-Agent
-                %s
-
-                ## Ticket-ID (System)
-                %s
-
-                ## Meta
-                Priority: %s
-                UserId: %s
-                """.formatted(
-                ticket.getDescription(),
-                ticket.getPageUrl() == null ? "-" : ticket.getPageUrl(),
-                ticket.getUserAgent() == null ? "-" : ticket.getUserAgent(),
-                ticket.getId(),
-                ticket.getPriority(),
-                userId
+        // 2️⃣ GitHub Issue erstellen
+        Map<String,Object> issue = githubClient.createIssue(
+                Map.of(
+                        "title", "[SUPPORT] " + t.getTitle(),
+                        "body", buildGithubBody(t),
+                        "labels", List.of("support","status:offen")
+                )
         );
 
-        List<String> labels = List.of(
-                "support",
-                "priority:" + ticket.getPriority().name().toLowerCase(),
-                "area:app"
-        );
+        // 3️⃣ GitHub response auslesen
+        t.setGithubIssueNumber((Integer) issue.get("number"));
+        t.setGithubIssueUrl((String) issue.get("html_url"));
 
-        GithubService.CreatedIssue created = githubService.createIssue(ghTitle, ghBody, labels);
-
-        ticket.setGithubIssueNumber(created.number());
-        ticket.setGithubIssueUrl(created.url());
-        ticket.setGithubIssueState("open");
-
-        ticket = ticketRepository.save(ticket);
-
-        // In-App Message: Ticket erstellt
-        sendInApp(userId,
-                "✅ Ticket erstellt (#" + ticket.getGithubIssueNumber() + ")",
-                "Wir haben dein Ticket erhalten:\n\n" +
-                        ticket.getTitle() + "\n\n" +
-                        (ticket.getGithubIssueUrl() != null ? "GitHub: " + ticket.getGithubIssueUrl() : "")
-        );
-
-        return ticket;
+        return supportTicketRepository.save(t);
     }
 
-    @Transactional
-    public void handleGithubIssueClosed(Integer issueNumber) {
-        SupportTicket ticket = ticketRepository.findByGithubIssueNumber(issueNumber).orElse(null);
-        if (ticket == null) return;
+    private String buildGithubBody(SupportTicket t) {
 
-        ticket.setGithubIssueState("closed");
+        StringBuilder sb = new StringBuilder();
 
-        // “closed” in GitHub heißt bei euch wahrscheinlich “gelöst”
-        if (ticket.getStatus() != SupportTicketStatus.RESOLVED && ticket.getStatus() != SupportTicketStatus.CLOSED) {
-            ticket.setStatus(SupportTicketStatus.RESOLVED);
+        sb.append("Ticket-ID: ").append(t.getId()).append("\n");
+        sb.append("Kategorie: ").append(t.getCategory()).append("\n");
+        sb.append("Priorität: ").append(t.getPriority()).append("\n");
+
+        if (t.getPageUrl() != null) {
+            sb.append("Page: ").append(t.getPageUrl()).append("\n");
         }
 
-        ticketRepository.save(ticket);
+        sb.append("\n---\n\n");
 
-        sendInApp(ticket.getCreatedByUserId(),
-                "✅ Ticket gelöst (#" + issueNumber + ")",
-                "Dein Ticket wurde als gelöst markiert:\n\n" + ticket.getTitle()
-        );
+        if (t.getDescription() != null) {
+            sb.append(t.getDescription()).append("\n");
+        }
+
+        if (t.getUserAgent() != null) {
+            sb.append("\n---\n");
+            sb.append("User-Agent: ").append(t.getUserAgent()).append("\n");
+        }
+
+        return sb.toString();
     }
 
     @Transactional
-    public void handleGithubIssueReopened(Integer issueNumber) {
-        SupportTicket ticket = ticketRepository.findByGithubIssueNumber(issueNumber).orElse(null);
-        if (ticket == null) return;
+    public void handleGithubIssueClosed(long issueNumber) {
+        // Ticket anhand Issue-Nummer suchen
+        var opt = supportTicketRepository.findByGithubIssueNumber(issueNumber);
+        if (opt.isEmpty()) return;
 
-        ticket.setGithubIssueState("open");
-        ticket.setStatus(SupportTicketStatus.OPEN);
-        ticketRepository.save(ticket);
+        var t = opt.get();
+
+        // auf ERLEDIGT setzen
+        t.setStatus(SupportTicketStatus.OPEN);
+        supportTicketRepository.save(t);
     }
 
-    private void sendInApp(Long recipientUserId, String subject, String body) {
-        Long senderId = supportProperties.systemSenderId() != null ? supportProperties.systemSenderId() : recipientUserId;
+    @Transactional
+    public void handleGithubIssueReopened(long issueNumber) {
+        var opt = supportTicketRepository.findByGithubIssueNumber(issueNumber);
+        if (opt.isEmpty()) return;
 
-        // Wenn du MessageService später entfernen willst: hier ist die einzige Stelle.
-        messageService.sendMessage(
-                senderId,
-                subject,
-                body,
-                List.of(recipientUserId),
-                null
-        );
+        var t = opt.get();
+
+        // auf OFFEN setzen
+        t.setStatus(SupportTicketStatus.CLOSED);
+        supportTicketRepository.save(t);
     }
 }
