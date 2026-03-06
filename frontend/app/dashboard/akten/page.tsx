@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { apiFetch } from "@/lib/api";
+import { FileText, RefreshCw, ChevronRight } from "lucide-react";
 
 type AkteListItem = {
   id: number; // akteId (KindDossier)
@@ -29,6 +30,13 @@ function toneForCount(n: number): "neutral" | "info" | "success" {
   if (!Number.isFinite(n) || n <= 0) return "neutral";
   if (n === 1) return "info";
   return "success";
+}
+
+function formatDateTimeDE(value: string | null) {
+  if (!value) return "—";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return String(value);
+  return new Intl.DateTimeFormat("de-DE", { dateStyle: "medium", timeStyle: "short" }).format(d);
 }
 
 export default function AktenPage() {
@@ -76,7 +84,6 @@ export default function AktenPage() {
   // debounced search via Topbar
   React.useEffect(() => {
     const t = setTimeout(() => {
-      // whenever q changes, reset to first page
       load(q, 0);
       setPage(0);
     }, 250);
@@ -86,10 +93,11 @@ export default function AktenPage() {
   }, [q]);
 
   const items = data?.items || [];
+  const totalLabel = loading ? "…" : `${data?.total ?? items.length} Einträge`;
 
   return (
       <AuthGate>
-        <div className="min-h-screen bg-background">
+        <div className="min-h-screen bg-brand-bg overflow-x-hidden">
           <Topbar
               title="Akten"
               onSearch={(val) => {
@@ -97,31 +105,48 @@ export default function AktenPage() {
               }}
           />
 
-          <div className="mx-auto w-full max-w-6xl space-y-4 p-4 md:p-6">
-            <div className="flex items-center justify-between">
-
-
-              <Button variant="secondary" onClick={() => load()} disabled={loading}>
-                Aktualisieren
-              </Button>
-            </div>
-
+          <div className="mx-auto w-full max-w-7xl px-3 sm:px-6 pb-12 pt-4 space-y-4">
             {err ? (
-                <div className="rounded-2xl border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive">{err}</div>
+                <div className="rounded-2xl border border-brand-danger/20 bg-brand-danger/10 p-3 text-sm text-brand-danger">
+                  {err}
+                </div>
             ) : null}
 
-            <Card>
+            {/* Header card / actions */}
+            <div className="rounded-2xl border border-brand-border/40 bg-white p-4 sm:p-5">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-start gap-3 min-w-0">
+                  <FileText className="h-5 w-5 text-brand-text2 mt-0.5" />
+                  <div className="min-w-0">
+                    <div className="text-base font-semibold text-brand-text truncate">Akten</div>
+                    <div className="mt-1 text-sm text-brand-text2 truncate">{totalLabel}</div>
+                  </div>
+                </div>
+
+                <Button
+                    variant="secondary"
+                    onClick={() => load()}
+                    disabled={loading}
+                    className="gap-2 h-11 w-full sm:w-auto justify-center"
+                >
+                  <RefreshCw className="h-4 w-4" />
+                  Aktualisieren
+                </Button>
+              </div>
+            </div>
+
+            <Card className="border border-brand-border/40 shadow-sm">
               <CardHeader className="flex flex-row items-center justify-between">
-                <div className="text-sm font-semibold">Liste</div>
-                <div className="text-xs text-muted-foreground">{loading ? "…" : `${data?.total ?? items.length} Einträge`}</div>
+                <div className="text-sm font-semibold text-brand-text">Liste</div>
+                <div className="text-xs text-brand-text2">{totalLabel}</div>
               </CardHeader>
 
               <CardContent className="space-y-2">
                 {!items.length ? (
-                    <div className="rounded-2xl border border-border bg-muted p-4 text-sm text-muted-foreground">
+                    <div className="rounded-2xl border border-brand-border/40 bg-white p-4 text-sm text-brand-text2">
                       {q.trim()
                           ? "Keine Akten zu dieser Suche gefunden."
-                          : "Noch keine Akten vorhanden. Bitte nach anlegen des Kindes über Neue Akte eine eröffnen."}
+                          : "Noch keine Akten vorhanden. Bitte nach Anlegen des Kindes über „Neue Akte“ eine eröffnen."}
                     </div>
                 ) : (
                     <div className="space-y-2">
@@ -129,26 +154,35 @@ export default function AktenPage() {
                           <button
                               key={a.id}
                               onClick={() => router.push(`/dashboard/akten/${a.id}`)}
-                              className="w-full rounded-2xl border border-border bg-card p-3 text-left transition hover:bg-accent"
+                              className="w-full rounded-2xl border border-brand-border/25 bg-white p-3 text-left transition hover:bg-brand-bg/30"
                           >
                             <div className="flex items-start justify-between gap-3">
                               <div className="min-w-0">
-                                <div className="truncate text-sm font-semibold">{a.kindName || `Kind #${a.kindId}`}</div>
-                                <div className="mt-1 text-xs text-muted-foreground">Akte #{a.id} · Kind #{a.kindId}</div>
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <div className="truncate text-sm font-semibold text-brand-text">
+                                    {a.kindName || `Kind #${a.kindId}`}
+                                  </div>
+                                  <ChevronRight className="h-4 w-4 text-brand-text2 shrink-0" />
+                                </div>
+                                <div className="mt-1 text-xs text-brand-text2">
+                                  Akte #{a.id} · Kind #{a.kindId}
+                                </div>
                               </div>
-                              <div className="flex items-center gap-2">
+
+                              <div className="flex items-center gap-2 shrink-0">
                                 <Badge tone={toneForCount(a.fallCount)}>{a.fallCount} Fälle</Badge>
                               </div>
                             </div>
 
-                            <div className="mt-2 text-xs text-muted-foreground">
-                              Erstellt: {a.createdAt || "—"} · Letzter Fall: {a.lastFallAt || "—"}
+                            <div className="mt-2 text-xs text-brand-text2">
+                              Erstellt: {formatDateTimeDE(a.createdAt)} · Letzter Fall: {formatDateTimeDE(a.lastFallAt)}
                             </div>
                           </button>
                       ))}
                     </div>
                 )}
 
+                {/* pagination */}
                 <div className="mt-3 flex items-center justify-between">
                   <Button
                       variant="secondary"
@@ -164,7 +198,7 @@ export default function AktenPage() {
                     Zurück
                   </Button>
 
-                  <div className="text-xs text-muted-foreground">Seite {page + 1}</div>
+                  <div className="text-xs text-brand-text2">Seite {page + 1}</div>
 
                   <Button
                       variant="secondary"

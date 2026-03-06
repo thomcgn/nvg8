@@ -37,6 +37,11 @@ public record MeldungDraftRequest(
         LocalDate naechsteUeberpruefungAm,
         String zusammenfassung,
 
+        // Version-Metadaten
+        MeldungChangeReason changeReason,
+        Instant infoEffectiveAt,
+        String reasonText,
+
         List<String> anlassCodes,
 
         List<ObservationDraft> observations,

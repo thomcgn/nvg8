@@ -21,6 +21,7 @@ import org.thomcgn.backend.falloeffnungen.repo.FalleroeffnungRepository;
 import org.thomcgn.backend.users.model.User;
 import org.thomcgn.backend.users.repo.UserRepository;
 
+import java.lang.reflect.Method;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -221,36 +222,190 @@ public class MeldungService {
             throw DomainException.forbidden(ErrorCode.ACCESS_DENIED, "Target does not belong to this Fall");
         }
 
+        // Original muss abgeschlossen sein (sonst korrigierst du einen Entwurf)
+        if (target.getStatus() != MeldungStatus.ABGESCHLOSSEN) {
+            throw DomainException.conflict(ErrorCode.CONFLICT, "Target is not abgeschlossen");
+        }
+
         User user = currentUser();
 
         try {
-            Integer maxLocked = meldungRepo.lockAndGetMaxVersionNo(fall.getId()); // <- PESSIMISTIC_WRITE
+            // Serialisiere Versionierung pro Fall
+            fallRepo.lockById(fall.getId())
+                    .orElseThrow(() -> DomainException.notFound(ErrorCode.NOT_FOUND, "Fall not found"));
+
+            Integer maxLocked = meldungRepo.lockAndGetMaxVersionNo(fall.getId()); // PESSIMISTIC_WRITE
             int nextVersion = (maxLocked == null ? 1 : maxLocked + 1);
 
             Meldung korr = new Meldung();
             korr.setFalleroeffnung(fall);
             korr.setVersionNo(nextVersion);
-            korr.setCurrent(true);
+
+            // ✅ KORREKTUR ist Ergänzung: niemals current
+            korr.setCurrent(false);
+
+            // ✅ Draft, bis submitted
             korr.setStatus(MeldungStatus.ENTWURF);
             korr.setType(MeldungType.KORREKTUR);
 
+            // ✅ Referenz auf Original
             korr.setCorrects(target);
-            korr.setSupersedes(target);
+
+            // ❌ NICHT supersedes setzen (würde fachliche Kette verfälschen)
+            korr.setSupersedes(null);
 
             korr.setCreatedBy(user);
             korr.setCreatedByDisplayName(user.getDisplayName());
 
+            // ✅ VORBEFÜLLEN: alles aus Ziel-Meldung übernehmen, damit nichts neu ausgefüllt werden muss
+            copyContentFrom(target, korr);
+
+            // optional: Metadaten direkt setzen (kann auch später im Draft gespeichert werden)
+            if (req.changeReason() != null) korr.setChangeReason(req.changeReason());
+            if (req.infoEffectiveAt() != null) korr.setInfoEffectiveAt(req.infoEffectiveAt());
+            if (req.reasonText() != null) korr.setReasonText(req.reasonText());
+
             Meldung saved = meldungRepo.saveAndFlush(korr);
 
-            // ensure only one current per fall
-            meldungRepo.clearCurrentByFallIdExcept(fall.getId(), saved.getId());
-            saved.setCurrent(true);
+            // ✅ Auch alle Sections kopieren (Anlass, Jugendamt, Kontakte, Extern, Attachments, Observations+Tags)
+            copySectionsFrom(target, saved);
 
             return buildResponse(saved, true);
 
         } catch (DataIntegrityViolationException ex) {
             em.clear();
             throw DomainException.conflict(ErrorCode.CONFLICT, "Could not create correction (version/current constraint)");
+        }
+    }
+
+    private void copyContentFrom(Meldung from, Meldung to) {
+        // Meta
+        to.setErfasstVonRolle(from.getErfasstVonRolle());
+        to.setMeldeweg(from.getMeldeweg());
+        to.setMeldewegSonstiges(from.getMeldewegSonstiges());
+        to.setMeldendeStelleKontakt(from.getMeldendeStelleKontakt());
+
+        to.setDringlichkeit(from.getDringlichkeit());
+        to.setDatenbasis(from.getDatenbasis());
+
+        to.setEinwilligungVorhanden(from.getEinwilligungVorhanden());
+        to.setSchweigepflichtentbindungVorhanden(from.getSchweigepflichtentbindungVorhanden());
+
+        // Inhalt
+        to.setKurzbeschreibung(from.getKurzbeschreibung());
+
+        // Fach
+        to.setFachAmpel(from.getFachAmpel());
+        to.setFachText(from.getFachText());
+        to.setAbweichungZurAuto(from.getAbweichungZurAuto());
+        to.setAbweichungsBegruendung(from.getAbweichungsBegruendung());
+
+        // Akut
+        to.setAkutGefahrImVerzug(from.isAkutGefahrImVerzug());
+        to.setAkutBegruendung(from.getAkutBegruendung());
+        to.setAkutNotrufErforderlich(from.getAkutNotrufErforderlich());
+        to.setAkutKindSicherUntergebracht(from.getAkutKindSicherUntergebracht());
+
+        // Planung
+        to.setVerantwortlicheFachkraft(from.getVerantwortlicheFachkraft());
+        to.setNaechsteUeberpruefungAm(from.getNaechsteUeberpruefungAm());
+        to.setZusammenfassung(from.getZusammenfassung());
+
+        // Snapshot
+        to.setAutoRiskSnapshot(from.getAutoRiskSnapshot());
+    }
+
+    private void copySectionsFrom(Meldung from, Meldung to) {
+        // AnlassCodes
+        List<String> codes = anlassRepo.findAllByMeldungId(from.getId()).stream()
+                .map(MeldungAnlassCode::getCode)
+                .toList();
+        upsertAnlassCodes(to, codes);
+
+        // Jugendamt
+        jugendamtRepo.findByMeldungId(from.getId()).ifPresent(j -> {
+            MeldungJugendamt ja = new MeldungJugendamt();
+            ja.setMeldung(to);
+            ja.setInformiert(j.getInformiert());
+            ja.setKontaktAm(j.getKontaktAm());
+            ja.setKontaktart(j.getKontaktart());
+            ja.setAktenzeichen(j.getAktenzeichen());
+            ja.setBegruendung(j.getBegruendung());
+            jugendamtRepo.save(ja);
+        });
+
+        // Contacts
+        List<MeldungDraftRequest.ContactDraft> contacts = contactRepo.findAllByMeldungId(from.getId()).stream()
+                .map(c -> new MeldungDraftRequest.ContactDraft(
+                        c.getKontaktMit(),
+                        c.getKontaktAm(),
+                        c.getStatus(),
+                        c.getNotiz(),
+                        c.getErgebnis()
+                ))
+                .toList();
+        upsertContacts(to, contacts);
+
+        // Extern
+        List<MeldungDraftRequest.ExternDraft> extern = externRepo.findAllByMeldungId(from.getId()).stream()
+                .map(e -> new MeldungDraftRequest.ExternDraft(
+                        e.getStelle(),
+                        e.getStelleSonstiges(),
+                        e.getAm(),
+                        e.getBegruendung(),
+                        e.getErgebnis()
+                ))
+                .toList();
+        upsertExtern(to, extern);
+
+        // Attachments
+        List<MeldungDraftRequest.AttachmentDraft> attachments = attachmentRepo.findAllByMeldungId(from.getId()).stream()
+                .map(a -> new MeldungDraftRequest.AttachmentDraft(
+                        a.getFileId(),
+                        a.getTyp(),
+                        a.getTitel(),
+                        a.getBeschreibung(),
+                        a.getSichtbarkeit(),
+                        a.getRechtsgrundlageHinweis()
+                ))
+                .toList();
+        upsertAttachments(to, attachments);
+
+        // Observations + Tags
+        List<MeldungObservation> obs = obsRepo.findAllByMeldungId(from.getId());
+        // create new observations, keep order by createdAt in repo
+        obsRepo.deleteAllByMeldungId(to.getId());
+
+        // We'll re-create and then copy tags
+        for (MeldungObservation o : obs) {
+            MeldungObservation n = new MeldungObservation();
+            n.setMeldung(to);
+            n.setZeitpunkt(o.getZeitpunkt());
+            n.setZeitraum(o.getZeitraum());
+            n.setOrt(o.getOrt());
+            n.setOrtSonstiges(o.getOrtSonstiges());
+            n.setQuelle(o.getQuelle());
+            n.setText(o.getText());
+            n.setWoertlichesZitat(o.getWoertlichesZitat());
+            n.setKoerperbefund(o.getKoerperbefund());
+            n.setVerhaltenKind(o.getVerhaltenKind());
+            n.setVerhaltenBezug(o.getVerhaltenBezug());
+            n.setSichtbarkeit(o.getSichtbarkeit());
+            n.setCreatedByDisplayName(to.getCreatedByDisplayName());
+
+            MeldungObservation savedObs = obsRepo.save(n);
+
+            // Tags for this observation
+            List<MeldungObservationTag> tags = obsTagRepo.findAllByObservationIds(List.of(o.getId()));
+            for (MeldungObservationTag t : tags) {
+                MeldungObservationTag nt = new MeldungObservationTag();
+                nt.setObservation(savedObs);
+                nt.setAnlassCode(t.getAnlassCode());
+                nt.setIndicatorId(t.getIndicatorId());
+                nt.setSeverity(t.getSeverity());
+                nt.setComment(t.getComment());
+                obsTagRepo.save(nt);
+            }
         }
     }
 
@@ -311,6 +466,27 @@ public class MeldungService {
             return buildResponse(m, true);
         }
 
+        // ✅ Korrektur erkennen: Type=KORREKTUR oder corrects != null
+        boolean isCorrection = (m.getType() == MeldungType.KORREKTUR) || (m.getCorrects() != null);
+
+        // ✅ Änderungsgrund NUR bei Korrektur Pflicht
+        if (isCorrection) {
+            String reason = extractSubmitChangeReason(req);
+            if (reason == null || reason.isBlank()) {
+                // Wichtig: Fehlermeldung wie im Frontend erwartet
+                throw DomainException.badRequest(ErrorCode.VALIDATION_FAILED, "changeReason missing");
+            }
+            writeSectionReasons(m, Map.of("KORREKTURGRUND", reason.trim()));
+        }
+
+        // ✅ Version-Metadaten NICHT mehr erzwingen (war Ursache für "changeReason missing" bei normalen Versionen)
+        // Optional: wenn changeReason gesetzt ist, darfst du trotzdem infoEffectiveAt prüfen
+        if (m.getChangeReason() != null) {
+            if (requiresInfoEffectiveAt(m.getChangeReason()) && m.getInfoEffectiveAt() == null) {
+                throw DomainException.badRequest(ErrorCode.VALIDATION_FAILED, "infoEffectiveAt missing");
+            }
+        }
+
         User user = currentUser();
 
         m.setStatus(MeldungStatus.ABGESCHLOSSEN);
@@ -332,12 +508,47 @@ public class MeldungService {
         return buildResponse(m, true);
     }
 
+    /**
+     * Robust: akzeptiert aktuell "correctionReason()" und (falls DTO angepasst) auch "changeReason()".
+     * So musst du nicht sofort überall gleichzeitig refactoren.
+     */
+    private String extractSubmitChangeReason(MeldungSubmitRequest req) {
+        if (req == null) return null;
+
+        // 1) aktuelles Feld im DTO (dein Service nutzte bisher correctionReason)
+        try {
+            Method m = req.getClass().getMethod("correctionReason");
+            Object v = m.invoke(req);
+            if (v instanceof String s && !s.isBlank()) return s;
+        } catch (Exception ignored) { }
+
+        // 2) falls DTO bereits/noch auf changeReason umgestellt ist
+        try {
+            Method m = req.getClass().getMethod("changeReason");
+            Object v = m.invoke(req);
+            if (v instanceof String s && !s.isBlank()) return s;
+        } catch (Exception ignored) { }
+
+        return null;
+    }
+
+    private boolean requiresInfoEffectiveAt(MeldungChangeReason reason) {
+        return reason == MeldungChangeReason.NACHTRAG
+                || reason == MeldungChangeReason.UPDATE
+                || reason == MeldungChangeReason.REASSESSMENT;
+    }
+
     // =====================================================
     // INTERNALS
     // =====================================================
 
     private void applyDraftToEntity(Meldung m, MeldungDraftRequest req) {
         if (req == null) return;
+
+        // Version-Metadaten (optional)
+        m.setChangeReason(req.changeReason());
+        m.setInfoEffectiveAt(req.infoEffectiveAt());
+        m.setReasonText(req.reasonText());
 
         m.setErfasstVonRolle(req.erfasstVonRolle());
         m.setMeldeweg(req.meldeweg());
@@ -663,6 +874,10 @@ public class MeldungService {
 
                 m.getSupersedes() == null ? null : m.getSupersedes().getId(),
                 m.getCorrects() == null ? null : m.getCorrects().getId(),
+
+                m.getChangeReason() == null ? null : m.getChangeReason().name(),
+                m.getInfoEffectiveAt(),
+                m.getReasonText(),
 
                 m.getErfasstVonRolle(),
                 m.getMeldeweg() == null ? null : m.getMeldeweg().name(),

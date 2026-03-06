@@ -10,13 +10,11 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 
 import { apiFetch, ApiError } from "@/lib/api";
-import { ArrowLeft, Plus, ArrowRight, RefreshCw } from "lucide-react";
+import { ArrowLeft, Plus, ArrowRight, RefreshCw, FolderOpen, AlertTriangle, FileText } from "lucide-react";
 
-import {
-    findFallWithDraftMeldung,
-    loadMeldungStatusByFallIds,
-    type FallListItem,
-} from "@/lib/fall";
+import { findFallWithDraftMeldung, loadMeldungStatusByFallIds, type FallListItem } from "@/lib/fall";
+
+/* ---------------- Helpers ---------------- */
 
 function safeNumber(v: unknown): number | null {
     if (typeof v === "string") {
@@ -27,29 +25,66 @@ function safeNumber(v: unknown): number | null {
         const n = Number(v[0]);
         return Number.isFinite(n) && n > 0 ? n : null;
     }
+    if (typeof v === "number") return Number.isFinite(v) && v > 0 ? v : null;
     return null;
 }
 
-function formatDateTime(v?: string | null) {
+function formatDateTimeDE(v?: string | null) {
     if (!v) return "—";
     const d = new Date(v);
-    if (Number.isNaN(d.getTime())) return v; // fallback, falls Backend kein ISO liefert
-    return new Intl.DateTimeFormat("de-DE", {
-        dateStyle: "medium",
-        timeStyle: "short",
-    }).format(d);
+    if (Number.isNaN(d.getTime())) return String(v);
+    return new Intl.DateTimeFormat("de-DE", { dateStyle: "medium", timeStyle: "short" }).format(d);
 }
+
+function toneForStatus(status: string | null | undefined): "success" | "warning" | "danger" | "info" | "neutral" {
+    const s = (status || "").toLowerCase();
+    if (s.includes("hoch") || s.includes("krit") || s.includes("risiko")) return "danger";
+    if (s.includes("warn") || s.includes("prüf") || s.includes("review") || s.includes("in_pruef")) return "warning";
+    if (s.includes("abgesch") || s.includes("done") || s.includes("geschlossen") || s.includes("abgeschlossen"))
+        return "success";
+    if (s.includes("offen") || s.includes("neu")) return "info";
+    return "neutral";
+}
+
+function isMeldungLocked(status: string | null | undefined) {
+    const s = String(status ?? "").toLowerCase();
+    return (
+        s.includes("abgesch") ||
+        s.includes("abgeschlossen") ||
+        s.includes("geschlossen") ||
+        s.includes("submitted") ||
+        s.includes("submit") ||
+        s.includes("freigabe") ||
+        s.includes("freigegeben")
+    );
+}
+
+function extractRequestedEinrichtungId(err: unknown): number | null {
+    if (!(err instanceof ApiError)) return null;
+    const meta = err.problem?.meta as any;
+
+    const candidates = [
+        meta?.requestedEinrichtungOrgUnitId,
+        meta?.einrichtungOrgUnitId,
+        meta?.requestedEinrichtungId,
+        meta?.einrichtungId,
+    ];
+
+    for (const c of candidates) {
+        const n = typeof c === "number" ? c : typeof c === "string" ? Number(c) : null;
+        if (n && Number.isFinite(n) && n > 0) return n;
+    }
+    return null;
+}
+
+/* ---------------- Types ---------------- */
 
 type AkteResponse = {
     akteId: number;
     kindId: number;
     kindName: string | null;
     enabled: boolean;
-
-    // ✅ muss Backend liefern, sonst bleibt es "—"
     createdAt?: string | null;
-
-    // optional
     einrichtungOrgUnitId?: number | null;
 };
 
@@ -61,8 +96,6 @@ type FallListResponse = {
 type CreateFallRequest = {
     titel?: string | null;
     kurzbeschreibung?: string | null;
-
-    // ⚠️ Backend nimmt einrichtungOrgUnitId aus Kontext – kann hier null bleiben
     einrichtungOrgUnitId?: number | null;
     teamOrgUnitId?: number | null;
 };
@@ -85,67 +118,26 @@ type ContextActive = {
     roles?: string[];
 };
 
-function toneForStatus(
-    status: string | null | undefined
-): "success" | "warning" | "danger" | "info" | "neutral" {
-    const s = (status || "").toLowerCase();
-    if (s.includes("hoch") || s.includes("krit") || s.includes("risiko")) return "danger";
-    if (s.includes("warn") || s.includes("prüf") || s.includes("review") || s.includes("in_pruef")) return "warning";
-    if (s.includes("abgesch") || s.includes("done") || s.includes("geschlossen") || s.includes("abgeschlossen")) return "success";
-    if (s.includes("offen") || s.includes("neu")) return "info";
-    return "neutral";
-}
-
-function extractRequestedEinrichtungId(err: unknown): number | null {
-    if (!(err instanceof ApiError)) return null;
-
-    const meta = err.problem?.meta as any;
-
-    const candidates = [
-        meta?.requestedEinrichtungOrgUnitId,
-        meta?.einrichtungOrgUnitId,
-        meta?.requestedEinrichtungId,
-        meta?.einrichtungId,
-    ];
-
-    for (const c of candidates) {
-        const n = typeof c === "number" ? c : typeof c === "string" ? Number(c) : null;
-        if (n && Number.isFinite(n) && n > 0) return n;
-    }
-
-    return null;
-}
-
-function isMeldungLocked(status: string | null | undefined) {
-    const s = String(status ?? "").toLowerCase();
-    return (
-        s.includes("abgesch") ||
-        s.includes("abgeschlossen") ||
-        s.includes("geschlossen") ||
-        s.includes("submitted") ||
-        s.includes("submit") ||
-        s.includes("freigabe") ||
-        s.includes("freigegeben")
-    );
-}
+/* ---------------- Page ---------------- */
 
 export default function AkteDetailPage() {
     const router = useRouter();
     const params = useParams();
 
-    const akteId = useMemo(() => safeNumber((params as any)?.akteId), [params]);
-
+    // ✅ Route ist /dashboard/akten/[id]
+    const akteId = useMemo(() => {
+        const p: any = params as any;
+        return safeNumber(p?.akteId) ?? safeNumber(p?.id) ?? null;
+    }, [params]);
     const [akte, setAkte] = React.useState<AkteResponse | null>(null);
     const [faelle, setFaelle] = React.useState<FallListResponse | null>(null);
 
     const [loading, setLoading] = React.useState(true);
     const [err, setErr] = React.useState<string | null>(null);
 
-    // Meldung-Status je Fall (current Meldung)
     const [meldungStatusByFallId, setMeldungStatusByFallId] = React.useState<Record<number, string>>({});
     const [loadingMeldungStates, setLoadingMeldungStates] = React.useState(false);
 
-    // Context/UI State
     const [context, setContext] = React.useState<ContextActive | null>(null);
     const [contextRequired, setContextRequired] = React.useState(false);
     const [contextHint, setContextHint] = React.useState<string | null>(null);
@@ -153,7 +145,6 @@ export default function AkteDetailPage() {
 
     const loadContext = React.useCallback(async () => {
         try {
-            // ✅ bewusst OHNE /api, falls auth endpoints nicht unter /api sind
             const ctx = await apiFetch<ContextResponse>(`/auth/contexts`, { method: "GET" });
             setContext(ctx?.active ?? null);
         } catch {
@@ -241,7 +232,6 @@ export default function AkteDetailPage() {
     const fallItems = faelle?.items || [];
     const total = faelle?.total ?? fallItems.length ?? 0;
 
-    // ✅ RULE: solange irgendein Fall eine current Meldung ENTWURF hat => kein neuer Fall
     const fallWithDraftMeldung = useMemo(
         () => findFallWithDraftMeldung(fallItems, meldungStatusByFallId),
         [fallItems, meldungStatusByFallId]
@@ -290,9 +280,7 @@ export default function AkteDetailPage() {
                         await doCreate();
                     });
                 } else {
-                    setContextHint(
-                        "Aktiver Kontext passt nicht zur Einrichtung dieser Akte. Bitte Kontext wechseln und erneut versuchen."
-                    );
+                    setContextHint("Aktiver Kontext passt nicht zur Einrichtung dieser Akte. Bitte Kontext wechseln und erneut versuchen.");
                 }
                 return;
             }
@@ -313,18 +301,19 @@ export default function AkteDetailPage() {
 
     return (
         <AuthGate>
-            <div className="min-h-screen bg-background">
+            <div className="min-h-screen bg-brand-bg overflow-x-hidden">
                 <Topbar title="Akte" />
 
-                <div className="mx-auto max-w-6xl space-y-4 p-4 md:p-6">
+                <div className="mx-auto w-full max-w-7xl px-3 sm:px-6 pb-12 pt-4 space-y-4">
+                    {/* Actions */}
                     <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                        <Button variant="secondary" onClick={() => router.back()} className="w-full sm:w-auto gap-2">
+                        <Button variant="secondary" onClick={() => router.back()} className="w-full sm:w-auto gap-2 h-11">
                             <ArrowLeft className="h-4 w-4" />
                             Zurück
                         </Button>
 
                         <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
-                            <Button variant="secondary" onClick={load} disabled={loading} className="w-full sm:w-auto gap-2">
+                            <Button variant="secondary" onClick={load} disabled={loading} className="w-full sm:w-auto gap-2 h-11">
                                 <RefreshCw className="h-4 w-4" />
                                 Aktualisieren
                             </Button>
@@ -332,7 +321,7 @@ export default function AkteDetailPage() {
                             <Button
                                 onClick={createFall}
                                 disabled={createFallDisabled}
-                                className="w-full sm:w-auto gap-2"
+                                className="w-full sm:w-auto gap-2 h-11"
                                 title={
                                     hasDraftMeldungBlocking && fallWithDraftMeldung
                                         ? `Deaktiviert: Entwurf existiert (${fallWithDraftMeldung.aktenzeichen || `Fall #${fallWithDraftMeldung.id}`})`
@@ -347,19 +336,25 @@ export default function AkteDetailPage() {
                         </div>
                     </div>
 
-                    {hasDraftMeldungBlocking && fallWithDraftMeldung ? (
-                        <div className="rounded-2xl border border-border bg-muted p-3 text-sm text-muted-foreground">
-                            Es existiert bereits eine Meldung im <span className="font-semibold">ENTWURF</span> für{" "}
-                            <span className="font-semibold">
-                {fallWithDraftMeldung.aktenzeichen || `Fall #${fallWithDraftMeldung.id}`}
-              </span>
-                            . Solange dieser Entwurf existiert, kann kein neuer Fall angelegt werden.
+                    {err ? (
+                        <div className="rounded-2xl border border-brand-danger/20 bg-brand-danger/10 p-3 text-sm text-brand-danger">
+                            {err}
                         </div>
                     ) : null}
 
-                    {err ? (
-                        <div className="rounded-2xl border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive">
-                            {err}
+                    {hasDraftMeldungBlocking && fallWithDraftMeldung ? (
+                        <div className="rounded-2xl border border-brand-warning/25 bg-brand-warning/10 p-3 text-sm text-brand-text space-y-1">
+                            <div className="flex items-start gap-2">
+                                <AlertTriangle className="h-4 w-4 mt-0.5 text-brand-text2" />
+                                <div className="min-w-0">
+                                    <div className="font-semibold">Neuer Fall gesperrt</div>
+                                    <div className="text-brand-text2">
+                                        Es existiert bereits eine Meldung im <span className="font-semibold">Entwurf</span> für{" "}
+                                        <span className="font-semibold">{fallWithDraftMeldung.aktenzeichen || `Fall #${fallWithDraftMeldung.id}`}</span>.
+                                        Solange dieser Entwurf existiert, kann kein neuer Fall angelegt werden.
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     ) : null}
 
@@ -367,8 +362,7 @@ export default function AkteDetailPage() {
                         <div className="rounded-2xl border border-brand-warning/25 bg-brand-warning/10 p-3 text-sm text-brand-text space-y-2">
                             <div className="font-semibold">Kontext erforderlich</div>
                             <div className="text-brand-text2">
-                                {contextHint ||
-                                    "Aktiver Kontext passt nicht zur Einrichtung dieser Akte. Bitte Kontext wechseln und erneut versuchen."}
+                                {contextHint || "Aktiver Kontext passt nicht zur Einrichtung dieser Akte. Bitte Kontext wechseln und erneut versuchen."}
                             </div>
 
                             <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
@@ -386,59 +380,55 @@ export default function AkteDetailPage() {
                         </div>
                     ) : null}
 
-                    <Card>
-                        <CardHeader className="flex flex-row items-center justify-between">
-                            <div>
-                                <div className="text-sm font-semibold">Details</div>
-                                <div className="mt-1 text-xs text-muted-foreground">KindDossier (1 pro Kind)</div>
-                            </div>
-                            <div className="text-xs text-muted-foreground">{loading ? "…" : akteId ? `#${akteId}` : "—"}</div>
-                        </CardHeader>
-
-                        <CardContent>
-                            {loading ? (
-                                <div className="text-sm text-muted-foreground">Lade…</div>
-                            ) : !akte ? (
-                                <div className="text-sm text-muted-foreground">Keine Akte geladen.</div>
-                            ) : (
-                                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                                    <div className="rounded-2xl border border-border bg-card p-3">
-                                        <div className="text-xs font-semibold text-muted-foreground">Kind</div>
-                                        <div className="mt-1 text-sm font-extrabold break-words">{akte.kindName || `Kind #${akte.kindId}`}</div>
-                                        <div className="mt-1 text-xs text-muted-foreground">Kind-ID: {akte.kindId}</div>
-                                    </div>
-
-                                    <div className="rounded-2xl border border-border bg-card p-3">
-                                        <div className="text-xs font-semibold text-muted-foreground">Erstellt</div>
-                                        <div className="mt-1 text-sm font-semibold break-words">
-                                            {/* ✅ hübsch formatiert */}
-                                            {formatDateTime(akte.createdAt)}
-                                        </div>
-
-                                        {typeof akte.einrichtungOrgUnitId === "number" ? (
-                                            <div className="mt-1 text-xs text-muted-foreground">Einrichtung: #{akte.einrichtungOrgUnitId}</div>
-                                        ) : null}
-                                    </div>
+                    {/* Summary */}
+                    <div className="rounded-2xl border border-brand-border/40 bg-white p-4 sm:p-5">
+                        <div className="flex items-start gap-3 min-w-0">
+                            <FolderOpen className="h-5 w-5 text-brand-text2 mt-0.5" />
+                            <div className="min-w-0">
+                                <div className="text-base font-semibold text-brand-text truncate">
+                                    {akte?.kindName ? `Akte: ${akte.kindName}` : loading ? "Lade…" : akteId ? `Akte #${akteId}` : "Akte"}
                                 </div>
-                            )}
-                        </CardContent>
-                    </Card>
+                                <div className="mt-1 text-sm text-brand-text2 truncate">
+                                    {akte ? `Kind-ID: ${akte.kindId}` : "—"}
+                                    {akte?.einrichtungOrgUnitId ? ` · Einrichtung #${akte.einrichtungOrgUnitId}` : ""}
+                                </div>
+                            </div>
+                        </div>
 
-                    <Card>
+                        <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
+                            <div className="rounded-2xl border border-brand-border/25 bg-white p-3">
+                                <div className="text-xs font-semibold text-brand-text2">Akte-ID</div>
+                                <div className="mt-1 text-sm font-semibold text-brand-text">{akteId ?? "—"}</div>
+                            </div>
+
+                            <div className="rounded-2xl border border-brand-border/25 bg-white p-3">
+                                <div className="text-xs font-semibold text-brand-text2">Erstellt</div>
+                                <div className="mt-1 text-sm font-semibold text-brand-text">{formatDateTimeDE(akte?.createdAt ?? null)}</div>
+                            </div>
+
+                            <div className="rounded-2xl border border-brand-border/25 bg-white p-3">
+                                <div className="text-xs font-semibold text-brand-text2">Fälle</div>
+                                <div className="mt-1 text-sm font-semibold text-brand-text">{loading ? "…" : total}</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Fälle */}
+                    <Card className="border border-brand-border/40 shadow-sm">
                         <CardHeader className="flex flex-row items-center justify-between">
                             <div>
-                                <div className="text-sm font-semibold">Fälle</div>
-                                <div className="mt-1 text-xs text-muted-foreground">Mehrere Fälle pro Akte</div>
+                                <div className="text-sm font-semibold text-brand-text">Fälle</div>
+                                <div className="mt-1 text-xs text-brand-text2">Alle Fälle dieser Akte</div>
                             </div>
-                            <div className="text-xs text-muted-foreground">{loading ? "…" : `${total} Einträge`}</div>
+                            <div className="text-xs text-brand-text2">{loading ? "…" : `${total} Einträge`}</div>
                         </CardHeader>
 
                         <CardContent className="space-y-2">
                             {!fallItems.length ? (
-                                <div className="rounded-2xl border border-border bg-muted p-4 text-sm text-muted-foreground">
+                                <div className="rounded-2xl border border-brand-border/40 bg-white p-4 text-sm text-brand-text2">
                                     {contextRequired
                                         ? "Fälle können erst geladen werden, nachdem der Kontext zur passenden Einrichtung gewechselt wurde."
-                                        : "Noch keine Fälle in dieser Akte. Erstelle den ersten Fall über „Neuer Fall (Erstmeldung)“."}
+                                        : "Noch keine Fälle in dieser Akte. Erstelle den ersten Fall über „Neuer Fall“."}
                                 </div>
                             ) : (
                                 <div className="space-y-2">
@@ -448,25 +438,30 @@ export default function AkteDetailPage() {
                                         const msIsDraft = ms === "ENTWURF" || ms === "DRAFT";
                                         const msLocked = isMeldungLocked(msRaw);
 
+                                        const opened = (f as any)?.openedAt ?? (f as any)?.createdAt ?? null;
+
                                         return (
-                                            <div key={f.id} className="rounded-2xl border border-border bg-card p-3">
+                                            <div key={f.id} className="rounded-2xl border border-brand-border/25 bg-white p-3">
                                                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                                                     <div className="min-w-0">
-                                                        <div className="text-sm font-semibold break-words">
-                                                            {f.fallNo ? `Fall ${f.fallNo}` : "Fall"} · {f.aktenzeichen || `#${f.id}`}
+                                                        <div className="flex items-center gap-2 min-w-0">
+                                                            <FileText className="h-4 w-4 text-brand-text2 shrink-0" />
+                                                            <div className="text-sm font-semibold text-brand-text break-words">
+                                                                {f.fallNo ? `Fall ${f.fallNo}` : "Fall"} · {f.aktenzeichen || `#${f.id}`}
+                                                            </div>
                                                         </div>
-                                                        <div className="mt-1 text-xs text-muted-foreground">Eröffnet: {f.openedAt || f.createdAt || "—"}</div>
+                                                        <div className="mt-1 text-xs text-brand-text2">Eröffnet: {formatDateTimeDE(opened)}</div>
                                                     </div>
 
                                                     <div className="flex flex-wrap items-center gap-2">
-                                                        <Badge tone={toneForStatus(f.status)}>{f.status || "—"}</Badge>
+                                                        <Badge tone={toneForStatus((f as any)?.status)}>{(f as any)?.status || "—"}</Badge>
 
                                                         {loadingMeldungStates ? (
                                                             <Badge tone="neutral">Meldung…</Badge>
                                                         ) : msIsDraft ? (
-                                                            <Badge tone="warning">Meldung ENTWURF</Badge>
+                                                            <Badge tone="warning">Meldung: Entwurf</Badge>
                                                         ) : ms ? (
-                                                            <Badge tone="neutral">Meldung {ms}</Badge>
+                                                            <Badge tone="neutral">Meldung: {ms}</Badge>
                                                         ) : (
                                                             <Badge tone="neutral">Keine Meldung</Badge>
                                                         )}
@@ -474,19 +469,16 @@ export default function AkteDetailPage() {
                                                         <Button
                                                             variant="secondary"
                                                             size="sm"
-                                                            onClick={() => router.push(`/dashboard/falloeffnungen/${f.id}`)}
+                                                            className="gap-2"
+                                                            onClick={() => router.push(`/dashboard/falloeffnungen/${f.id}?autostart=meldungen`)}
                                                         >
-                                                            Details
+                                                            Meldungen
+                                                            <ArrowRight className="h-4 w-4" />
                                                         </Button>
 
-                                                        {/* ✅ Draft-Button nur wenn NICHT locked (z.B. ABGESCHLOSSEN) */}
                                                         {!msLocked ? (
-                                                            <Button
-                                                                size="sm"
-                                                                onClick={() => router.push(`/dashboard/falloeffnungen/${f.id}/meldung`)}
-                                                                className="gap-2"
-                                                            >
-                                                                Draft weiterführen
+                                                            <Button size="sm" className="gap-2" onClick={() => router.push(`/dashboard/falloeffnungen/${f.id}/meldung`)}>
+                                                                Entwurf öffnen
                                                                 <ArrowRight className="h-4 w-4" />
                                                             </Button>
                                                         ) : null}

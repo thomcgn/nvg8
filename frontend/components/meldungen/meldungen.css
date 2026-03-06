@@ -1,0 +1,81 @@
+.mPage { padding: 16px; padding-bottom: 90px; }
+.mHeader { display:flex; justify-content: space-between; gap:16px; align-items:flex-start; }
+.mSub { opacity: .75; margin-top: 4px; }
+.mActions { display:flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+
+.mGrid2 { display:grid; grid-template-columns: 3fr 2fr; gap: 16px; align-items:start; }
+.mStack { display:flex; flex-direction: column; gap: 16px; }
+
+.mCard { background: #fff; border: 1px solid #e6e6e6; border-radius: 14px; padding: 14px; box-shadow: 0 1px 2px rgba(0,0,0,.04); }
+.mCardHeader { display:flex; justify-content: space-between; align-items:center; gap: 12px; margin-bottom: 8px; }
+
+.mBadge { display:inline-block; padding: 4px 8px; border-radius: 999px; background:#f2f2f2; font-size: 12px; }
+.mBadgeSoft { background:#f7f7f7; }
+
+.mBtn { border: 1px solid #ddd; background:#fff; padding: 10px 12px; border-radius: 10px; text-decoration:none; display:inline-flex; align-items:center; gap: 6px; cursor:pointer; }
+.mBtnPrimary { background:#111; color:#fff; border-color:#111; }
+
+.mError { background:#ffecec; border:1px solid #ffb9b9; padding: 10px 12px; border-radius: 12px; margin: 10px 0; }
+.mBanner { background:#f6f7ff; border:1px solid #d9dcff; padding: 10px 12px; border-radius: 12px; margin: 10px 0; }
+.mBannerActions { margin-top: 8px; display:flex; gap: 8px; flex-wrap: wrap; }
+
+.mSummaryRow { display:grid; grid-template-columns: 140px 1fr; gap: 10px; padding: 6px 0; border-bottom: 1px solid #f1f1f1; }
+.mSummaryRow:last-child { border-bottom: none; }
+.mLabel { opacity: .7; }
+
+.mTimeline { display:flex; flex-direction: column; gap: 10px; }
+.mTimelineItem { border: 1px solid #eee; border-radius: 12px; padding: 10px; }
+.mTimelineTop { display:flex; gap: 10px; align-items:center; flex-wrap: wrap; }
+.mTimelineActions { margin-top: 8px; display:flex; gap: 8px; flex-wrap: wrap; }
+.mSummaryText { margin-top: 6px; opacity: .85; }
+
+.mFormRow { display:flex; flex-direction: column; gap: 6px; margin: 10px 0; }
+.mFormRow input, .mFormRow select, .mFormRow textarea { padding: 10px 12px; border-radius: 10px; border: 1px solid #ddd; font-size: 16px; }
+.mHint { opacity: .7; font-size: 13px; }
+
+.mStickyBar {
+    position: fixed; left: 0; right: 0; bottom: 0;
+    display:flex; gap: 10px; padding: 12px;
+    background: rgba(255,255,255,.96);
+    border-top: 1px solid #eaeaea;
+    justify-content: center;
+}
+.mStickyBar .mBtn { flex: 1; justify-content: center; }
+
+@media (min-width: 900px) {
+    .mStickyBar { display:none; }
+}
+.mModalBackdrop{
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,.35);
+    display:flex; align-items:center; justify-content:center;
+    padding: 16px;
+    z-index: 50;
+}
+
+.mModal{
+    width: min(720px, 100%);
+    background: #fff;
+    border-radius: 16px;
+    border: 1px solid #e6e6e6;
+    box-shadow: 0 10px 30px rgba(0,0,0,.15);
+    padding: 14px;
+}
+
+.mModalHeader{
+    display:flex; justify-content: space-between; align-items:flex-start;
+    gap: 12px;
+    margin-bottom: 8px;
+}
+
+.mModalActions{
+    display:flex;
+    gap: 10px;
+    justify-content: flex-end;
+    margin-top: 12px;
+}
+
+@media (max-width: 520px) {
+    .mModalActions { flex-direction: column; }
+    .mModalActions .mBtn { width: 100%; justify-content: center; }
+}

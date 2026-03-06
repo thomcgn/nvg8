@@ -125,3 +125,21 @@ export async function apiFetch<T>(
     return await rawFetch<T>(path, options);
   }
 }
+
+export type FallMeldungListItem = {
+  id: number;
+  versionNo: number;
+  current: boolean;
+  status: "ENTWURF" | "ABGESCHLOSSEN" | string;
+  type: "ERSTMELDUNG" | "MELDUNG" | "KORREKTUR" | string;
+  createdAt: string;
+  createdByDisplayName: string;
+  supersedesId: number | null;
+  correctsId: number | null;
+};
+
+export async function listMeldungenByFallId(fallId: number) {
+  // Dein Backend liefert: https://localhost:8080/falloeffnungen/1/meldungen
+  // -> das ist KEIN /api-prefix. Deshalb exakt so:
+  return apiFetch<FallMeldungListItem[]>(`/falloeffnungen/${fallId}/meldungen`, { method: "GET" });
+}

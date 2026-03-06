@@ -100,22 +100,24 @@ export default function TeamsPage() {
     return (
         <AuthGate>
             <div className="min-h-screen bg-brand-bg overflow-x-hidden">
-                <Topbar title="Teams" />
+                <Topbar title="Personal" />
                 <div className="mx-auto w-full max-w-6xl px-4 pb-8 pt-4 sm:px-6 md:px-8">
                     <Card>
                         <CardHeader>
                             <div className="flex items-start justify-between gap-3">
                                 <div>
-                                    <div className="text-sm font-semibold text-brand-text">Teams</div>
-                                    <div className="mt-1 text-xs text-brand-text2">Gruppen, Zuständigkeiten, Mitglieder</div>
+                                    <div className="text-sm font-semibold text-brand-text">Mitarbeitende</div>
+                                    <div className="mt-1 text-xs text-brand-text2">Rollen & Zugriffe</div>
                                 </div>
 
                                 <Button
                                     onClick={() => setWizardOpen(true)}
-                                    disabled={!canCreate}
+                                    //disabled={!canCreate}
+                                    disabled={true}
                                     title={!canCreate ? "Nur für Träger-/Einrichtungs-Admins" : "Neuen Mitarbeiter anlegen"}
                                 >
-                                    Neuer Mitarbeiter
+                                    Vorerst keine neuen Mitarbeiter
+
                                 </Button>
                             </div>
                         </CardHeader>

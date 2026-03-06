@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import type { MeldungDraftRequest, MeldungResponse } from "@/lib/api/meldung";
+import { ANLASS_CATALOG, ANLASS_CODES, ANLASS_DEFAULT_SEVERITY, anlassLabel } from "@/lib/anlass/catalog";
 
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -14,14 +15,9 @@ import { Switch } from "@/components/ui/switch";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
-// ✅ Shadcn Carousel Tabs (Embla)
-import {
-    Carousel,
-    CarouselContent,
-    CarouselItem,
-    CarouselNext,
-    CarouselPrevious,
-} from "@/components/ui/carousel";
+import { FileText, ShieldAlert, ClipboardCheck, Save, CheckCircle2 } from "lucide-react";
+
+/* ---------------- Helpers ---------------- */
 
 function clampSeverity(n: number): number {
     if (!Number.isFinite(n)) return 0;
@@ -30,6 +26,10 @@ function clampSeverity(n: number): number {
 
 function pick<T extends string>(value: string, allowed: readonly T[], fallback: T): T {
     return (allowed as readonly string[]).includes(value) ? (value as T) : fallback;
+}
+
+function nowIso() {
+    return new Date().toISOString();
 }
 
 /* ---------------- Backend Enums (Frontend mirrors) ----------------
@@ -130,85 +130,13 @@ const JNU_LABEL: Record<(typeof JANEINUNKLAR)[number], string> = {
     UNKLAR: "Unklar",
 };
 
-// ✅ Contacts
-const KONTAKT_MIT = ["KIND", "MUTTER", "VATER", "BEZUGSPERSON", "SONSTIGE"] as const;
-const KONTAKT_MIT_LABEL: Record<(typeof KONTAKT_MIT)[number], string> = {
-    KIND: "Kind",
-    MUTTER: "Mutter",
-    VATER: "Vater",
-    BEZUGSPERSON: "Bezugsperson",
-    SONSTIGE: "Sonstige Person",
-};
+// Simple helper for status
+function isDoneStatus(status: string | null | undefined) {
+    const s = String(status ?? "").toUpperCase();
+    return s.includes("ABGESCH") || s.includes("GESCHLOSS") || s.includes("SUBMIT");
+}
 
-const KONTAKT_STATUS = ["GEPLANT", "ERREICHT", "NICHT_ERREICHT", "ABGEBROCHEN"] as const;
-const KONTAKT_STATUS_LABEL: Record<(typeof KONTAKT_STATUS)[number], string> = {
-    GEPLANT: "Geplant",
-    ERREICHT: "Erreicht",
-    NICHT_ERREICHT: "Nicht erreicht",
-    ABGEBROCHEN: "Abgebrochen",
-};
-
-// ✅ Extern
-const EXTERN_STELLE = ["POLIZEI", "SCHULE_KITA", "ARZT_KLINIK", "SONSTIGE"] as const;
-const EXTERN_STELLE_LABEL: Record<(typeof EXTERN_STELLE)[number], string> = {
-    POLIZEI: "Polizei",
-    SCHULE_KITA: "Schule/Kita",
-    ARZT_KLINIK: "Ärztliche Stelle/Klinik",
-    SONSTIGE: "Sonstige Stelle",
-};
-
-// ✅ Attachments
-const ATTACH_TYP = ["DOKUMENT", "FOTO", "AUDIO", "VIDEO", "SONSTIGES"] as const;
-const ATTACH_TYP_LABEL: Record<(typeof ATTACH_TYP)[number], string> = {
-    DOKUMENT: "Dokument",
-    FOTO: "Foto",
-    AUDIO: "Audio",
-    VIDEO: "Video",
-    SONSTIGES: "Sonstiges",
-};
-
-/* ---------------- Anlass / Indikatoren (Demo) ---------------- */
-
-type AnlassCategory = {
-    key: string;
-    title: string;
-    items: Array<{ code: string; label: string }>;
-};
-
-export const ANLASS_CATALOG: AnlassCategory[] = [
-    {
-        key: "BODY",
-        title: "Körperbezogene Anlässe",
-        items: [
-            { code: "BODY_INJURY_VISIBLE", label: "Sichtbare Verletzungen" },
-            { code: "BODY_INJURY_REPEATED", label: "Wiederholte Verletzungen" },
-            { code: "BODY_INJURY_EXPLANATION_ODD", label: "Unplausible Erklärung für Verletzungen" },
-            { code: "BODY_PUNISHMENT_HINT", label: "Hinweis auf körperliche Bestrafung" },
-            { code: "BODY_MALNUTRITION", label: "Mangelernährung" },
-            { code: "BODY_MEDICAL_NEGLECT", label: "Medizinische Vernachlässigung" },
-            { code: "BODY_NEGLECT_APPEARANCE", label: "Vernachlässigtes Erscheinungsbild" },
-            { code: "BODY_PSYCHOSOMATIC", label: "Psychosomatische Beschwerden" },
-            { code: "BODY_SELF_HARM", label: "Selbstverletzendes Verhalten" },
-            { code: "BODY_ACUTE_HEALTH", label: "Akute gesundheitliche Gefährdung" },
-        ],
-    },
-    { key: "OTHER", title: "Sonstiges", items: [{ code: "OTHER", label: "Sonstiges" }] },
-];
-
-const ANLASS_CODES: string[] = ANLASS_CATALOG.flatMap((c) => c.items.map((i) => i.code));
-const ANLASS_LABELS: Record<string, string> = Object.fromEntries(
-    ANLASS_CATALOG.flatMap((c) => c.items.map((i) => [i.code, i.label]))
-);
-
-const INDICATORS: { id: string; label: string }[] = [
-    { id: "INJURY_UNEXPLAINED", label: "Unerklärte Verletzungen" },
-    { id: "FEAR_OF_CAREGIVER", label: "Angst vor Bezugsperson" },
-    { id: "NEGLECT_HYGIENE", label: "Vernachlässigung/Hygiene" },
-    { id: "ABSENCE_PATTERN", label: "Auffälliges Fehlzeitenmuster" },
-    { id: "DISCLOSURE", label: "Offenbarung/Aussage Kind" },
-];
-
-/* ---------------- Risk scoring (Auto-Ampel) ---------------- */
+/* ---------------- Auto-Ampel (sehr simple) ---------------- */
 
 function ampToRank(a: string | null | undefined): number {
     if (a === "GRUEN") return 0;
@@ -218,7 +146,8 @@ function ampToRank(a: string | null | undefined): number {
 }
 
 function computeAutoAssessment(form: MeldungDraftRequest) {
-    const obs = (form as any).observations || [];
+    const obs = ((form as any).observations || []) as any[];
+
     let maxSeverity = 0;
     let sumSeverity = 0;
     let tagCount = 0;
@@ -236,7 +165,6 @@ function computeAutoAssessment(form: MeldungDraftRequest) {
     const repeatedCount = obs.filter((o: any) => o?.zeitraum === "WIEDERHOLT").length;
 
     const akutBonus = (form.akutGefahrImVerzug ? 1.25 : 0) + (form.akutNotrufErforderlich ? 0.75 : 0);
-
     const score = maxSeverity * 2.0 + avgSeverity * 1.0 + Math.min(2, repeatedCount) * 0.5 + akutBonus;
 
     let autoAmpel: (typeof AMPEL)[number] = "GRUEN";
@@ -244,10 +172,10 @@ function computeAutoAssessment(form: MeldungDraftRequest) {
     else if (score >= 2.0) autoAmpel = "GELB";
 
     const rationaleParts: string[] = [];
-    if (tagCount === 0) rationaleParts.push("Keine Tags/Severity angegeben");
+    if (tagCount === 0) rationaleParts.push("Keine Tags/Severity");
     else {
-        rationaleParts.push(`Max-Severity ${maxSeverity}`);
-        rationaleParts.push(`Ø-Severity ${avgSeverity.toFixed(1)}`);
+        rationaleParts.push(`Max ${maxSeverity}`);
+        rationaleParts.push(`Ø ${avgSeverity.toFixed(1)}`);
         if (repeatedCount) rationaleParts.push(`${repeatedCount}× wiederholt`);
     }
     if (form.akutGefahrImVerzug) rationaleParts.push("Gefahr im Verzug");
@@ -257,8 +185,6 @@ function computeAutoAssessment(form: MeldungDraftRequest) {
         score: Number.isFinite(score) ? Math.round(score * 10) / 10 : 0,
         autoAmpel,
         rationale: rationaleParts.join(" · "),
-        maxSeverity,
-        tagCount,
     };
 }
 
@@ -364,17 +290,103 @@ function toDraftFromResponse(v: MeldungResponse): MeldungDraftRequest {
     } as any;
 }
 
+/* ---------------- Auto-Tag Generation ----------------
+   Tags sind pro Beobachtung: genau 1 Tag pro ausgewähltem AnlassCode.
+   - Beim (De-)Selektieren von Anlässen werden Tags synchronisiert.
+   - bestehende Tag-Infos (severity/comment/indicatorId) bleiben erhalten.
+-------------------------------------------------------- */
+
+function normalizeAnlassCodes(input: any): string[] {
+    const arr = Array.isArray(input) ? input : [];
+    const codes = arr.filter((x) => typeof x === "string" && ANLASS_CODES.includes(x));
+    return Array.from(new Set(codes));
+}
+
+function syncObsTagsToAnlassCodes(observation: any, anlassCodes: string[]) {
+    const existing = Array.isArray(observation?.tags) ? observation.tags : [];
+    const byCode = new Map<string, any>();
+
+    for (const t of existing) {
+        const c = t?.anlassCode;
+        if (typeof c === "string" && c) {
+            if (!byCode.has(c)) byCode.set(c, t);
+        }
+    }
+
+    const nextTags = anlassCodes.map((code) => {
+        const prev = byCode.get(code);
+        if (prev) {
+            return {
+                ...prev,
+                anlassCode: code,
+                severity: prev.severity ?? ANLASS_DEFAULT_SEVERITY[code] ?? 0,
+            };
+        }
+        return {
+            anlassCode: code,
+            indicatorId: null,
+            severity: ANLASS_DEFAULT_SEVERITY[code] ?? 0,
+            comment: null,
+        };
+    });
+
+    return { ...observation, tags: nextTags };
+}
+
+function syncAllObservations(form: MeldungDraftRequest) {
+    const anlassCodes = normalizeAnlassCodes((form as any).anlassCodes);
+    const obs = Array.isArray((form as any).observations) ? (form as any).observations : [];
+    const nextObs = obs.map((o: any) => syncObsTagsToAnlassCodes(o, anlassCodes));
+    return { ...form, anlassCodes, observations: nextObs } as any;
+}
+
+/* ---------------- UI bits ---------------- */
+
+function PageCard(props: { title: string; icon?: React.ReactNode; children: React.ReactNode }) {
+    return (
+        <Card className="border border-brand-border/40 shadow-sm">
+            <CardHeader className="pb-3">
+                <CardTitle className="text-base font-semibold text-brand-text flex items-center gap-2">
+                    {props.icon}
+                    {props.title}
+                </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">{props.children}</CardContent>
+        </Card>
+    );
+}
+
+function FieldRow(props: { label: string; children: React.ReactNode; hint?: string }) {
+    return (
+        <div className="space-y-1">
+            <Label className="text-brand-text">{props.label}</Label>
+            {props.children}
+            {props.hint ? <div className="text-xs text-brand-text2">{props.hint}</div> : null}
+        </div>
+    );
+}
+
 /* ---------------- Component ---------------- */
 
 export function MeldungEditor(props: {
     value: MeldungResponse;
     disabled?: boolean;
     onSaveDraft: (req: MeldungDraftRequest) => Promise<MeldungResponse | void>;
-    onSubmit: (mirrorToNotizen: boolean) => Promise<void>;
+
+    // ✅ changeReason optional; bei Korrektur zwingend
+    onSubmit: (mirrorToNotizen: boolean, changeReason?: string) => Promise<void>;
 }) {
     const { value, disabled = false, onSaveDraft, onSubmit } = props;
 
-    // ✅ Central tab definition
+    const statusIsDone = isDoneStatus((value as any)?.status);
+
+    // ✅ Korrektur erkennen (Draft-Zustand kann trotzdem sein)
+    const isCorrection = React.useMemo(() => {
+        const t = String((value as any)?.type ?? "").toUpperCase();
+        const correctsId = (value as any)?.correctsId;
+        return t === "KORREKTUR" || (typeof correctsId === "number" && correctsId > 0);
+    }, [value]);
+
     const TAB_ITEMS = React.useMemo(
         () =>
             [
@@ -384,1469 +396,848 @@ export function MeldungEditor(props: {
                 ["fach", "Fachbewertung"],
                 ["akut", "Akut / Schutz"],
                 ["planung", "Planung"],
-                ["doku", "Dokumentation"],
                 ["save", "Speichern"],
             ] as const,
         []
     );
 
-    // ✅ Controlled Tabs so we can auto-scroll carousel to active tab
     const [activeTab, setActiveTab] = React.useState<(typeof TAB_ITEMS)[number][0]>("basis");
-    const [tabsCarouselApi, setTabsCarouselApi] = React.useState<any>(null);
 
-    const [form, setForm] = React.useState<MeldungDraftRequest>(() => toDraftFromResponse(value));
+    const [form, setForm] = React.useState<MeldungDraftRequest>(() => syncAllObservations(toDraftFromResponse(value)));
     const [saving, setSaving] = React.useState(false);
     const [saveMsg, setSaveMsg] = React.useState<string | null>(null);
+
     const [submitMirror, setSubmitMirror] = React.useState(true);
     const [validationErr, setValidationErr] = React.useState<string | null>(null);
 
+    const [changeReason, setChangeReason] = React.useState("");
+    const [submitErr, setSubmitErr] = React.useState<string | null>(null);
+
     React.useEffect(() => {
-        setForm(toDraftFromResponse(value));
+        setForm(syncAllObservations(toDraftFromResponse(value)));
+        setSaveMsg(null);
+        setValidationErr(null);
+        setSubmitErr(null);
+        setChangeReason("");
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [(value as any).id]);
 
-    // ✅ keep active tab visible inside the carousel
-    React.useEffect(() => {
-        if (!tabsCarouselApi) return;
-        const idx = TAB_ITEMS.findIndex(([key]) => key === activeTab);
-        if (idx >= 0) tabsCarouselApi.scrollTo(idx);
-    }, [tabsCarouselApi, activeTab, TAB_ITEMS]);
-
     const set = <K extends keyof MeldungDraftRequest>(k: K, v: MeldungDraftRequest[K]) =>
-        setForm((s) => ({ ...s, [k]: v }));
+        setForm((s) => syncAllObservations({ ...(s as any), [k]: v } as any));
+
+    /* ------------ Anlass selection + Tag generation ------------ */
 
     const toggleAnlass = (code: string) => {
-        const cur = new Set((form as any).anlassCodes || []);
-        if (cur.has(code)) cur.delete(code);
-        else cur.add(code);
-        set("anlassCodes" as any, Array.from(cur) as any);
+        setForm((prev) => {
+            const cur = new Set(normalizeAnlassCodes((prev as any).anlassCodes));
+            if (cur.has(code)) cur.delete(code);
+            else cur.add(code);
+            const next = { ...(prev as any), anlassCodes: Array.from(cur) } as any;
+            return syncAllObservations(next);
+        });
     };
 
-    // Observations helpers
+    /* ---------------- Observations helpers ---------------- */
+
     const addObservation = () => {
-        const obs = {
-            zeitpunkt: new Date().toISOString(),
-            zeitraum: "EINMALIG",
-            ort: "SCHULE_KITA",
-            quelle: "EIGENE_WAHRNEHMUNG",
-            sichtbarkeit: "INTERN",
-            text: "",
-            tags: [],
-        };
-        set("observations" as any, ([...(((form as any).observations || []) as any[]), obs] as any) as any);
+        setForm((prev) => {
+            const obs = Array.isArray((prev as any).observations) ? [...(prev as any).observations] : [];
+            const newObs = {
+                zeitpunkt: nowIso(),
+                zeitraum: "EINMALIG",
+                ort: "SCHULE_KITA",
+                ortSonstiges: null,
+                quelle: "EIGENE_WAHRNEHMUNG",
+                sichtbarkeit: "INTERN",
+                text: "",
+                woertlichesZitat: null,
+                koerperbefund: null,
+                verhaltenKind: null,
+                verhaltenBezug: null,
+                tags: [],
+            };
+            obs.push(newObs);
+            const next = { ...(prev as any), observations: obs } as any;
+            return syncAllObservations(next);
+        });
     };
 
     const updateObs = (idx: number, patch: any) => {
-        const arr = [...(((form as any).observations || []) as any[])];
-        arr[idx] = { ...arr[idx], ...patch };
-        set("observations" as any, arr as any);
+        setForm((prev) => {
+            const obs = Array.isArray((prev as any).observations) ? [...(prev as any).observations] : [];
+            obs[idx] = { ...(obs[idx] ?? {}), ...patch };
+            const next = { ...(prev as any), observations: obs } as any;
+            return syncAllObservations(next);
+        });
     };
 
     const removeObs = (idx: number) => {
-        const arr = [...(((form as any).observations || []) as any[])];
-        arr.splice(idx, 1);
-        set("observations" as any, arr as any);
-    };
-
-    const addObsTag = (idx: number) => {
-        const arr = [...(((form as any).observations || []) as any[])];
-        const tags = [...((arr[idx].tags || []) as any[])];
-        tags.push({
-            anlassCode: (((form as any).anlassCodes || [])[0] ?? null) as any,
-            indicatorId: null,
-            severity: 0,
-            comment: null,
+        setForm((prev) => {
+            const obs = Array.isArray((prev as any).observations) ? [...(prev as any).observations] : [];
+            obs.splice(idx, 1);
+            const next = { ...(prev as any), observations: obs } as any;
+            return syncAllObservations(next);
         });
-        arr[idx] = { ...arr[idx], tags };
-        set("observations" as any, arr as any);
     };
 
-    const updateObsTag = (obsIdx: number, tagIdx: number, patch: any) => {
-        const arr = [...(((form as any).observations || []) as any[])];
-        const tags = [...((arr[obsIdx].tags || []) as any[])];
-        tags[tagIdx] = { ...tags[tagIdx], ...patch };
-        arr[obsIdx] = { ...arr[obsIdx], tags };
-        set("observations" as any, arr as any);
-    };
+    const updateObsTag = (obsIdx: number, anlassCode: string, patch: any) => {
+        setForm((prev) => {
+            const obs = Array.isArray((prev as any).observations) ? [...(prev as any).observations] : [];
+            const o = obs[obsIdx];
+            if (!o) return prev;
 
-    const removeObsTag = (obsIdx: number, tagIdx: number) => {
-        const arr = [...(((form as any).observations || []) as any[])];
-        const tags = [...((arr[obsIdx].tags || []) as any[])];
-        tags.splice(tagIdx, 1);
-        arr[obsIdx] = { ...arr[obsIdx], tags };
-        set("observations" as any, arr as any);
-    };
+            const tags = Array.isArray(o.tags) ? [...o.tags] : [];
+            const i = tags.findIndex((t: any) => t?.anlassCode === anlassCode);
+            if (i < 0) return prev;
 
-    // Contacts / Extern / Attachments / sectionReasons
-    const addContact = () => {
-        const next = [...(((form as any).contacts || []) as any[])];
-        next.push({
-            kontaktMit: "SONSTIGE",
-            kontaktAm: new Date().toISOString(),
-            status: "GEPLANT",
-            notiz: null,
-            ergebnis: null,
+            tags[i] = { ...tags[i], ...patch, anlassCode };
+            obs[obsIdx] = { ...o, tags };
+
+            const next = { ...(prev as any), observations: obs } as any;
+            return syncAllObservations(next);
         });
-        set("contacts" as any, next as any);
     };
 
-    const updateContact = (idx: number, patch: any) => {
-        const next = [...(((form as any).contacts || []) as any[])];
-        next[idx] = { ...next[idx], ...patch };
-        set("contacts" as any, next as any);
-    };
+    /* ---------------- Validation ---------------- */
 
-    const removeContact = (idx: number) => {
-        const next = [...(((form as any).contacts || []) as any[])];
-        next.splice(idx, 1);
-        set("contacts" as any, next as any);
-    };
+    function validateForSaveUI(): string | null {
+        const kb = String((form as any).kurzbeschreibung ?? "").trim();
+        if (!kb) return "Kurzbeschreibung (Sachlage) ist erforderlich.";
+        return null;
+    }
 
-    const addExtern = () => {
-        const next = [...(((form as any).extern || []) as any[])];
-        next.push({
-            stelle: "SONSTIGE",
-            stelleSonstiges: null,
-            am: new Date().toISOString(),
-            begruendung: null,
-            ergebnis: null,
-        });
-        set("extern" as any, next as any);
-    };
+    function validateForSubmitUI(): string | null {
+        const base = validateForSaveUI();
+        if (base) return base;
 
-    const updateExtern = (idx: number, patch: any) => {
-        const next = [...(((form as any).extern || []) as any[])];
-        next[idx] = { ...next[idx], ...patch };
-        set("extern" as any, next as any);
-    };
+        const anlassCodes = normalizeAnlassCodes((form as any).anlassCodes);
+        if (anlassCodes.length === 0) return "Bitte mindestens einen Anlass auswählen.";
 
-    const removeExtern = (idx: number) => {
-        const next = [...(((form as any).extern || []) as any[])];
-        next.splice(idx, 1);
-        set("extern" as any, next as any);
-    };
+        const obs = Array.isArray((form as any).observations) ? (form as any).observations : [];
+        if (obs.length === 0) return "Bitte mindestens eine Beobachtung erfassen.";
 
-    const addAttachment = () => {
-        const next = [...(((form as any).attachments || []) as any[])];
-        next.push({
-            fileId: null,
-            typ: "DOKUMENT",
-            titel: null,
-            beschreibung: null,
-            sichtbarkeit: "INTERN",
-            rechtsgrundlageHinweis: null,
-        });
-        set("attachments" as any, next as any);
-    };
-
-    const updateAttachment = (idx: number, patch: any) => {
-        const next = [...(((form as any).attachments || []) as any[])];
-        next[idx] = { ...next[idx], ...patch };
-        set("attachments" as any, next as any);
-    };
-
-    const removeAttachment = (idx: number) => {
-        const next = [...(((form as any).attachments || []) as any[])];
-        next.splice(idx, 1);
-        set("attachments" as any, next as any);
-    };
-
-    const setSectionReason = (key: string, reason: string | null) => {
-        const cur = { ...(((form as any).sectionReasons || {}) as Record<string, string>) };
-        if (!reason || reason.trim().length === 0) delete cur[key];
-        else cur[key] = reason;
-        set("sectionReasons" as any, cur as any);
-    };
-
-    // ✅ Auto assessment + auto-derivation of abweichungZurAuto (kept in sync)
-    const auto = React.useMemo(() => computeAutoAssessment(form), [form]);
-    const fachAmpel = (form as any).fachAmpel as string | null;
-    const abwComputed = React.useMemo(() => computeAbweichungZurAuto(fachAmpel, auto.autoAmpel), [fachAmpel, auto.autoAmpel]);
-
-    React.useEffect(() => {
-        const cur = (form as any).abweichungZurAuto as string | null | undefined;
-        if (!cur || cur !== abwComputed) {
-            set("abweichungZurAuto" as any, abwComputed as any);
-        }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [abwComputed]);
-
-    // ✅ Risk-based Pflichtfeldlogik (Submit)
-    const validateForSubmitUI = (): string | null => {
-        const kd = String((form as any).kurzbeschreibung ?? "").trim();
-        if (kd.length === 0) return "Kurzbeschreibung fehlt.";
-
-        const obs = (((form as any).observations || []) as any[]).filter(Boolean);
-        if (obs.length === 0) return "Mindestens eine Beobachtung (Observation) ist erforderlich.";
-        if (obs.some((o) => String(o?.text ?? "").trim().length === 0)) return "Es gibt Beobachtungen ohne Text.";
-
-        if ((form as any).akutGefahrImVerzug && String((form as any).akutBegruendung ?? "").trim().length === 0) {
-            return "Akut-Begründung ist erforderlich, wenn Gefahr im Verzug gesetzt ist.";
-        }
-
-        const finalAmpel = (fachAmpel ?? auto.autoAmpel) as string;
-
-        if (!fachAmpel) return "Fachliche Ampel fehlt (Pflicht bei Submit).";
-        if (String((form as any).fachText ?? "").trim().length === 0)
-            return "Fachliche Begründung (Text) fehlt (Pflicht bei Submit).";
-
-        if (finalAmpel === "ROT") {
-            const jug = (form as any).jugendamt;
-            if (!jug?.informiert) return "Jugendamt-Entscheidung fehlt (bei ROT erforderlich).";
-            if (jug.informiert !== "JA" && String(jug.begruendung ?? "").trim().length === 0) {
-                return "Begründung beim Jugendamt ist erforderlich, wenn nicht informiert (bei ROT).";
-            }
-            if (!(form as any).akutKindSicherUntergebracht) {
-                return "Angabe 'Kind sicher untergebracht' ist erforderlich (bei ROT).";
-            }
-            const contacts = ((form as any).contacts || []) as any[];
-            const extern = ((form as any).extern || []) as any[];
-            if (contacts.length + extern.length === 0) {
-                return "Mindestens ein Kontakt oder eine externe Abklärung ist erforderlich (bei ROT).";
-            }
-        }
-
-        if (finalAmpel === "GELB") {
-            const jug = (form as any).jugendamt;
-            if ((form as any).akutGefahrImVerzug && !jug?.informiert) {
-                return "Jugendamt-Entscheidung ist erforderlich, wenn Gefahr im Verzug gesetzt ist (auch bei GELB).";
-            }
-        }
-
-        if ((form as any).abweichungZurAuto && (form as any).abweichungZurAuto !== "GLEICH") {
-            if (String((form as any).abweichungsBegruendung ?? "").trim().length === 0) {
-                return "Begründung der Abweichung ist erforderlich, wenn von der Vorbewertung abgewichen wird.";
-            }
+        // ✅ Korrektur: Änderungsgrund Pflicht
+        if (isCorrection) {
+            const r = String(changeReason ?? "").trim();
+            if (!r) return "Änderungsgrund ist erforderlich (Pflicht bei Korrektur).";
         }
 
         return null;
-    };
+    }
+
+    /* ---------------- Save / Submit ---------------- */
 
     const doSave = async () => {
         setSaveMsg(null);
-        setValidationErr(null);
+        setSubmitErr(null);
+
+        const vErr = validateForSaveUI();
+        setValidationErr(vErr);
+        if (vErr) return;
+
         setSaving(true);
         try {
-            await onSaveDraft(form);
-            setSaveMsg("Gespeichert.");
+            const normalized = syncAllObservations(form);
+            await onSaveDraft(normalized);
+            setSaveMsg("Entwurf gespeichert.");
+        } catch (e: any) {
+            setSaveMsg(null);
+            setSubmitErr(e?.message || "Speichern fehlgeschlagen.");
         } finally {
             setSaving(false);
-            setTimeout(() => setSaveMsg(null), 2000);
         }
     };
 
     const doSubmit = async () => {
+        setSaveMsg(null);
+        setSubmitErr(null);
+
         const vErr = validateForSubmitUI();
         setValidationErr(vErr);
         if (vErr) return;
-        await doSave();
-        await onSubmit(submitMirror);
+
+        setSaving(true);
+        try {
+            // erst speichern
+            const normalized = syncAllObservations(form);
+            await onSaveDraft(normalized);
+
+            // submit
+            const trimmed = String(changeReason ?? "").trim();
+            const effectiveReason = isCorrection ? trimmed : (trimmed || "Abschluss");
+            await onSubmit(submitMirror, effectiveReason);
+
+            setSaveMsg("Meldung abgeschlossen.");
+        } catch (e: any) {
+            setSaveMsg(null);
+            setSubmitErr(e?.message || "Abschließen fehlgeschlagen.");
+        } finally {
+            setSaving(false);
+        }
     };
 
-    const statusIsDone = String((value as any).status || "").toUpperCase().includes("ABGESCHLOSSEN");
+    /* ---------------- Derived ---------------- */
 
-    const riskTone = (a: string) => {
-        if (a === "ROT") return "danger";
-        if (a === "GELB") return "warning";
-        return "success";
-    };
+    const auto = React.useMemo(() => computeAutoAssessment(form), [form]);
+
+    const fachAmpel = (form as any).fachAmpel ?? null;
+    const computedAbw = computeAbweichungZurAuto(fachAmpel, auto.autoAmpel);
+
+    React.useEffect(() => {
+        // nur automatisch setzen, wenn leer/undefiniert
+        setForm((prev) => {
+            const cur = (prev as any).abweichungZurAuto;
+            if (cur) return prev;
+            return { ...(prev as any), abweichungZurAuto: computedAbw } as any;
+        });
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [computedAbw]);
+
+    const headerTitle = React.useMemo(() => {
+        const t = String((value as any)?.type ?? "Meldung");
+        const vNo = (value as any)?.versionNo;
+        return `${t}${typeof vNo === "number" ? ` · v${vNo}` : ""}`;
+    }, [value]);
+
+    /* ---------------- Render ---------------- */
 
     return (
-        // ✅ iPad fix: bottom padding + safe-area so buttons never sit under Safari toolbar/home indicator
-        <div className="space-y-4 pb-24 [padding-bottom:calc(env(safe-area-inset-bottom)+6rem)]">
-            {statusIsDone && (
-                <Alert>
-                    <AlertTitle>Abgeschlossen</AlertTitle>
-                    <AlertDescription>Diese Version ist abgeschlossen und nicht mehr editierbar.</AlertDescription>
-                </Alert>
-            )}
-
-            <div className="flex flex-wrap items-center gap-2">
-                <Badge variant="secondary">v{(value as any).versionNo}</Badge>
-                {(value as any).current ? <Badge tone="info">current</Badge> : null}
-                <Badge tone={statusIsDone ? "success" : "info"}>{String((value as any).status ?? "")}</Badge>
-
-                <Separator className="mx-2 hidden sm:block" />
-
-                <Badge tone={riskTone(auto.autoAmpel)}>Auto: {AMPEL_LABEL[auto.autoAmpel]}</Badge>
-                <Badge variant="secondary">Score: {auto.score}</Badge>
-                <span className="text-xs text-muted-foreground hidden sm:inline">{auto.rationale}</span>
-            </div>
-
-            <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)}>
-                {/* ✅ iPad-friendly TabsList via Shadcn Carousel */}
-                <div className="relative">
-                    <Carousel setApi={setTabsCarouselApi} opts={{ align: "start", dragFree: true }} className="w-full">
-                        <div className="rounded-2xl bg-muted/40 p-2">
-                            <TabsList className="w-full bg-transparent p-0">
-                                <CarouselContent className="-ml-2">
-                                    {TAB_ITEMS.map(([val, label]) => (
-                                        <CarouselItem key={val} className="pl-2 basis-auto">
-                                            <TabsTrigger
-                                                value={val}
-                                                className={[
-                                                    "whitespace-nowrap",
-                                                    "rounded-full px-4 py-2",
-                                                    "text-sm",
-                                                    "border border-border/60",
-                                                    "data-[state=active]:bg-background",
-                                                    "data-[state=active]:shadow-sm",
-                                                    "data-[state=active]:border-border",
-                                                    "min-h-10",
-                                                    "select-none",
-                                                ].join(" ")}
-                                            >
-                                                {label}
-                                            </TabsTrigger>
-                                        </CarouselItem>
-                                    ))}
-                                </CarouselContent>
-                            </TabsList>
+        <div className="space-y-4">
+            {/* Header */}
+            <div className="rounded-2xl border border-brand-border/40 bg-white p-4">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="min-w-0">
+                        <div className="text-base font-semibold text-brand-text flex items-center gap-2">
+                            <FileText className="h-5 w-5 text-brand-text2" />
+                            <span className="truncate">{headerTitle}</span>
+                            {isCorrection ? <Badge tone="warning">Korrektur</Badge> : null}
+                            {statusIsDone ? <Badge tone="success">abgeschlossen</Badge> : <Badge tone="info">Entwurf</Badge>}
                         </div>
 
-                        {/* optional: arrows (tablet helpful) */}
-                        <CarouselPrevious className="left-1 top-1/2 -translate-y-1/2 hidden sm:flex" />
-                        <CarouselNext className="right-1 top-1/2 -translate-y-1/2 hidden sm:flex" />
-                    </Carousel>
-                </div>
-
-                {/* BASIS */}
-                <TabsContent value="basis" className="mt-4 space-y-4">
-                    <Alert>
-                        <AlertTitle>Erfassung / Eingangshinweis</AlertTitle>
-                        <AlertDescription>
-                            Dokumentation im Kontext des Schutzauftrags nach § 8a SGB VIII: sachlich, nachvollziehbar, fallbezogen.
-                        </AlertDescription>
-                    </Alert>
-
-                    <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-                        <div className="space-y-2">
-                            <Label>Erfasst von (Rolle)</Label>
-                            <Input
-                                value={String((form as any).erfasstVonRolle ?? "")}
-                                onChange={(e) => set("erfasstVonRolle" as any, e.target.value as any)}
-                                disabled={disabled || statusIsDone}
-                                placeholder="z. B. Lehrkraft, Schulsozialarbeit…"
-                            />
-                        </div>
-
-                        <div className="space-y-2">
-                            <Label>Meldeweg</Label>
-                            <select
-                                className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
-                                value={String((form as any).meldeweg ?? "TELEFON")}
-                                onChange={(e) => set("meldeweg" as any, pick(e.target.value, MELDEWEG, "TELEFON") as any)}
-                                disabled={disabled || statusIsDone}
-                            >
-                                {MELDEWEG.map((m) => (
-                                    <option key={m} value={m}>
-                                        {MELDEWEG_LABEL[m]}
-                                    </option>
-                                ))}
-                            </select>
-
-                            {String((form as any).meldeweg) === "SONSTIGES" ? (
-                                <Input
-                                    value={String((form as any).meldewegSonstiges ?? "")}
-                                    onChange={(e) => set("meldewegSonstiges" as any, (e.target.value || null) as any)}
-                                    disabled={disabled || statusIsDone}
-                                    placeholder="Bitte spezifizieren…"
-                                />
-                            ) : null}
-                        </div>
-
-                        <div className="space-y-2">
-                            <Label>Dringlichkeit</Label>
-                            <select
-                                className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
-                                value={String((form as any).dringlichkeit ?? "UNKLAR")}
-                                onChange={(e) => set("dringlichkeit" as any, pick(e.target.value, DRING, "UNKLAR") as any)}
-                                disabled={disabled || statusIsDone}
-                            >
-                                {DRING.map((d) => (
-                                    <option key={d} value={d}>
-                                        {DRING_LABEL[d]}
-                                    </option>
-                                ))}
-                            </select>
-                        </div>
-
-                        <div className="space-y-2">
-                            <Label>Datenbasis</Label>
-                            <select
-                                className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
-                                value={String((form as any).datenbasis ?? "UNKLAR")}
-                                onChange={(e) => set("datenbasis" as any, pick(e.target.value, DATENB, "UNKLAR") as any)}
-                                disabled={disabled || statusIsDone}
-                            >
-                                {DATENB.map((d) => (
-                                    <option key={d} value={d}>
-                                        {DATENB_LABEL[d]}
-                                    </option>
-                                ))}
-                            </select>
-                        </div>
-
-                        <div className="space-y-2">
-                            <Label>Informationsquelle / Kontakt (optional)</Label>
-                            <Input
-                                value={String((form as any).meldendeStelleKontakt ?? "")}
-                                onChange={(e) => set("meldendeStelleKontakt" as any, (e.target.value || null) as any)}
-                                disabled={disabled || statusIsDone}
-                                placeholder="Name / Telefon / Institution…"
-                            />
-                        </div>
-
-                        <div className="grid grid-cols-1 gap-3">
-                            <div className="flex items-center justify-between rounded-xl border border-border p-3">
-                                <div>
-                                    <div className="font-medium">Einwilligung vorhanden</div>
-                                    <div className="text-xs text-muted-foreground">Optional, je nach Lage/Erforderlichkeit</div>
-                                </div>
-                                <Switch
-                                    checked={!!(form as any).einwilligungVorhanden}
-                                    onCheckedChange={(v) => set("einwilligungVorhanden" as any, v as any)}
-                                    disabled={disabled || statusIsDone}
-                                />
-                            </div>
-
-                            <div className="flex items-center justify-between rounded-xl border border-border p-3">
-                                <div>
-                                    <div className="font-medium">Schweigepflichtentbindung vorhanden</div>
-                                    <div className="text-xs text-muted-foreground">Dokumentationshinweis; Upload separat</div>
-                                </div>
-                                <Switch
-                                    checked={!!(form as any).schweigepflichtentbindungVorhanden}
-                                    onCheckedChange={(v) => set("schweigepflichtentbindungVorhanden" as any, v as any)}
-                                    disabled={disabled || statusIsDone}
-                                />
-                            </div>
+                        <div className="mt-1 text-sm text-brand-text2">
+                            §8a-konforme Dokumentation: sachlich, nachvollziehbar, mit Verlauf.
                         </div>
                     </div>
 
-                    <div className="space-y-2">
-                        <Label>Kurzbeschreibung (Pflicht)</Label>
-                        <Textarea
-                            value={String((form as any).kurzbeschreibung ?? "")}
-                            onChange={(e) => set("kurzbeschreibung" as any, e.target.value as any)}
-                            disabled={disabled || statusIsDone}
-                            placeholder="Was ist passiert / was wurde beobachtet / warum wird gemeldet?"
-                            rows={5}
-                        />
-                    </div>
-                </TabsContent>
+                    <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+                        <Button
+                            variant="secondary"
+                            className="h-11 gap-2 w-full sm:w-auto"
+                            onClick={doSave}
+                            disabled={disabled || statusIsDone || saving}
+                        >
+                            <Save className="h-4 w-4" />
+                            Entwurf speichern
+                        </Button>
 
-                {/* ANLASS */}
-                <TabsContent value="anlass" className="mt-4 space-y-4">
-                    <Alert>
-                        <AlertTitle>Anlass-Katalog</AlertTitle>
-                        <AlertDescription>Auswahl wird als Codes dokumentiert und in Tags/Beobachtungen referenziert.</AlertDescription>
-                    </Alert>
-
-                    <div className="space-y-5">
-                        {ANLASS_CATALOG.map((cat) => (
-                            <div key={cat.key} className="space-y-2">
-                                <div className="text-sm font-semibold">{cat.title}</div>
-                                <div className="flex flex-wrap gap-2">
-                                    {cat.items.map(({ code, label }) => {
-                                        const active = (((form as any).anlassCodes || []) as string[]).includes(code);
-                                        return (
-                                            <button
-                                                key={code}
-                                                onClick={() => toggleAnlass(code)}
-                                                disabled={disabled || statusIsDone}
-                                                title={code}
-                                                className={[
-                                                    "rounded-full border px-3 py-1 text-sm transition",
-                                                    active ? "border-primary bg-accent" : "border-border hover:bg-accent/60",
-                                                ].join(" ")}
-                                                type="button"
-                                            >
-                                                {label}
-                                            </button>
-                                        );
-                                    })}
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-
-                    <div className="text-sm text-muted-foreground">
-                        Ausgewählt: <Badge variant="secondary">{(((form as any).anlassCodes || []) as any[]).length}</Badge>
-                    </div>
-                </TabsContent>
-
-                {/* OBSERVATIONS */}
-                <TabsContent value="obs" className="mt-4 space-y-4">
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <div className="font-medium">Beobachtungen (Observations)</div>
-                            <div className="text-sm text-muted-foreground">
-                                Jede Beobachtung kann Tags (Anlass/Indikator/Severity) enthalten – Grundlage für Auto-Vorbewertung.
-                            </div>
-                        </div>
-                        <Button onClick={addObservation} disabled={disabled || statusIsDone}>
-                            + Observation
+                        <Button
+                            className="h-11 gap-2 w-full sm:w-auto"
+                            onClick={doSubmit}
+                            disabled={disabled || statusIsDone || saving}
+                        >
+                            <CheckCircle2 className="h-4 w-4" />
+                            Abschließen
                         </Button>
                     </div>
+                </div>
 
-                    <div className="space-y-3">
-                        {((((form as any).observations || []) as any[]) || []).map((o: any, idx: number) => (
-                            <Card key={idx} className="rounded-2xl">
-                                <CardHeader className="flex-row items-start justify-between gap-4">
-                                    <div>
-                                        <CardTitle className="text-base">Observation #{idx + 1}</CardTitle>
-                                        <div className="mt-1 text-xs text-muted-foreground">
-                                            {o.zeitpunkt ? new Date(o.zeitpunkt).toLocaleString() : "—"}
-                                        </div>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            onClick={() => addObsTag(idx)}
+                <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    <div className="rounded-2xl border border-brand-border/25 bg-white p-3">
+                        <div className="text-xs font-semibold text-brand-text2">Auto-Ampel</div>
+                        <div className="mt-1 text-sm font-semibold text-brand-text">
+                            {AMPEL_LABEL[pick(auto.autoAmpel, AMPEL, "GRUEN")]}
+                        </div>
+                        <div className="mt-1 text-xs text-brand-text2">{auto.rationale}</div>
+                    </div>
+
+                    <div className="rounded-2xl border border-brand-border/25 bg-white p-3">
+                        <div className="text-xs font-semibold text-brand-text2">Fach-Ampel</div>
+                        <div className="mt-1 text-sm font-semibold text-brand-text">
+                            {fachAmpel ? AMPEL_LABEL[pick(fachAmpel, AMPEL, "GRUEN")] : "—"}
+                        </div>
+                        <div className="mt-1 text-xs text-brand-text2">
+                            Abweichung: {ABW_AUTO_LABEL[pick((form as any).abweichungZurAuto ?? "GLEICH", ABW_AUTO, "GLEICH")]}
+                        </div>
+                    </div>
+
+                    <div className="rounded-2xl border border-brand-border/25 bg-white p-3">
+                        <div className="text-xs font-semibold text-brand-text2">Dringlichkeit</div>
+                        <div className="mt-1 text-sm font-semibold text-brand-text">
+                            {DRING_LABEL[pick((form as any).dringlichkeit ?? "UNKLAR", DRING, "UNKLAR")]}
+                        </div>
+                        <div className="mt-1 text-xs text-brand-text2">Bitte sachlich & überprüfbar formulieren.</div>
+                    </div>
+                </div>
+            </div>
+
+            {/* Messages */}
+            {validationErr ? (
+                <Alert variant="destructive">
+                    <AlertTitle>Bitte prüfen</AlertTitle>
+                    <AlertDescription>{validationErr}</AlertDescription>
+                </Alert>
+            ) : null}
+
+            {submitErr ? (
+                <div className="rounded-2xl border border-brand-danger/20 bg-brand-danger/10 p-3 text-sm text-brand-danger">
+                    {submitErr}
+                </div>
+            ) : null}
+
+            {saveMsg ? (
+                <div className="rounded-2xl border border-brand-border/40 bg-white p-3 text-sm text-brand-text">
+                    {saveMsg}
+                </div>
+            ) : null}
+
+            {/* Tabs */}
+            <div className="rounded-2xl border border-brand-border/40 bg-white p-2">
+                <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)}>
+                    <TabsList className="w-full flex flex-wrap justify-start gap-1 h-auto bg-transparent">
+                        {TAB_ITEMS.map(([key, label]) => (
+                            <TabsTrigger key={key} value={key} className="data-[state=active]:bg-brand-bg rounded-xl">
+                                {label}
+                            </TabsTrigger>
+                        ))}
+                    </TabsList>
+
+                    <div className="px-2 pb-2">
+                        <Separator className="my-3" />
+
+                        {/* Basis */}
+                        <TabsContent value="basis" className="m-0">
+                            <PageCard title="Basis" icon={<ClipboardCheck className="h-4 w-4 text-brand-text2" />}>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    <FieldRow label="Erfasst von (Rolle)">
+                                        <Input
+                                            value={String((form as any).erfasstVonRolle ?? "")}
+                                            onChange={(e) => set("erfasstVonRolle" as any, e.target.value as any)}
                                             disabled={disabled || statusIsDone}
-                                            type="button"
-                                        >
-                                            + Tag
-                                        </Button>
-                                        <Button
-                                            variant="destructive"
-                                            size="sm"
-                                            onClick={() => removeObs(idx)}
-                                            disabled={disabled || statusIsDone}
-                                            type="button"
-                                        >
-                                            Entfernen
-                                        </Button>
-                                    </div>
-                                </CardHeader>
-
-                                <CardContent className="space-y-3">
-                                    <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
-                                        <div className="space-y-1">
-                                            <Label>Zeitraum</Label>
-                                            <select
-                                                className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
-                                                value={o.zeitraum ?? "UNBEKANNT"}
-                                                onChange={(e) => updateObs(idx, { zeitraum: pick(e.target.value, OBS_ZEITRAUM, "UNBEKANNT") })}
-                                                disabled={disabled || statusIsDone}
-                                            >
-                                                {OBS_ZEITRAUM.map((z) => (
-                                                    <option key={z} value={z}>
-                                                        {OBS_ZEITRAUM_LABEL[z]}
-                                                    </option>
-                                                ))}
-                                            </select>
-                                        </div>
-
-                                        <div className="space-y-1">
-                                            <Label>Ort</Label>
-                                            <select
-                                                className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
-                                                value={o.ort ?? "SONSTIGES"}
-                                                onChange={(e) => updateObs(idx, { ort: pick(e.target.value, OBS_ORT, "SONSTIGES") })}
-                                                disabled={disabled || statusIsDone}
-                                            >
-                                                {OBS_ORT.map((x) => (
-                                                    <option key={x} value={x}>
-                                                        {OBS_ORT_LABEL[x]}
-                                                    </option>
-                                                ))}
-                                            </select>
-                                            {o.ort === "SONSTIGES" ? (
-                                                <Input
-                                                    value={o.ortSonstiges ?? ""}
-                                                    onChange={(e) => updateObs(idx, { ortSonstiges: e.target.value || null })}
-                                                    disabled={disabled || statusIsDone}
-                                                    placeholder="Ort spezifizieren…"
-                                                />
-                                            ) : null}
-                                        </div>
-
-                                        <div className="space-y-1">
-                                            <Label>Quelle</Label>
-                                            <select
-                                                className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
-                                                value={o.quelle ?? "UNBEKANNT"}
-                                                onChange={(e) => updateObs(idx, { quelle: pick(e.target.value, OBS_QUELLE, "UNBEKANNT") })}
-                                                disabled={disabled || statusIsDone}
-                                            >
-                                                {OBS_QUELLE.map((q) => (
-                                                    <option key={q} value={q}>
-                                                        {OBS_QUELLE_LABEL[q]}
-                                                    </option>
-                                                ))}
-                                            </select>
-                                        </div>
-                                    </div>
-
-                                    <div className="space-y-1">
-                                        <Label>Text (Pflicht)</Label>
-                                        <Textarea
-                                            value={o.text ?? ""}
-                                            onChange={(e) => updateObs(idx, { text: e.target.value })}
-                                            disabled={disabled || statusIsDone}
-                                            rows={4}
-                                            placeholder="Sachlich, faktenorientiert. Wörtliche Zitate separat."
                                         />
-                                    </div>
+                                    </FieldRow>
 
-                                    <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-                                        <div className="space-y-1">
-                                            <Label>Wörtliches Zitat</Label>
-                                            <Textarea
-                                                value={o.woertlichesZitat ?? ""}
-                                                onChange={(e) => updateObs(idx, { woertlichesZitat: e.target.value || null })}
-                                                disabled={disabled || statusIsDone}
-                                                rows={2}
-                                            />
-                                        </div>
-                                        <div className="space-y-1">
-                                            <Label>Körperbefund (optional)</Label>
-                                            <Textarea
-                                                value={o.koerperbefund ?? ""}
-                                                onChange={(e) => updateObs(idx, { koerperbefund: e.target.value || null })}
-                                                disabled={disabled || statusIsDone}
-                                                rows={2}
-                                            />
-                                        </div>
-                                    </div>
-
-                                    <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-                                        <div className="space-y-1">
-                                            <Label>Verhalten Kind</Label>
-                                            <Textarea
-                                                value={o.verhaltenKind ?? ""}
-                                                onChange={(e) => updateObs(idx, { verhaltenKind: e.target.value || null })}
-                                                disabled={disabled || statusIsDone}
-                                                rows={2}
-                                            />
-                                        </div>
-                                        <div className="space-y-1">
-                                            <Label>Verhalten Bezugsperson</Label>
-                                            <Textarea
-                                                value={o.verhaltenBezug ?? ""}
-                                                onChange={(e) => updateObs(idx, { verhaltenBezug: e.target.value || null })}
-                                                disabled={disabled || statusIsDone}
-                                                rows={2}
-                                            />
-                                        </div>
-                                    </div>
-
-                                    <div className="space-y-1">
-                                        <Label>Sichtbarkeit</Label>
+                                    <FieldRow label="Meldeweg">
                                         <select
-                                            className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
-                                            value={o.sichtbarkeit ?? "INTERN"}
-                                            onChange={(e) => updateObs(idx, { sichtbarkeit: pick(e.target.value, SICHT, "INTERN") })}
+                                            className="h-10 w-full rounded-2xl border border-brand-border/40 bg-white px-3 text-sm text-brand-text"
+                                            value={pick(String((form as any).meldeweg ?? "TELEFON"), MELDEWEG, "TELEFON")}
+                                            onChange={(e) => set("meldeweg" as any, e.target.value as any)}
                                             disabled={disabled || statusIsDone}
                                         >
-                                            {SICHT.map((s) => (
-                                                <option key={s} value={s}>
-                                                    {SICHT_LABEL[s]}
+                                            {MELDEWEG.map((x) => (
+                                                <option key={x} value={x}>
+                                                    {MELDEWEG_LABEL[x]}
                                                 </option>
                                             ))}
                                         </select>
+                                    </FieldRow>
+
+                                    <FieldRow label="Meldende Stelle (Kontakt)" hint="z.B. Name/Institution, Rückrufnummer, E-Mail">
+                                        <Input
+                                            value={String((form as any).meldendeStelleKontakt ?? "")}
+                                            onChange={(e) => set("meldendeStelleKontakt" as any, e.target.value as any)}
+                                            disabled={disabled || statusIsDone}
+                                        />
+                                    </FieldRow>
+
+                                    <FieldRow label="Datenbasis">
+                                        <select
+                                            className="h-10 w-full rounded-2xl border border-brand-border/40 bg-white px-3 text-sm text-brand-text"
+                                            value={pick(String((form as any).datenbasis ?? "UNKLAR"), DATENB, "UNKLAR")}
+                                            onChange={(e) => set("datenbasis" as any, e.target.value as any)}
+                                            disabled={disabled || statusIsDone}
+                                        >
+                                            {DATENB.map((x) => (
+                                                <option key={x} value={x}>
+                                                    {DATENB_LABEL[x]}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </FieldRow>
+
+                                    <FieldRow label="Dringlichkeit">
+                                        <select
+                                            className="h-10 w-full rounded-2xl border border-brand-border/40 bg-white px-3 text-sm text-brand-text"
+                                            value={pick(String((form as any).dringlichkeit ?? "UNKLAR"), DRING, "UNKLAR")}
+                                            onChange={(e) => set("dringlichkeit" as any, e.target.value as any)}
+                                            disabled={disabled || statusIsDone}
+                                        >
+                                            {DRING.map((x) => (
+                                                <option key={x} value={x}>
+                                                    {DRING_LABEL[x]}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </FieldRow>
+
+                                    <FieldRow label="Kurzbeschreibung (Sachlage)" hint="Kurz, sachlich, überprüfbar. Keine Wertungen.">
+                                        <Textarea
+                                            rows={5}
+                                            value={String((form as any).kurzbeschreibung ?? "")}
+                                            onChange={(e) => set("kurzbeschreibung" as any, e.target.value as any)}
+                                            disabled={disabled || statusIsDone}
+                                        />
+                                    </FieldRow>
+                                </div>
+                            </PageCard>
+                        </TabsContent>
+
+                        {/* Anlässe */}
+                        <TabsContent value="anlass" className="m-0">
+                            <PageCard title="Anlässe" icon={<FileText className="h-4 w-4 text-brand-text2" />}>
+                                <div className="text-sm text-brand-text2">
+                                    Auswahl steuert die automatische Tag-Erstellung in den Beobachtungen.
+                                </div>
+
+                                <div className="space-y-4">
+                                    {ANLASS_CATALOG.map((cat) => (
+                                        <div key={cat.key} className="rounded-2xl border border-brand-border/25 bg-white p-3">
+                                            <div className="text-sm font-semibold text-brand-text">{cat.title}</div>
+
+                                            <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                                {cat.items.map((it) => {
+                                                    const selected = normalizeAnlassCodes((form as any).anlassCodes).includes(it.code);
+                                                    return (
+                                                        <button
+                                                            key={it.code}
+                                                            type="button"
+                                                            onClick={() => toggleAnlass(it.code)}
+                                                            disabled={disabled || statusIsDone}
+                                                            className={[
+                                                                "rounded-2xl border p-3 text-left transition",
+                                                                selected
+                                                                    ? "border-brand-border/60 bg-brand-bg"
+                                                                    : "border-brand-border/25 bg-white hover:bg-brand-bg/40",
+                                                                disabled || statusIsDone ? "opacity-60" : "",
+                                                            ].join(" ")}
+                                                        >
+                                                            <div className="flex items-start justify-between gap-2">
+                                                                <div className="text-sm font-semibold text-brand-text">{it.label}</div>
+                                                                {selected ? <Badge tone="info">ausgewählt</Badge> : <Badge tone="neutral">—</Badge>}
+                                                            </div>
+                                                            <div className="mt-1 text-xs text-brand-text2">Code: {it.code}</div>
+                                                        </button>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </PageCard>
+                        </TabsContent>
+
+                        {/* Beobachtungen */}
+                        <TabsContent value="obs" className="m-0">
+                            <PageCard title="Beobachtungen" icon={<FileText className="h-4 w-4 text-brand-text2" />}>
+                                <div className="flex flex-col sm:flex-row gap-2 sm:items-center sm:justify-between">
+                                    <div className="text-sm text-brand-text2">
+                                        Pro Beobachtung werden Tags automatisch aus den ausgewählten Anlässen erzeugt.
                                     </div>
 
-                                    <Separator />
+                                    <Button
+                                        variant="secondary"
+                                        className="h-11"
+                                        onClick={addObservation}
+                                        disabled={disabled || statusIsDone}
+                                    >
+                                        Beobachtung hinzufügen
+                                    </Button>
+                                </div>
 
-                                    <div>
-                                        <div className="mb-2 flex items-center justify-between">
-                                            <div className="font-medium">Tags (Anlass / Indikator / Severity)</div>
-                                            <Badge variant="secondary">{(o.tags || []).length}</Badge>
+                                <div className="space-y-3">
+                                    {(((form as any).observations || []) as any[]).length === 0 ? (
+                                        <div className="rounded-2xl border border-brand-border/40 bg-white p-4 text-sm text-brand-text2">
+                                            Noch keine Beobachtungen.
                                         </div>
+                                    ) : null}
 
-                                        {(o.tags || []).length === 0 ? (
-                                            <div className="text-sm text-muted-foreground">
-                                                Keine Tags. Füge mindestens einen Indikator hinzu, damit das Instrument bewerten kann.
-                                            </div>
-                                        ) : (
-                                            <div className="space-y-2">
-                                                {(o.tags || []).map((t: any, tIdx: number) => (
-                                                    <div key={tIdx} className="rounded-xl border border-border p-3">
-                                                        <div className="grid grid-cols-1 gap-3 lg:grid-cols-4">
-                                                            <div className="space-y-1">
-                                                                <Label>Anlass</Label>
-                                                                <select
-                                                                    className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
-                                                                    value={t.anlassCode ?? ""}
-                                                                    onChange={(e) => updateObsTag(idx, tIdx, { anlassCode: e.target.value || null })}
-                                                                    disabled={disabled || statusIsDone}
-                                                                >
-                                                                    <option value="">—</option>
-                                                                    {(((form as any).anlassCodes || ANLASS_CODES) as string[]).map((c) => (
-                                                                        <option key={c} value={c}>
-                                                                            {ANLASS_LABELS[c] ?? c}
-                                                                        </option>
-                                                                    ))}
-                                                                </select>
-                                                            </div>
-
-                                                            <div className="space-y-1 lg:col-span-2">
-                                                                <Label>Indikator</Label>
-                                                                <select
-                                                                    className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
-                                                                    value={t.indicatorId ?? ""}
-                                                                    onChange={(e) => updateObsTag(idx, tIdx, { indicatorId: e.target.value || null })}
-                                                                    disabled={disabled || statusIsDone}
-                                                                >
-                                                                    <option value="">—</option>
-                                                                    {INDICATORS.map((i) => (
-                                                                        <option key={i.id} value={i.id}>
-                                                                            {i.label} ({i.id})
-                                                                        </option>
-                                                                    ))}
-                                                                </select>
-                                                            </div>
-
-                                                            <div className="space-y-1">
-                                                                <Label>Severity (0..3)</Label>
-                                                                <Input
-                                                                    type="number"
-                                                                    min={0}
-                                                                    max={3}
-                                                                    value={t.severity ?? 0}
-                                                                    onChange={(e) => updateObsTag(idx, tIdx, { severity: clampSeverity(Number(e.target.value)) })}
-                                                                    disabled={disabled || statusIsDone}
-                                                                />
-                                                            </div>
-                                                        </div>
-
-                                                        <div className="mt-3 flex items-start gap-3">
-                                                            <div className="flex-1 space-y-1">
-                                                                <Label>Kommentar (optional)</Label>
-                                                                <Textarea
-                                                                    rows={2}
-                                                                    value={t.comment ?? ""}
-                                                                    onChange={(e) => updateObsTag(idx, tIdx, { comment: e.target.value || null })}
-                                                                    disabled={disabled || statusIsDone}
-                                                                />
-                                                            </div>
-                                                            <Button
-                                                                variant="outline"
-                                                                onClick={() => removeObsTag(idx, tIdx)}
-                                                                disabled={disabled || statusIsDone}
-                                                                type="button"
-                                                            >
-                                                                Entfernen
-                                                            </Button>
-                                                        </div>
+                                    {(((form as any).observations || []) as any[]).map((o: any, idx: number) => {
+                                        const tags = Array.isArray(o?.tags) ? o.tags : [];
+                                        return (
+                                            <div key={idx} className="rounded-2xl border border-brand-border/25 bg-white p-3 space-y-3">
+                                                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                                                    <div className="text-sm font-semibold text-brand-text">
+                                                        Beobachtung {idx + 1}
                                                     </div>
-                                                ))}
-                                            </div>
-                                        )}
-                                    </div>
-                                </CardContent>
-                            </Card>
-                        ))}
-                    </div>
-                </TabsContent>
 
-                {/* FACHBEWERTUNG */}
-                <TabsContent value="fach" className="mt-4 space-y-4">
-                    <Alert>
-                        <AlertTitle>Fachliche Bewertung nach § 8a SGB VIII</AlertTitle>
-                        <AlertDescription>
-                            Die Auto-Vorbewertung ist eine Orientierung. Maßgeblich ist die begründete fachliche Einschätzung.
-                        </AlertDescription>
-                    </Alert>
-
-                    <Card>
-                        <CardHeader>
-                            <CardTitle className="text-base">Vorbewertung & Abweichung</CardTitle>
-                        </CardHeader>
-                        <CardContent className="space-y-3">
-                            <div className="flex flex-wrap items-center gap-2">
-                                <Badge tone={riskTone(auto.autoAmpel)}>Auto: {AMPEL_LABEL[auto.autoAmpel]}</Badge>
-                                <Badge variant="secondary">Score: {auto.score}</Badge>
-                                <span className="text-xs text-muted-foreground">{auto.rationale}</span>
-                            </div>
-
-                            <Separator />
-
-                            <div className="space-y-1">
-                                <Label>Fach-Ampel (Pflicht bei Submit)</Label>
-                                <select
-                                    className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
-                                    value={(form as any).fachAmpel ?? ""}
-                                    onChange={(e) => set("fachAmpel" as any, e.target.value ? pick(e.target.value, AMPEL, "GRUEN") : null)}
-                                    disabled={disabled || statusIsDone}
-                                >
-                                    <option value="">—</option>
-                                    {AMPEL.map((a) => (
-                                        <option key={a} value={a}>
-                                            {AMPEL_LABEL[a]}
-                                        </option>
-                                    ))}
-                                </select>
-                            </div>
-
-                            <div className="space-y-1">
-                                <Label>Fachliche Begründung (Pflicht bei Submit)</Label>
-                                <Textarea
-                                    rows={5}
-                                    value={(form as any).fachText ?? ""}
-                                    onChange={(e) => set("fachText" as any, e.target.value as any)}
-                                    disabled={disabled || statusIsDone}
-                                    placeholder="Fallbezogene Herleitung: welche Beobachtungen/Indikatoren sind maßgeblich?"
-                                />
-                            </div>
-
-                            <Separator />
-
-                            <div className="space-y-1">
-                                <Label>Abweichung zur Auto-Vorbewertung (automatisch abgeleitet)</Label>
-                                <select
-                                    className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
-                                    value={String((form as any).abweichungZurAuto ?? "GLEICH")}
-                                    onChange={(e) => set("abweichungZurAuto" as any, pick(e.target.value, ABW_AUTO, "GLEICH") as any)}
-                                    disabled={disabled || statusIsDone}
-                                >
-                                    {ABW_AUTO.map((x) => (
-                                        <option key={x} value={x}>
-                                            {ABW_AUTO_LABEL[x]}
-                                        </option>
-                                    ))}
-                                </select>
-
-                                {(form as any).abweichungZurAuto !== "GLEICH" ? (
-                                    <div className="space-y-1 mt-2">
-                                        <Label>Begründung der Abweichung (Pflicht bei Abweichung)</Label>
-                                        <Textarea
-                                            rows={3}
-                                            value={(form as any).abweichungsBegruendung ?? ""}
-                                            onChange={(e) => set("abweichungsBegruendung" as any, e.target.value || null)}
-                                            disabled={disabled || statusIsDone}
-                                            placeholder="Warum weicht die fachliche Einschätzung ab?"
-                                        />
-                                    </div>
-                                ) : (
-                                    <div className="space-y-1 mt-2">
-                                        <Label>Begründung der Abweichung (optional)</Label>
-                                        <Textarea
-                                            rows={2}
-                                            value={(form as any).abweichungsBegruendung ?? ""}
-                                            onChange={(e) => set("abweichungsBegruendung" as any, e.target.value || null)}
-                                            disabled={disabled || statusIsDone}
-                                            placeholder="Optional"
-                                        />
-                                    </div>
-                                )}
-                            </div>
-                        </CardContent>
-                    </Card>
-                </TabsContent>
-
-                {/* AKUT / SCHUTZ + JUGENDAMT */}
-                <TabsContent value="akut" className="mt-4 space-y-4">
-                    {validationErr ? (
-                        <Alert>
-                            <AlertTitle>Unvollständig</AlertTitle>
-                            <AlertDescription>{validationErr}</AlertDescription>
-                        </Alert>
-                    ) : null}
-
-                    <Alert>
-                        <AlertTitle>Akutprüfung / Schutzauftrag</AlertTitle>
-                        <AlertDescription>
-                            Sofortige Schutzaspekte (Gefahr im Verzug, Notruf, Unterbringung). Bei hoher Gefährdung: Jugendamt-Entscheidung dokumentieren.
-                        </AlertDescription>
-                    </Alert>
-
-                    <Card>
-                        <CardHeader>
-                            <CardTitle className="text-base">Akutindikatoren</CardTitle>
-                        </CardHeader>
-                        <CardContent className="space-y-3">
-                            <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
-                                <div className="flex items-center justify-between rounded-xl border border-border p-3">
-                                    <div>
-                                        <div className="font-medium">Gefahr im Verzug</div>
-                                        <div className="text-xs text-muted-foreground">Unmittelbarer Handlungsbedarf</div>
-                                    </div>
-                                    <Switch
-                                        checked={!!(form as any).akutGefahrImVerzug}
-                                        onCheckedChange={(v) => set("akutGefahrImVerzug" as any, v as any)}
-                                        disabled={disabled || statusIsDone}
-                                    />
-                                </div>
-
-                                <div className="flex items-center justify-between rounded-xl border border-border p-3">
-                                    <div>
-                                        <div className="font-medium">Notruf erforderlich</div>
-                                        <div className="text-xs text-muted-foreground">Optional</div>
-                                    </div>
-                                    <Switch
-                                        checked={!!(form as any).akutNotrufErforderlich}
-                                        onCheckedChange={(v) => set("akutNotrufErforderlich" as any, v as any)}
-                                        disabled={disabled || statusIsDone}
-                                    />
-                                </div>
-
-                                <div className="space-y-1 rounded-xl border border-border p-3">
-                                    <Label>Kind sicher untergebracht</Label>
-                                    <select
-                                        className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
-                                        value={String((form as any).akutKindSicherUntergebracht ?? "UNKLAR")}
-                                        onChange={(e) =>
-                                            set("akutKindSicherUntergebracht" as any, pick(e.target.value, JANEINUNKLAR, "UNKLAR") as any)
-                                        }
-                                        disabled={disabled || statusIsDone}
-                                    >
-                                        {JANEINUNKLAR.map((x) => (
-                                            <option key={x} value={x}>
-                                                {JNU_LABEL[x]}
-                                            </option>
-                                        ))}
-                                    </select>
-                                    <div className="text-xs text-muted-foreground">Aktuelle Schutz-/Betreuungslage</div>
-                                </div>
-                            </div>
-
-                            <div className="space-y-1">
-                                <Label>Akut-Begründung{(form as any).akutGefahrImVerzug ? " (Pflicht bei Gefahr im Verzug)" : " (optional)"}</Label>
-                                <Textarea
-                                    rows={3}
-                                    value={(form as any).akutBegruendung ?? ""}
-                                    onChange={(e) => set("akutBegruendung" as any, e.target.value || null)}
-                                    disabled={disabled || statusIsDone}
-                                    placeholder="Kurz: warum akut? welche Sofortmaßnahmen wurden/wären eingeleitet?"
-                                />
-                            </div>
-                        </CardContent>
-                    </Card>
-
-                    <Card>
-                        <CardHeader>
-                            <CardTitle className="text-base">Jugendamt</CardTitle>
-                        </CardHeader>
-                        <CardContent className="space-y-3">
-                            <div className="space-y-1">
-                                <Label>Informiert?{(form as any).fachAmpel === "ROT" ? " (Pflicht bei ROT)" : " (optional)"} </Label>
-                                <select
-                                    className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
-                                    value={(form as any).jugendamt?.informiert ?? ""}
-                                    onChange={(e) =>
-                                        set("jugendamt" as any, {
-                                            ...((form as any).jugendamt || { informiert: "UNKLAR" }),
-                                            informiert: pick(e.target.value, JUG_INF, "UNKLAR"),
-                                        })
-                                    }
-                                    disabled={disabled || statusIsDone}
-                                >
-                                    <option value="">—</option>
-                                    {JUG_INF.map((x) => (
-                                        <option key={x} value={x}>
-                                            {JUG_INF_LABEL[x]}
-                                        </option>
-                                    ))}
-                                </select>
-                            </div>
-
-                            <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-                                <div className="space-y-1">
-                                    <Label>Kontaktart</Label>
-                                    <select
-                                        className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
-                                        value={(form as any).jugendamt?.kontaktart ?? ""}
-                                        onChange={(e) =>
-                                            set("jugendamt" as any, {
-                                                ...((form as any).jugendamt || { informiert: "UNKLAR" }),
-                                                kontaktart: e.target.value ? pick(e.target.value, JUG_KONTAKTART, "TELEFON") : null,
-                                            })
-                                        }
-                                        disabled={disabled || statusIsDone}
-                                    >
-                                        <option value="">—</option>
-                                        {JUG_KONTAKTART.map((x) => (
-                                            <option key={x} value={x}>
-                                                {JUG_KONTAKTART_LABEL[x]}
-                                            </option>
-                                        ))}
-                                    </select>
-                                </div>
-
-                                <div className="space-y-1">
-                                    <Label>Kontakt am (Instant/ISO)</Label>
-                                    <Input
-                                        value={(form as any).jugendamt?.kontaktAm ?? ""}
-                                        onChange={(e) =>
-                                            set("jugendamt" as any, {
-                                                ...((form as any).jugendamt || { informiert: "UNKLAR" }),
-                                                kontaktAm: e.target.value || null,
-                                            })
-                                        }
-                                        disabled={disabled || statusIsDone}
-                                        placeholder="2026-03-04T10:30:00Z"
-                                    />
-                                </div>
-                            </div>
-
-                            <div className="space-y-1">
-                                <Label>Aktenzeichen</Label>
-                                <Input
-                                    value={(form as any).jugendamt?.aktenzeichen ?? ""}
-                                    onChange={(e) =>
-                                        set("jugendamt" as any, {
-                                            ...((form as any).jugendamt || { informiert: "UNKLAR" }),
-                                            aktenzeichen: e.target.value || null,
-                                        })
-                                    }
-                                    disabled={disabled || statusIsDone}
-                                />
-                            </div>
-
-                            <div className="space-y-1">
-                                <Label>
-                                    Begründung
-                                    {(String((form as any).jugendamt?.informiert || "") !== "JA" &&
-                                    String((form as any).jugendamt?.informiert || "") !== ""
-                                        ? " (Pflicht wenn nicht JA)"
-                                        : " (optional)")}
-                                </Label>
-                                <Textarea
-                                    rows={3}
-                                    value={(form as any).jugendamt?.begruendung ?? ""}
-                                    onChange={(e) =>
-                                        set("jugendamt" as any, {
-                                            ...((form as any).jugendamt || { informiert: "UNKLAR" }),
-                                            begruendung: e.target.value || null,
-                                        })
-                                    }
-                                    disabled={disabled || statusIsDone}
-                                    placeholder="Kurz: warum (nicht) informiert / welche Abwägung?"
-                                />
-                            </div>
-                        </CardContent>
-                    </Card>
-                </TabsContent>
-
-                {/* PLANUNG */}
-                <TabsContent value="planung" className="mt-4 space-y-4">
-                    <Alert>
-                        <AlertTitle>Weiteres Vorgehen / Verlaufssicherung</AlertTitle>
-                        <AlertDescription>
-                            Zuständigkeit und nächste Überprüfung zur fallbezogenen Steuerung (Schutzauftrag nach § 8a SGB VIII).
-                        </AlertDescription>
-                    </Alert>
-
-                    <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-                        <div className="space-y-2">
-                            <Label>Verantwortliche Fachkraft (UserId)</Label>
-                            <Input
-                                value={(form as any).verantwortlicheFachkraftUserId ?? ""}
-                                onChange={(e) => {
-                                    const raw = e.target.value.trim();
-                                    set("verantwortlicheFachkraftUserId" as any, raw ? Number(raw) : null);
-                                }}
-                                disabled={disabled || statusIsDone}
-                                placeholder="z. B. 12345"
-                            />
-                        </div>
-
-                        <div className="space-y-2">
-                            <Label>Nächste Überprüfung am (LocalDate)</Label>
-                            <Input
-                                type="date"
-                                value={String((form as any).naechsteUeberpruefungAm ?? "").slice(0, 10)}
-                                onChange={(e) => set("naechsteUeberpruefungAm" as any, e.target.value ? e.target.value : null)}
-                                disabled={disabled || statusIsDone}
-                            />
-                        </div>
-                    </div>
-
-                    <div className="space-y-2">
-                        <Label>Zusammenfassung</Label>
-                        <Textarea
-                            rows={4}
-                            value={(form as any).zusammenfassung ?? ""}
-                            onChange={(e) => set("zusammenfassung" as any, e.target.value || null)}
-                            disabled={disabled || statusIsDone}
-                            placeholder="Kurz, sachlich: Kernaussagen, Bewertung, nächste Schritte."
-                        />
-                    </div>
-                </TabsContent>
-
-                {/* DOKU */}
-                <TabsContent value="doku" className="mt-4 space-y-6">
-                    <Alert>
-                        <AlertTitle>Dokumentation / Nachvollziehbarkeit</AlertTitle>
-                        <AlertDescription>
-                            Kontakte, externe Abklärungen und Unterlagen sind zentrale Belege/Herleitung. Zusätzlich: Begründungen je Sektion (sectionReasons).
-                        </AlertDescription>
-                    </Alert>
-
-                    <Card>
-                        <CardHeader>
-                            <CardTitle className="text-base">Begründungen je Sektion (sectionReasons)</CardTitle>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
-                            {[
-                                ["basis", "Basis / Meldedaten"],
-                                ["anlass", "Anlässe"],
-                                ["obs", "Beobachtungen"],
-                                ["fach", "Fachbewertung"],
-                                ["akut", "Akut / Jugendamt"],
-                                ["planung", "Planung"],
-                                ["doku", "Dokumentation"],
-                            ].map(([key, label]) => (
-                                <div key={key} className="space-y-1">
-                                    <Label>{label}: Dokumentationsbegründung</Label>
-                                    <Textarea
-                                        rows={2}
-                                        value={(((form as any).sectionReasons || {}) as Record<string, string>)[key] ?? ""}
-                                        onChange={(e) => setSectionReason(key, e.target.value)}
-                                        disabled={disabled || statusIsDone}
-                                        placeholder="Warum ist die Dokumentation so/ggf. warum fehlen Informationen?"
-                                    />
-                                </div>
-                            ))}
-                        </CardContent>
-                    </Card>
-
-                    {/* Contacts */}
-                    <Card>
-                        <CardHeader className="flex-row items-center justify-between">
-                            <CardTitle className="text-base">Kontakte</CardTitle>
-                            <Button onClick={addContact} disabled={disabled || statusIsDone} type="button">
-                                + Kontakt
-                            </Button>
-                        </CardHeader>
-                        <CardContent className="space-y-3">
-                            {((((form as any).contacts || []) as any[]) || []).length === 0 ? (
-                                <div className="text-sm text-muted-foreground">Keine Kontakte erfasst.</div>
-                            ) : (
-                                (((form as any).contacts || []) as any[]).map((c: any, idx: number) => (
-                                    <div key={idx} className="rounded-xl border border-border p-3 space-y-3">
-                                        <div className="flex items-center justify-between">
-                                            <div className="font-medium">Kontakt #{idx + 1}</div>
-                                            <Button
-                                                variant="destructive"
-                                                size="sm"
-                                                onClick={() => removeContact(idx)}
-                                                disabled={disabled || statusIsDone}
-                                                type="button"
-                                            >
-                                                Entfernen
-                                            </Button>
-                                        </div>
-
-                                        <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-                                            <div className="space-y-1">
-                                                <Label>Kontakt mit</Label>
-                                                <select
-                                                    className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
-                                                    value={c.kontaktMit ?? "SONSTIGE"}
-                                                    onChange={(e) => updateContact(idx, { kontaktMit: pick(e.target.value, KONTAKT_MIT, "SONSTIGE") })}
-                                                    disabled={disabled || statusIsDone}
-                                                >
-                                                    {KONTAKT_MIT.map((k) => (
-                                                        <option key={k} value={k}>
-                                                            {KONTAKT_MIT_LABEL[k]}
-                                                        </option>
-                                                    ))}
-                                                </select>
-                                            </div>
-
-                                            <div className="space-y-1">
-                                                <Label>Kontakt am (Instant/ISO)</Label>
-                                                <Input
-                                                    value={c.kontaktAm ?? ""}
-                                                    onChange={(e) => updateContact(idx, { kontaktAm: e.target.value || null })}
-                                                    disabled={disabled || statusIsDone}
-                                                    placeholder="2026-03-04T10:30:00Z"
-                                                />
-                                            </div>
-
-                                            <div className="space-y-1">
-                                                <Label>Status</Label>
-                                                <select
-                                                    className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
-                                                    value={c.status ?? "GEPLANT"}
-                                                    onChange={(e) => updateContact(idx, { status: pick(e.target.value, KONTAKT_STATUS, "GEPLANT") })}
-                                                    disabled={disabled || statusIsDone}
-                                                >
-                                                    {KONTAKT_STATUS.map((k) => (
-                                                        <option key={k} value={k}>
-                                                            {KONTAKT_STATUS_LABEL[k]}
-                                                        </option>
-                                                    ))}
-                                                </select>
-                                            </div>
-
-                                            <div className="space-y-1">
-                                                <Label>Ergebnis</Label>
-                                                <Input
-                                                    value={c.ergebnis ?? ""}
-                                                    onChange={(e) => updateContact(idx, { ergebnis: e.target.value || null })}
-                                                    disabled={disabled || statusIsDone}
-                                                    placeholder="Kernresultat"
-                                                />
-                                            </div>
-                                        </div>
-
-                                        <div className="space-y-1">
-                                            <Label>Notiz / Kurzprotokoll</Label>
-                                            <Textarea
-                                                rows={3}
-                                                value={c.notiz ?? ""}
-                                                onChange={(e) => updateContact(idx, { notiz: e.target.value || null })}
-                                                disabled={disabled || statusIsDone}
-                                                placeholder="Sachlich: relevante Aussagen, Vereinbarungen, Beobachtungen."
-                                            />
-                                        </div>
-                                    </div>
-                                ))
-                            )}
-                        </CardContent>
-                    </Card>
-
-                    {/* Extern */}
-                    <Card>
-                        <CardHeader className="flex-row items-center justify-between">
-                            <CardTitle className="text-base">Externe Abklärungen</CardTitle>
-                            <Button onClick={addExtern} disabled={disabled || statusIsDone} type="button">
-                                + Extern
-                            </Button>
-                        </CardHeader>
-                        <CardContent className="space-y-3">
-                            {((((form as any).extern || []) as any[]) || []).length === 0 ? (
-                                <div className="text-sm text-muted-foreground">Keine externen Abklärungen erfasst.</div>
-                            ) : (
-                                (((form as any).extern || []) as any[]).map((x: any, idx: number) => (
-                                    <div key={idx} className="rounded-xl border border-border p-3 space-y-3">
-                                        <div className="flex items-center justify-between">
-                                            <div className="font-medium">Extern #{idx + 1}</div>
-                                            <Button
-                                                variant="destructive"
-                                                size="sm"
-                                                onClick={() => removeExtern(idx)}
-                                                disabled={disabled || statusIsDone}
-                                                type="button"
-                                            >
-                                                Entfernen
-                                            </Button>
-                                        </div>
-
-                                        <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-                                            <div className="space-y-1">
-                                                <Label>Stelle</Label>
-                                                <select
-                                                    className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
-                                                    value={x.stelle ?? "SONSTIGE"}
-                                                    onChange={(e) => updateExtern(idx, { stelle: pick(e.target.value, EXTERN_STELLE, "SONSTIGE") })}
-                                                    disabled={disabled || statusIsDone}
-                                                >
-                                                    {EXTERN_STELLE.map((s) => (
-                                                        <option key={s} value={s}>
-                                                            {EXTERN_STELLE_LABEL[s]}
-                                                        </option>
-                                                    ))}
-                                                </select>
-
-                                                {x.stelle === "SONSTIGE" ? (
-                                                    <Input
-                                                        value={x.stelleSonstiges ?? ""}
-                                                        onChange={(e) => updateExtern(idx, { stelleSonstiges: e.target.value || null })}
+                                                    <Button
+                                                        variant="secondary"
+                                                        className="h-10"
+                                                        onClick={() => removeObs(idx)}
                                                         disabled={disabled || statusIsDone}
-                                                        placeholder="Stelle spezifizieren"
-                                                    />
-                                                ) : null}
-                                            </div>
+                                                    >
+                                                        Entfernen
+                                                    </Button>
+                                                </div>
 
-                                            <div className="space-y-1">
-                                                <Label>Am (Instant/ISO)</Label>
-                                                <Input
-                                                    value={x.am ?? ""}
-                                                    onChange={(e) => updateExtern(idx, { am: e.target.value || null })}
-                                                    disabled={disabled || statusIsDone}
-                                                />
-                                            </div>
+                                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                                    <FieldRow label="Zeitpunkt" hint="ISO wird gespeichert; Anzeige kann später formatiert werden.">
+                                                        <Input
+                                                            value={String(o.zeitpunkt ?? "")}
+                                                            onChange={(e) => updateObs(idx, { zeitpunkt: e.target.value })}
+                                                            disabled={disabled || statusIsDone}
+                                                        />
+                                                    </FieldRow>
 
-                                            <div className="space-y-1">
-                                                <Label>Ergebnis</Label>
-                                                <Input
-                                                    value={x.ergebnis ?? ""}
-                                                    onChange={(e) => updateExtern(idx, { ergebnis: e.target.value || null })}
-                                                    disabled={disabled || statusIsDone}
-                                                />
-                                            </div>
+                                                    <FieldRow label="Zeitraum">
+                                                        <select
+                                                            className="h-10 w-full rounded-2xl border border-brand-border/40 bg-white px-3 text-sm text-brand-text"
+                                                            value={pick(String(o.zeitraum ?? "EINMALIG"), OBS_ZEITRAUM, "EINMALIG")}
+                                                            onChange={(e) => updateObs(idx, { zeitraum: e.target.value })}
+                                                            disabled={disabled || statusIsDone}
+                                                        >
+                                                            {OBS_ZEITRAUM.map((x) => (
+                                                                <option key={x} value={x}>
+                                                                    {OBS_ZEITRAUM_LABEL[x]}
+                                                                </option>
+                                                            ))}
+                                                        </select>
+                                                    </FieldRow>
 
-                                            <div className="space-y-1">
-                                                <Label>Begründung / Anlass</Label>
-                                                <Textarea
-                                                    rows={2}
-                                                    value={x.begruendung ?? ""}
-                                                    onChange={(e) => updateExtern(idx, { begruendung: e.target.value || null })}
-                                                    disabled={disabled || statusIsDone}
-                                                />
-                                            </div>
-                                        </div>
-                                    </div>
-                                ))
-                            )}
-                        </CardContent>
-                    </Card>
+                                                    <FieldRow label="Ort">
+                                                        <select
+                                                            className="h-10 w-full rounded-2xl border border-brand-border/40 bg-white px-3 text-sm text-brand-text"
+                                                            value={pick(String(o.ort ?? "SCHULE_KITA"), OBS_ORT, "SCHULE_KITA")}
+                                                            onChange={(e) => updateObs(idx, { ort: e.target.value })}
+                                                            disabled={disabled || statusIsDone}
+                                                        >
+                                                            {OBS_ORT.map((x) => (
+                                                                <option key={x} value={x}>
+                                                                    {OBS_ORT_LABEL[x]}
+                                                                </option>
+                                                            ))}
+                                                        </select>
+                                                    </FieldRow>
 
-                    {/* Attachments */}
-                    <Card>
-                        <CardHeader className="flex-row items-center justify-between">
-                            <CardTitle className="text-base">Unterlagen / Anhänge</CardTitle>
-                            <Button onClick={addAttachment} disabled={disabled || statusIsDone} type="button">
-                                + Anhang
-                            </Button>
-                        </CardHeader>
-                        <CardContent className="space-y-3">
-                            {((((form as any).attachments || []) as any[]) || []).length === 0 ? (
-                                <div className="text-sm text-muted-foreground">Keine Anhänge erfasst.</div>
-                            ) : (
-                                (((form as any).attachments || []) as any[]).map((a: any, idx: number) => (
-                                    <div key={idx} className="rounded-xl border border-border p-3 space-y-3">
+                                                    <FieldRow label="Quelle">
+                                                        <select
+                                                            className="h-10 w-full rounded-2xl border border-brand-border/40 bg-white px-3 text-sm text-brand-text"
+                                                            value={pick(String(o.quelle ?? "UNBEKANNT"), OBS_QUELLE, "UNBEKANNT")}
+                                                            onChange={(e) => updateObs(idx, { quelle: e.target.value })}
+                                                            disabled={disabled || statusIsDone}
+                                                        >
+                                                            {OBS_QUELLE.map((x) => (
+                                                                <option key={x} value={x}>
+                                                                    {OBS_QUELLE_LABEL[x]}
+                                                                </option>
+                                                            ))}
+                                                        </select>
+                                                    </FieldRow>
+
+                                                    <FieldRow label="Sichtbarkeit">
+                                                        <select
+                                                            className="h-10 w-full rounded-2xl border border-brand-border/40 bg-white px-3 text-sm text-brand-text"
+                                                            value={pick(String(o.sichtbarkeit ?? "INTERN"), SICHT, "INTERN")}
+                                                            onChange={(e) => updateObs(idx, { sichtbarkeit: e.target.value })}
+                                                            disabled={disabled || statusIsDone}
+                                                        >
+                                                            {SICHT.map((x) => (
+                                                                <option key={x} value={x}>
+                                                                    {SICHT_LABEL[x]}
+                                                                </option>
+                                                            ))}
+                                                        </select>
+                                                    </FieldRow>
+
+                                                    <FieldRow label="Beobachtungstext" hint="Fakten/Beobachtungen – keine Interpretation.">
+                                                        <Textarea
+                                                            rows={4}
+                                                            value={String(o.text ?? "")}
+                                                            onChange={(e) => updateObs(idx, { text: e.target.value })}
+                                                            disabled={disabled || statusIsDone}
+                                                        />
+                                                    </FieldRow>
+                                                </div>
+
+                                                <Separator />
+
+                                                <div className="space-y-2">
+                                                    <div className="text-sm font-semibold text-brand-text">Tags (automatisch aus Anlässen)</div>
+                                                    {normalizeAnlassCodes((form as any).anlassCodes).length === 0 ? (
+                                                        <div className="text-sm text-brand-text2">
+                                                            Bitte zuerst Anlässe auswählen – danach werden Tags automatisch erzeugt.
+                                                        </div>
+                                                    ) : null}
+
+                                                    <div className="grid grid-cols-1 gap-2">
+                                                        {tags.map((t: any) => {
+                                                            const code = String(t?.anlassCode ?? "");
+                                                            return (
+                                                                <div key={code} className="rounded-2xl border border-brand-border/25 bg-white p-3">
+                                                                    <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
+                                                                        <div className="min-w-0">
+                                                                            <div className="text-sm font-semibold text-brand-text">
+                                                                                {anlassLabel(code)}
+                                                                            </div>
+                                                                            <div className="text-xs text-brand-text2">Code: {code}</div>
+                                                                        </div>
+
+                                                                        <div className="flex items-center gap-2">
+                                                                            <Badge tone="neutral">Severity {clampSeverity(Number(t?.severity ?? 0))}</Badge>
+                                                                        </div>
+                                                                    </div>
+
+                                                                    <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                                                        <FieldRow label="Severity (0–3)">
+                                                                            <select
+                                                                                className="h-10 w-full rounded-2xl border border-brand-border/40 bg-white px-3 text-sm text-brand-text"
+                                                                                value={String(clampSeverity(Number(t?.severity ?? 0)))}
+                                                                                onChange={(e) =>
+                                                                                    updateObsTag(idx, code, { severity: clampSeverity(Number(e.target.value)) })
+                                                                                }
+                                                                                disabled={disabled || statusIsDone}
+                                                                            >
+                                                                                {[0, 1, 2, 3].map((n) => (
+                                                                                    <option key={n} value={n}>
+                                                                                        {n}
+                                                                                    </option>
+                                                                                ))}
+                                                                            </select>
+                                                                        </FieldRow>
+
+                                                                        <FieldRow label="Kommentar / Kontext">
+                                                                            <Input
+                                                                                value={String(t?.comment ?? "")}
+                                                                                onChange={(e) => updateObsTag(idx, code, { comment: e.target.value })}
+                                                                                disabled={disabled || statusIsDone}
+                                                                                placeholder="kurzer Hinweis (optional)"
+                                                                            />
+                                                                        </FieldRow>
+
+                                                                        <FieldRow label="IndicatorId (optional)">
+                                                                            <Input
+                                                                                value={String(t?.indicatorId ?? "")}
+                                                                                onChange={(e) => updateObsTag(idx, code, { indicatorId: e.target.value || null })}
+                                                                                disabled={disabled || statusIsDone}
+                                                                                placeholder="später ggf. Dropdown"
+                                                                            />
+                                                                        </FieldRow>
+                                                                    </div>
+                                                                </div>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </PageCard>
+                        </TabsContent>
+
+                        {/* Fach */}
+                        <TabsContent value="fach" className="m-0">
+                            <PageCard title="Fachbewertung" icon={<ClipboardCheck className="h-4 w-4 text-brand-text2" />}>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    <FieldRow label="Fach-Ampel">
+                                        <select
+                                            className="h-10 w-full rounded-2xl border border-brand-border/40 bg-white px-3 text-sm text-brand-text"
+                                            value={form.fachAmpel ? pick(String(form.fachAmpel), AMPEL, "GRUEN") : ""}
+                                            onChange={(e) => set("fachAmpel" as any, e.target.value || null)}
+                                            disabled={disabled || statusIsDone}
+                                        >
+                                            <option value="">—</option>
+                                            {AMPEL.map((x) => (
+                                                <option key={x} value={x}>
+                                                    {AMPEL_LABEL[x]}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </FieldRow>
+
+                                    <FieldRow label="Abweichung zur Auto-Ampel">
+                                        <select
+                                            className="h-10 w-full rounded-2xl border border-brand-border/40 bg-white px-3 text-sm text-brand-text"
+                                            value={pick(String((form as any).abweichungZurAuto ?? "GLEICH"), ABW_AUTO, "GLEICH")}
+                                            onChange={(e) => set("abweichungZurAuto" as any, e.target.value as any)}
+                                            disabled={disabled || statusIsDone}
+                                        >
+                                            {ABW_AUTO.map((x) => (
+                                                <option key={x} value={x}>
+                                                    {ABW_AUTO_LABEL[x]}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </FieldRow>
+
+                                    <FieldRow label="Fachtext">
+                                        <Textarea
+                                            rows={5}
+                                            value={String((form as any).fachText ?? "")}
+                                            onChange={(e) => set("fachText" as any, e.target.value || null)}
+                                            disabled={disabled || statusIsDone}
+                                        />
+                                    </FieldRow>
+
+                                    <FieldRow label="Begründung (falls abweichend)" hint="Pflicht, wenn Auto und Fach abweichen (empfohlen).">
+                                        <Textarea
+                                            rows={4}
+                                            value={String((form as any).abweichungsBegruendung ?? "")}
+                                            onChange={(e) => set("abweichungsBegruendung" as any, e.target.value || null)}
+                                            disabled={disabled || statusIsDone}
+                                        />
+                                    </FieldRow>
+                                </div>
+                            </PageCard>
+                        </TabsContent>
+
+                        {/* Akut */}
+                        <TabsContent value="akut" className="m-0">
+                            <PageCard title="Akut / Schutz" icon={<ShieldAlert className="h-4 w-4 text-brand-text2" />}>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    <div className="rounded-2xl border border-brand-border/25 bg-white p-3">
                                         <div className="flex items-center justify-between">
-                                            <div className="font-medium">Anhang #{idx + 1}</div>
-                                            <Button
-                                                variant="destructive"
-                                                size="sm"
-                                                onClick={() => removeAttachment(idx)}
-                                                disabled={disabled || statusIsDone}
-                                                type="button"
-                                            >
-                                                Entfernen
-                                            </Button>
-                                        </div>
-
-                                        <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-                                            <div className="space-y-1">
-                                                <Label>FileId (Long)</Label>
-                                                <Input
-                                                    value={a.fileId ?? ""}
-                                                    onChange={(e) => {
-                                                        const raw = e.target.value.trim();
-                                                        updateAttachment(idx, { fileId: raw ? Number(raw) : null });
-                                                    }}
-                                                    disabled={disabled || statusIsDone}
-                                                    placeholder="Backend-Datei-ID"
-                                                />
-                                            </div>
-
-                                            <div className="space-y-1">
-                                                <Label>Typ</Label>
-                                                <select
-                                                    className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
-                                                    value={a.typ ?? "DOKUMENT"}
-                                                    onChange={(e) => updateAttachment(idx, { typ: pick(e.target.value, ATTACH_TYP, "DOKUMENT") })}
-                                                    disabled={disabled || statusIsDone}
-                                                >
-                                                    {ATTACH_TYP.map((t) => (
-                                                        <option key={t} value={t}>
-                                                            {ATTACH_TYP_LABEL[t]}
-                                                        </option>
-                                                    ))}
-                                                </select>
-                                            </div>
-
-                                            <div className="space-y-1">
-                                                <Label>Titel</Label>
-                                                <Input
-                                                    value={a.titel ?? ""}
-                                                    onChange={(e) => updateAttachment(idx, { titel: e.target.value || null })}
-                                                    disabled={disabled || statusIsDone}
-                                                />
-                                            </div>
-
-                                            <div className="space-y-1">
-                                                <Label>Sichtbarkeit</Label>
-                                                <select
-                                                    className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
-                                                    value={a.sichtbarkeit ?? "INTERN"}
-                                                    onChange={(e) => updateAttachment(idx, { sichtbarkeit: pick(e.target.value, SICHT, "INTERN") })}
-                                                    disabled={disabled || statusIsDone}
-                                                >
-                                                    {SICHT.map((s) => (
-                                                        <option key={s} value={s}>
-                                                            {SICHT_LABEL[s]}
-                                                        </option>
-                                                    ))}
-                                                </select>
-                                            </div>
-                                        </div>
-
-                                        <div className="space-y-1">
-                                            <Label>Beschreibung</Label>
-                                            <Textarea
-                                                rows={2}
-                                                value={a.beschreibung ?? ""}
-                                                onChange={(e) => updateAttachment(idx, { beschreibung: e.target.value || null })}
+                                            <div className="text-sm font-semibold text-brand-text">Gefahr im Verzug</div>
+                                            <Switch
+                                                checked={!!(form as any).akutGefahrImVerzug}
+                                                onCheckedChange={(v) => set("akutGefahrImVerzug" as any, !!v as any)}
                                                 disabled={disabled || statusIsDone}
                                             />
                                         </div>
-
-                                        <div className="space-y-1">
-                                            <Label>Rechtsgrundlage / Hinweis (Sozialdatenschutz, § 8a SGB VIII)</Label>
-                                            <Textarea
-                                                rows={2}
-                                                value={a.rechtsgrundlageHinweis ?? ""}
-                                                onChange={(e) => updateAttachment(idx, { rechtsgrundlageHinweis: e.target.value || null })}
-                                                disabled={disabled || statusIsDone}
-                                                placeholder="Zweckbindung/Erforderlichkeit, Zugriff/Sichtbarkeit"
-                                            />
+                                        <div className="mt-2 text-xs text-brand-text2">
+                                            Nur setzen, wenn eine sofortige Intervention erforderlich ist.
                                         </div>
                                     </div>
-                                ))
-                            )}
-                        </CardContent>
-                    </Card>
-                </TabsContent>
 
-                {/* ✅ Speichern */}
-                <TabsContent value="save" className="mt-4 space-y-4">
-                    {validationErr ? (
-                        <Alert>
-                            <AlertTitle>Unvollständig</AlertTitle>
-                            <AlertDescription>{validationErr}</AlertDescription>
-                        </Alert>
-                    ) : null}
+                                    <FieldRow label="Notruf erforderlich">
+                                        <select
+                                            className="h-10 w-full rounded-2xl border border-brand-border/40 bg-white px-3 text-sm text-brand-text"
+                                            value={String((form as any).akutNotrufErforderlich ?? "")}
+                                            onChange={(e) => set("akutNotrufErforderlich" as any, e.target.value === "" ? null : e.target.value === "true")}
+                                            disabled={disabled || statusIsDone}
+                                        >
+                                            <option value="">—</option>
+                                            <option value="true">Ja</option>
+                                            <option value="false">Nein</option>
+                                        </select>
+                                    </FieldRow>
 
-                    <Alert>
-                        <AlertTitle>Speichern & Abschließen</AlertTitle>
-                        <AlertDescription>
-                            Draft speichern oder Meldung abschließen (Submit). Nach Submit erfolgt die Rückkehr zur Akte.
-                        </AlertDescription>
-                    </Alert>
+                                    <FieldRow label="Kind sicher untergebracht">
+                                        <select
+                                            className="h-10 w-full rounded-2xl border border-brand-border/40 bg-white px-3 text-sm text-brand-text"
+                                            value={pick(String((form as any).akutKindSicherUntergebracht ?? "UNKLAR"), JANEINUNKLAR, "UNKLAR")}
+                                            onChange={(e) => set("akutKindSicherUntergebracht" as any, e.target.value as any)}
+                                            disabled={disabled || statusIsDone}
+                                        >
+                                            {JANEINUNKLAR.map((x) => (
+                                                <option key={x} value={x}>
+                                                    {JNU_LABEL[x]}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </FieldRow>
 
-                    <Card>
-                        <CardHeader>
-                            <CardTitle className="text-base">Speichern</CardTitle>
-                        </CardHeader>
-                        <CardContent className="space-y-3">
-                            <div className="flex flex-wrap items-center gap-3">
-                                <Button onClick={doSave} disabled={disabled || statusIsDone || saving} type="button">
-                                    {saving ? "Speichere…" : "Draft speichern"}
-                                </Button>
-                                {saveMsg ? <span className="text-sm text-muted-foreground">{saveMsg}</span> : null}
-                            </div>
+                                    <FieldRow label="Begründung / Maßnahmen (Akut)">
+                                        <Textarea
+                                            rows={5}
+                                            value={String((form as any).akutBegruendung ?? "")}
+                                            onChange={(e) => set("akutBegruendung" as any, e.target.value || null)}
+                                            disabled={disabled || statusIsDone}
+                                        />
+                                    </FieldRow>
+                                </div>
+                            </PageCard>
+                        </TabsContent>
 
-                            <Separator />
+                        {/* Planung */}
+                        <TabsContent value="planung" className="m-0">
+                            <PageCard title="Planung" icon={<ClipboardCheck className="h-4 w-4 text-brand-text2" />}>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    <FieldRow label="Verantwortliche Fachkraft (UserId)">
+                                        <Input
+                                            value={String((form as any).verantwortlicheFachkraftUserId ?? "")}
+                                            onChange={(e) => set("verantwortlicheFachkraftUserId" as any, e.target.value || null)}
+                                            disabled={disabled || statusIsDone}
+                                        />
+                                    </FieldRow>
 
-                            <div className="flex flex-col gap-3 rounded-xl border border-border p-3">
-                                <div className="flex items-center justify-between gap-3">
-                                    <div>
-                                        <div className="font-medium">Observations → Notizen spiegeln</div>
-                                        <div className="text-xs text-muted-foreground">Empfohlen</div>
+                                    <FieldRow label="Nächste Überprüfung am (YYYY-MM-DD)">
+                                        <Input
+                                            value={String((form as any).naechsteUeberpruefungAm ?? "")}
+                                            onChange={(e) => set("naechsteUeberpruefungAm" as any, e.target.value || null)}
+                                            disabled={disabled || statusIsDone}
+                                            placeholder="2026-03-06"
+                                        />
+                                    </FieldRow>
+
+                                    <FieldRow label="Zusammenfassung">
+                                        <Textarea
+                                            rows={4}
+                                            value={String((form as any).zusammenfassung ?? "")}
+                                            onChange={(e) => set("zusammenfassung" as any, e.target.value || null)}
+                                            disabled={disabled || statusIsDone}
+                                        />
+                                    </FieldRow>
+                                </div>
+                            </PageCard>
+                        </TabsContent>
+
+                        {/* Speichern / Abschluss */}
+                        <TabsContent value="save" className="m-0">
+                            <PageCard title="Speichern & Abschluss" icon={<Save className="h-4 w-4 text-brand-text2" />}>
+                                <div className="rounded-2xl border border-brand-border/25 bg-white p-3 space-y-2">
+                                    <div className="text-sm font-semibold text-brand-text">Notizen spiegeln</div>
+                                    <div className="text-sm text-brand-text2">
+                                        Optional: Abschluss in die Notizen übernehmen (je nach Teamprozess).
                                     </div>
-                                    <Switch checked={submitMirror} onCheckedChange={setSubmitMirror} disabled={disabled || statusIsDone} />
+                                    <div className="flex items-center justify-between rounded-2xl border border-brand-border/25 p-3">
+                                        <div className="text-sm text-brand-text">Beim Abschließen spiegeln</div>
+                                        <Switch checked={submitMirror} onCheckedChange={(v) => setSubmitMirror(!!v)} disabled={disabled || statusIsDone} />
+                                    </div>
                                 </div>
 
-                                <Button onClick={doSubmit} disabled={disabled || statusIsDone || saving} type="button">
-                                    Abschließen (Submit)
-                                </Button>
-                            </div>
-                        </CardContent>
-                    </Card>
-                </TabsContent>
-            </Tabs>
+                                {isCorrection ? (
+                                    <div className="rounded-2xl border border-brand-warning/25 bg-brand-warning/10 p-3 space-y-2">
+                                        <div className="flex items-start gap-2">
+                                            <ShieldAlert className="h-4 w-4 mt-0.5 text-brand-text2" />
+                                            <div className="min-w-0">
+                                                <div className="text-sm font-semibold text-brand-text">Korrektur: Änderungsgrund erforderlich</div>
+                                                <div className="text-sm text-brand-text2">
+                                                    Für Korrekturen muss dokumentiert werden, <span className="font-semibold">was</span> geändert wurde und <span className="font-semibold">warum</span>.
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <FieldRow label="Änderungsgrund (Pflicht)">
+                                            <Textarea
+                                                rows={4}
+                                                value={changeReason}
+                                                onChange={(e) => setChangeReason(e.target.value)}
+                                                disabled={disabled || statusIsDone}
+                                                placeholder="z.B. falsche Angabe korrigiert / neue Information nach Rückruf / Datenabgleich mit Arzt …"
+                                            />
+                                        </FieldRow>
+                                    </div>
+                                ) : null}
+
+                                <div className="flex flex-col sm:flex-row gap-2">
+                                    <Button
+                                        variant="secondary"
+                                        className="h-11 gap-2 w-full sm:w-auto"
+                                        onClick={doSave}
+                                        disabled={disabled || statusIsDone || saving}
+                                    >
+                                        <Save className="h-4 w-4" />
+                                        Entwurf speichern
+                                    </Button>
+
+                                    <Button
+                                        className="h-11 gap-2 w-full sm:w-auto"
+                                        onClick={doSubmit}
+                                        disabled={disabled || statusIsDone || saving}
+                                    >
+                                        <CheckCircle2 className="h-4 w-4" />
+                                        Abschließen
+                                    </Button>
+                                </div>
+
+                                <div className="text-xs text-brand-text2">
+                                    Hinweis: „Abschließen“ nutzt den Submit-Endpunkt. Entwurf-Speichern löst keinen Änderungsgrund aus.
+                                </div>
+                            </PageCard>
+                        </TabsContent>
+                    </div>
+                </Tabs>
+            </div>
         </div>
     );
 }
