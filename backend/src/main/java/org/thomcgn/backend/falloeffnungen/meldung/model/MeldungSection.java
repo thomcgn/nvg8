@@ -5,6 +5,7 @@ public enum MeldungSection {
     INHALT,
     FACH,
     AKUT,
+    PLANUNG,
     ANLAESSE,
     OBSERVATIONS,
     JUGENDAMT,

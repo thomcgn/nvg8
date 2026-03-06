@@ -29,11 +29,12 @@ import {
 } from "lucide-react";
 
 /* =========================================================
-   Modal statt Accordion
-   - Badges nur visuell
-   - Auge-Icon klar hervorgehoben
-   - PDF-/Druck-tauglicher Detaildialog
-   - iPad 10.5 freundlich
+   Fall · Meldungen
+   - Liste ohne Accordion
+   - Modal-Lesemodus
+   - Druckansicht ohne Tabs
+   - Korrektur-Markierung aus Audit old/new
+   - Behörden-modern, iPad-tauglich
 ========================================================= */
 
 /* ---------------- Status Helpers ---------------- */
@@ -49,7 +50,13 @@ function toneForStatus(status: string): "success" | "warning" | "danger" | "info
 
 function isClosedStatus(status: string) {
     const s = (status || "").toLowerCase();
-    return s.includes("abgesch") || s.includes("abgeschlossen") || s.includes("geschlossen") || s.includes("done") || s.includes("submitted");
+    return (
+        s.includes("abgesch") ||
+        s.includes("abgeschlossen") ||
+        s.includes("geschlossen") ||
+        s.includes("done") ||
+        s.includes("submitted")
+    );
 }
 
 function isDraftStatus(status: string) {
@@ -76,17 +83,14 @@ function errorMessage(e: unknown, fallback: string) {
 
 function safeNumber(v: unknown): number | null {
     if (typeof v === "number") return Number.isFinite(v) ? v : null;
-
     if (typeof v === "string") {
         const n = Number(v);
         return Number.isFinite(n) ? n : null;
     }
-
     if (Array.isArray(v) && typeof v[0] === "string") {
         const n = Number(v[0]);
         return Number.isFinite(n) ? n : null;
     }
-
     return null;
 }
 
@@ -94,7 +98,10 @@ function formatDateTimeDE(value: string | null) {
     if (!value) return "—";
     const d = new Date(value);
     if (Number.isNaN(d.getTime())) return String(value);
-    return new Intl.DateTimeFormat("de-DE", { dateStyle: "medium", timeStyle: "short" }).format(d);
+    return new Intl.DateTimeFormat("de-DE", {
+        dateStyle: "medium",
+        timeStyle: "short",
+    }).format(d);
 }
 
 function formatDateDE(value: string | null) {
@@ -107,6 +114,13 @@ function formatDateDE(value: string | null) {
 function cacheBust() {
     return `cb=${Date.now()}`;
 }
+
+function normalizeAuditValue(value: unknown) {
+    if (value === null || value === undefined || value === "") return "—";
+    return String(value);
+}
+
+/* ---------------- Generic UI ---------------- */
 
 function Row({ label, value }: { label: string; value: any }) {
     const v =
@@ -126,7 +140,18 @@ function Row({ label, value }: { label: string; value: any }) {
     );
 }
 
-/* ---------------- UI Helpers ---------------- */
+function KeyGrid({ children }: { children: React.ReactNode }) {
+    return <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">{children}</div>;
+}
+
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+    return (
+        <section className="bg-white">
+            <div className="text-sm font-semibold text-brand-text">{title}</div>
+            <div className="mt-3">{children}</div>
+        </section>
+    );
+}
 
 function Segmented({
                        value,
@@ -138,7 +163,7 @@ function Segmented({
     items: { value: string; label: string }[];
 }) {
     return (
-        <div className="-mx-1 overflow-x-auto">
+        <div className="-mx-1 overflow-x-auto print:hidden">
             <div className="mx-1 inline-flex w-max rounded-2xl border border-brand-border/40 bg-white p-1 gap-1">
                 {items.map((it) => (
                     <Button
@@ -153,19 +178,6 @@ function Segmented({
                 ))}
             </div>
         </div>
-    );
-}
-
-function KeyGrid({ children }: { children: React.ReactNode }) {
-    return <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">{children}</div>;
-}
-
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
-    return (
-        <section className="bg-white">
-            <div className="text-sm font-semibold text-brand-text">{title}</div>
-            <div className="mt-3">{children}</div>
-        </section>
     );
 }
 
@@ -264,11 +276,509 @@ function KeyFactsBar({ d }: { d: MeldungResponse }) {
     );
 }
 
-/* ---------------- Modal Details ---------------- */
+/* ---------------- Audit / Changes ---------------- */
+
+function getChangedMap(changes: MeldungResponse["changes"] | undefined) {
+    const map = new Map<
+        string,
+        {
+            oldValue: string | null;
+            newValue: string | null;
+            reason: string | null;
+            changedAt: string | null;
+            changedByDisplayName: string | null;
+        }
+    >();
+
+    for (const c of changes ?? []) {
+        const key = String(c.fieldPath ?? "").trim();
+        if (!key) continue;
+
+        map.set(key, {
+            oldValue: c.oldValue ?? null,
+            newValue: c.newValue ?? null,
+            reason: c.reason ?? null,
+            changedAt: c.changedAt ?? null,
+            changedByDisplayName: c.changedByDisplayName ?? null,
+        });
+    }
+
+    return map;
+}
+
+function ChangedField({
+                          label,
+                          fallbackValue,
+                          change,
+                      }: {
+    label: string;
+    fallbackValue: React.ReactNode;
+    change?: {
+        oldValue: string | null;
+        newValue: string | null;
+        reason: string | null;
+        changedAt: string | null;
+        changedByDisplayName: string | null;
+    };
+}) {
+    const changed = !!change;
+    const currentValue = changed ? normalizeAuditValue(change?.newValue) : fallbackValue ?? "—";
+
+    return (
+        <div
+            className={[
+                "min-w-0 rounded-2xl border p-3",
+                changed ? "border-red-200 bg-red-50/60" : "border-brand-border/20 bg-white",
+            ].join(" ")}
+            title={changed ? `Vorher: ${normalizeAuditValue(change?.oldValue)}` : undefined}
+        >
+            <div className="flex items-center gap-2">
+                <div className={changed ? "text-xs font-semibold text-red-700" : "text-xs font-semibold text-brand-text2"}>
+                    {label}
+                </div>
+                {changed ? <Badge tone="danger">geändert</Badge> : null}
+            </div>
+
+            <div className={changed ? "mt-1 text-sm text-red-900 whitespace-pre-wrap break-words" : "mt-1 text-sm text-brand-text whitespace-pre-wrap break-words"}>
+                {currentValue}
+            </div>
+
+            {changed ? (
+                <div className="mt-2 space-y-1 text-xs">
+                    <div className="text-red-700">
+                        <span className="font-semibold">Vorher:</span> {normalizeAuditValue(change?.oldValue)}
+                    </div>
+                    {change?.reason ? (
+                        <div className="text-red-700/90">
+                            <span className="font-semibold">Grund:</span> {change.reason}
+                        </div>
+                    ) : null}
+                    {(change?.changedAt || change?.changedByDisplayName) ? (
+                        <div className="text-red-700/80">
+                            <span className="font-semibold">Änderung:</span>{" "}
+                            {change?.changedAt ? formatDateTimeDE(change.changedAt) : "—"}
+                            {change?.changedByDisplayName ? ` · ${change.changedByDisplayName}` : ""}
+                        </div>
+                    ) : null}
+                </div>
+            ) : null}
+        </div>
+    );
+}
+
+/* ---------------- Blocks ---------------- */
+
+function MeldungBlockInhalt({
+                                d,
+                                ch,
+                            }: {
+    d: MeldungResponse;
+    ch: (fieldPath: string) => ReturnType<typeof getChangedMap> extends Map<any, infer V> ? V | undefined : never;
+}) {
+    return (
+        <Section title="Inhalt">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div className="sm:col-span-2">
+                    <ChangedField
+                        label="Kurzbeschreibung (Sachlage)"
+                        fallbackValue={d.kurzbeschreibung ?? "—"}
+                        change={ch("kurzbeschreibung")}
+                    />
+                </div>
+
+                <ChangedField
+                    label="Anlass-Codes"
+                    fallbackValue={(d.anlassCodes ?? []).length ? d.anlassCodes.join(", ") : "—"}
+                    change={ch("anlassCodes")}
+                />
+
+                <div className="sm:col-span-2">
+                    <ChangedField
+                        label="Zusammenfassung"
+                        fallbackValue={d.zusammenfassung ?? "—"}
+                        change={ch("zusammenfassung")}
+                    />
+                </div>
+            </div>
+        </Section>
+    );
+}
+
+function MeldungBlockMeta({
+                              d,
+                              ch,
+                          }: {
+    d: MeldungResponse;
+    ch: (fieldPath: string) => ReturnType<typeof getChangedMap> extends Map<any, infer V> ? V | undefined : never;
+}) {
+    return (
+        <Section title="Meta">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <ChangedField
+                    label="Erfasst von Rolle"
+                    fallbackValue={d.erfasstVonRolle ?? "—"}
+                    change={ch("erfasstVonRolle")}
+                />
+
+                <ChangedField
+                    label="Meldeweg"
+                    fallbackValue={
+                        d.meldeweg
+                            ? d.meldewegSonstiges
+                                ? `${d.meldeweg} (${d.meldewegSonstiges})`
+                                : d.meldeweg
+                            : "—"
+                    }
+                    change={ch("meldeweg")}
+                />
+
+                <ChangedField
+                    label="Meldende Stelle Kontakt"
+                    fallbackValue={d.meldendeStelleKontakt ?? "—"}
+                    change={ch("meldendeStelleKontakt")}
+                />
+
+                <ChangedField
+                    label="Dringlichkeit"
+                    fallbackValue={d.dringlichkeit ?? "—"}
+                    change={ch("dringlichkeit")}
+                />
+
+                <ChangedField
+                    label="Datenbasis"
+                    fallbackValue={d.datenbasis ?? "—"}
+                    change={ch("datenbasis")}
+                />
+
+                <ChangedField
+                    label="Einwilligung vorhanden"
+                    fallbackValue={d.einwilligungVorhanden == null ? "—" : d.einwilligungVorhanden ? "Ja" : "Nein"}
+                    change={ch("einwilligungVorhanden")}
+                />
+
+                <ChangedField
+                    label="Schweigepflichtentbindung vorhanden"
+                    fallbackValue={
+                        d.schweigepflichtentbindungVorhanden == null
+                            ? "—"
+                            : d.schweigepflichtentbindungVorhanden
+                                ? "Ja"
+                                : "Nein"
+                    }
+                    change={ch("schweigepflichtentbindungVorhanden")}
+                />
+            </div>
+        </Section>
+    );
+}
+
+function MeldungBlockFach({
+                              d,
+                              ch,
+                          }: {
+    d: MeldungResponse;
+    ch: (fieldPath: string) => ReturnType<typeof getChangedMap> extends Map<any, infer V> ? V | undefined : never;
+}) {
+    return (
+        <Section title="Fach">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <ChangedField
+                    label="Ampel"
+                    fallbackValue={d.fachAmpel ?? "—"}
+                    change={ch("fachAmpel")}
+                />
+
+                <div className="sm:col-span-2">
+                    <ChangedField
+                        label="Fachtext"
+                        fallbackValue={d.fachText ?? "—"}
+                        change={ch("fachText")}
+                    />
+                </div>
+
+                <ChangedField
+                    label="Abweichung zur Auto"
+                    fallbackValue={d.abweichungZurAuto ?? "—"}
+                    change={ch("abweichungZurAuto")}
+                />
+
+                <div className="sm:col-span-2">
+                    <ChangedField
+                        label="Abweichungs-Begründung"
+                        fallbackValue={d.abweichungsBegruendung ?? "—"}
+                        change={ch("abweichungsBegruendung")}
+                    />
+                </div>
+            </div>
+        </Section>
+    );
+}
+
+function MeldungBlockAkut({
+                              d,
+                              ch,
+                          }: {
+    d: MeldungResponse;
+    ch: (fieldPath: string) => ReturnType<typeof getChangedMap> extends Map<any, infer V> ? V | undefined : never;
+}) {
+    return (
+        <Section title="Akut">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <ChangedField
+                    label="Gefahr im Verzug"
+                    fallbackValue={d.akutGefahrImVerzug ? "Ja" : "Nein"}
+                    change={ch("akutGefahrImVerzug")}
+                />
+
+                <ChangedField
+                    label="Notruf erforderlich"
+                    fallbackValue={d.akutNotrufErforderlich == null ? "—" : d.akutNotrufErforderlich ? "Ja" : "Nein"}
+                    change={ch("akutNotrufErforderlich")}
+                />
+
+                <ChangedField
+                    label="Kind sicher untergebracht"
+                    fallbackValue={d.akutKindSicherUntergebracht ?? "—"}
+                    change={ch("akutKindSicherUntergebracht")}
+                />
+
+                <div className="sm:col-span-2">
+                    <ChangedField
+                        label="Begründung"
+                        fallbackValue={d.akutBegruendung ?? "—"}
+                        change={ch("akutBegruendung")}
+                    />
+                </div>
+            </div>
+
+            <Separator className="my-3" />
+
+            <div className="text-sm font-semibold text-brand-text">Jugendamt</div>
+            <div className="mt-3">
+                {d.jugendamt ? (
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        <ChangedField
+                            label="Informiert"
+                            fallbackValue={d.jugendamt.informiert ?? "—"}
+                            change={ch("jugendamt.informiert")}
+                        />
+                        <ChangedField
+                            label="Kontakt am"
+                            fallbackValue={formatDateTimeDE(d.jugendamt.kontaktAm)}
+                            change={ch("jugendamt.kontaktAm")}
+                        />
+                        <ChangedField
+                            label="Kontaktart"
+                            fallbackValue={d.jugendamt.kontaktart ?? "—"}
+                            change={ch("jugendamt.kontaktart")}
+                        />
+                        <ChangedField
+                            label="Aktenzeichen"
+                            fallbackValue={d.jugendamt.aktenzeichen ?? "—"}
+                            change={ch("jugendamt.aktenzeichen")}
+                        />
+                        <div className="sm:col-span-2">
+                            <ChangedField
+                                label="Begründung"
+                                fallbackValue={d.jugendamt.begruendung ?? "—"}
+                                change={ch("jugendamt.begruendung")}
+                            />
+                        </div>
+                    </div>
+                ) : (
+                    <div className="text-sm text-brand-text2">—</div>
+                )}
+            </div>
+        </Section>
+    );
+}
+
+function MeldungBlockPlanung({
+                                 d,
+                                 ch,
+                             }: {
+    d: MeldungResponse;
+    ch: (fieldPath: string) => ReturnType<typeof getChangedMap> extends Map<any, infer V> ? V | undefined : never;
+}) {
+    return (
+        <Section title="Planung">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <ChangedField
+                    label="Verantwortliche Fachkraft (UserId)"
+                    fallbackValue={d.verantwortlicheFachkraftUserId ?? "—"}
+                    change={ch("verantwortlicheFachkraftUserId")}
+                />
+
+                <ChangedField
+                    label="Nächste Überprüfung am"
+                    fallbackValue={formatDateDE(d.naechsteUeberpruefungAm)}
+                    change={ch("naechsteUeberpruefungAm")}
+                />
+
+                <div className="sm:col-span-2">
+                    <ChangedField
+                        label="Zusammenfassung"
+                        fallbackValue={d.zusammenfassung ?? "—"}
+                        change={ch("zusammenfassung")}
+                    />
+                </div>
+            </div>
+        </Section>
+    );
+}
+
+function MeldungBlockListen({ d }: { d: MeldungResponse }) {
+    return (
+        <div className="space-y-6">
+            <Section title="Beobachtungen">
+                <SimpleTable
+                    columns={[
+                        { key: "zeit", label: "Zeitpunkt" },
+                        { key: "zeitraum", label: "Zeitraum" },
+                        { key: "ort", label: "Ort" },
+                        { key: "quelle", label: "Quelle" },
+                        { key: "text", label: "Text", className: "min-w-[320px]" },
+                        { key: "woertlich", label: "Wörtliches Zitat", className: "min-w-[240px]" },
+                        { key: "koerperbefund", label: "Körperbefund", className: "min-w-[220px]" },
+                        { key: "verhaltenKind", label: "Verhalten Kind", className: "min-w-[220px]" },
+                        { key: "verhaltenBezug", label: "Verhalten Bezug", className: "min-w-[220px]" },
+                        { key: "sichtbarkeit", label: "Sichtbarkeit" },
+                        { key: "tags", label: "Tags", className: "min-w-[260px]" },
+                    ]}
+                    rows={(d.observations ?? []).map((o) => ({
+                        zeit: formatDateTimeDE(o.zeitpunkt),
+                        zeitraum: o.zeitraum ?? "—",
+                        ort: o.ortSonstiges ? `${o.ort ?? "—"} (${o.ortSonstiges})` : (o.ort ?? "—"),
+                        quelle: o.quelle ?? "—",
+                        text: o.text ?? "—",
+                        woertlich: o.woertlichesZitat ?? "—",
+                        koerperbefund: o.koerperbefund ?? "—",
+                        verhaltenKind: o.verhaltenKind ?? "—",
+                        verhaltenBezug: o.verhaltenBezug ?? "—",
+                        sichtbarkeit: o.sichtbarkeit ?? "—",
+                        tags: (o.tags ?? []).length
+                            ? o.tags
+                                .map((t) =>
+                                    [t.anlassCode, t.indicatorId, t.severity != null ? `S${t.severity}` : null, t.comment]
+                                        .filter(Boolean)
+                                        .join(" · ")
+                                )
+                                .join(" | ")
+                            : "—",
+                    }))}
+                />
+            </Section>
+
+            <Section title="Kontakte">
+                <SimpleTable
+                    columns={[
+                        { key: "mit", label: "Kontakt mit" },
+                        { key: "am", label: "Kontakt am" },
+                        { key: "status", label: "Status" },
+                        { key: "ergebnis", label: "Ergebnis" },
+                        { key: "notiz", label: "Notiz", className: "min-w-[260px]" },
+                    ]}
+                    rows={(d.contacts ?? []).map((c) => ({
+                        mit: c.kontaktMit ?? "—",
+                        am: formatDateTimeDE(c.kontaktAm),
+                        status: c.status ?? "—",
+                        ergebnis: c.ergebnis ?? "—",
+                        notiz: c.notiz ?? "—",
+                    }))}
+                />
+            </Section>
+
+            <Section title="Extern">
+                <SimpleTable
+                    columns={[
+                        { key: "stelle", label: "Stelle" },
+                        { key: "am", label: "Am" },
+                        { key: "sonst", label: "Stelle sonstiges" },
+                        { key: "ergebnis", label: "Ergebnis" },
+                        { key: "begruendung", label: "Begründung", className: "min-w-[260px]" },
+                    ]}
+                    rows={(d.extern ?? []).map((x) => ({
+                        stelle: x.stelle ?? "—",
+                        am: formatDateTimeDE(x.am),
+                        sonst: x.stelleSonstiges ?? "—",
+                        ergebnis: x.ergebnis ?? "—",
+                        begruendung: x.begruendung ?? "—",
+                    }))}
+                />
+            </Section>
+
+            <Section title="Anhänge">
+                <SimpleTable
+                    columns={[
+                        { key: "titel", label: "Titel" },
+                        { key: "typ", label: "Typ" },
+                        { key: "sicht", label: "Sichtbarkeit" },
+                        { key: "file", label: "FileId" },
+                        { key: "besch", label: "Beschreibung", className: "min-w-[260px]" },
+                        { key: "rg", label: "Rechtsgrundlage", className: "min-w-[260px]" },
+                    ]}
+                    rows={(d.attachments ?? []).map((a) => ({
+                        titel: a.titel ?? "—",
+                        typ: a.typ ?? "—",
+                        sicht: a.sichtbarkeit ?? "—",
+                        file: a.fileId ?? "—",
+                        besch: a.beschreibung ?? "—",
+                        rg: a.rechtsgrundlageHinweis ?? "—",
+                    }))}
+                />
+            </Section>
+        </div>
+    );
+}
+
+function MeldungBlockAudit({ d }: { d: MeldungResponse }) {
+    return (
+        <div className="space-y-6">
+            <Section title="Freigabe / Submit">
+                <KeyGrid>
+                    <Row label="Submitted am" value={formatDateTimeDE(d.submittedAt)} />
+                    <Row label="Submitted von" value={d.submittedByDisplayName} />
+                    <Row label="Freigabe am" value={formatDateTimeDE(d.freigabeAm)} />
+                    <Row label="Freigabe von" value={d.freigabeVonDisplayName} />
+                </KeyGrid>
+            </Section>
+
+            <Section title="Änderungen">
+                <SimpleTable
+                    stickyHeader
+                    maxHeightClassName="max-h-[42vh] md:max-h-[52vh] print:max-h-none"
+                    columns={[
+                        { key: "section", label: "Sektion" },
+                        { key: "field", label: "Feld" },
+                        { key: "at", label: "Zeit" },
+                        { key: "old", label: "Alt", className: "min-w-[220px]" },
+                        { key: "neu", label: "Neu", className: "min-w-[220px]" },
+                        { key: "reason", label: "Grund", className: "min-w-[220px]" },
+                        { key: "by", label: "Von" },
+                    ]}
+                    rows={(d.changes ?? []).map((c) => ({
+                        section: c.section ?? "—",
+                        field: c.fieldPath ?? "—",
+                        at: formatDateTimeDE(c.changedAt),
+                        old: c.oldValue ?? "—",
+                        neu: c.newValue ?? "—",
+                        reason: c.reason ?? "—",
+                        by: c.changedByDisplayName ?? "—",
+                    }))}
+                />
+            </Section>
+        </div>
+    );
+}
+
+/* ---------------- Details Content ---------------- */
 
 function MeldungDetailsContent({ d }: { d: MeldungResponse }) {
     const [tab, setTab] = useState<"inhalt" | "meta" | "fach" | "akut" | "planung" | "listen" | "audit">("inhalt");
     const isCorrection = String(d.type ?? "").toUpperCase() === "KORREKTUR" || !!d.correctsId;
+
+    const changedMap = useMemo(() => getChangedMap(d.changes), [d.changes]);
+    const ch = (fieldPath: string) => changedMap.get(fieldPath);
 
     return (
         <div className="space-y-4">
@@ -279,7 +789,7 @@ function MeldungDetailsContent({ d }: { d: MeldungResponse }) {
                         <div>
                             <div className="font-semibold">Korrekturvermerk</div>
                             <div className="text-brand-text2">
-                                Diese Meldung ist eine Korrektur{d.correctsId ? ` zur Meldung #${d.correctsId}` : ""}. Änderungen und Begründungen sind im Bereich „Audit“ dokumentiert.
+                                Diese Meldung ist eine Korrektur{d.correctsId ? ` zur Meldung #${d.correctsId}` : ""}. Geänderte Felder sind rot markiert.
                             </div>
                         </div>
                     </div>
@@ -288,219 +798,46 @@ function MeldungDetailsContent({ d }: { d: MeldungResponse }) {
 
             <KeyFactsBar d={d} />
 
-            <Segmented
-                value={tab}
-                onChange={(v) => setTab(v as any)}
-                items={[
-                    { value: "inhalt", label: "Inhalt" },
-                    { value: "meta", label: "Meta" },
-                    { value: "fach", label: "Fach" },
-                    { value: "akut", label: "Akut" },
-                    { value: "planung", label: "Planung" },
-                    { value: "listen", label: "Listen" },
-                    { value: "audit", label: "Audit" },
-                ]}
-            />
+            {/* Bildschirm */}
+            <div className="print:hidden space-y-4">
+                <Segmented
+                    value={tab}
+                    onChange={(v) => setTab(v as any)}
+                    items={[
+                        { value: "inhalt", label: "Inhalt" },
+                        { value: "meta", label: "Meta" },
+                        { value: "fach", label: "Fach" },
+                        { value: "akut", label: "Akut" },
+                        { value: "planung", label: "Planung" },
+                        { value: "listen", label: "Listen" },
+                        { value: "audit", label: "Audit" },
+                    ]}
+                />
 
-            {tab === "inhalt" ? (
-                <Section title="Inhalt">
-                    <KeyGrid>
-                        <div className="sm:col-span-2">
-                            <Row label="Kurzbeschreibung (Sachlage)" value={d.kurzbeschreibung} />
-                        </div>
-                        <Row label="Anlass-Codes" value={(d.anlassCodes ?? []).length ? d.anlassCodes.join(", ") : "—"} />
-                        <div className="sm:col-span-2">
-                            <Row label="Zusammenfassung" value={d.zusammenfassung} />
-                        </div>
-                    </KeyGrid>
-                </Section>
-            ) : null}
+                {tab === "inhalt" ? <MeldungBlockInhalt d={d} ch={ch} /> : null}
+                {tab === "meta" ? <MeldungBlockMeta d={d} ch={ch} /> : null}
+                {tab === "fach" ? <MeldungBlockFach d={d} ch={ch} /> : null}
+                {tab === "akut" ? <MeldungBlockAkut d={d} ch={ch} /> : null}
+                {tab === "planung" ? <MeldungBlockPlanung d={d} ch={ch} /> : null}
+                {tab === "listen" ? <MeldungBlockListen d={d} /> : null}
+                {tab === "audit" ? <MeldungBlockAudit d={d} /> : null}
+            </div>
 
-            {tab === "meta" ? (
-                <Section title="Meta">
-                    <KeyGrid>
-                        <Row label="Erfasst von Rolle" value={d.erfasstVonRolle} />
-                        <Row
-                            label="Meldeweg"
-                            value={
-                                d.meldeweg
-                                    ? d.meldewegSonstiges
-                                        ? `${d.meldeweg} (${d.meldewegSonstiges})`
-                                        : d.meldeweg
-                                    : "—"
-                            }
-                        />
-                        <Row label="Meldende Stelle Kontakt" value={d.meldendeStelleKontakt} />
-                        <Row label="Dringlichkeit" value={d.dringlichkeit} />
-                        <Row label="Datenbasis" value={d.datenbasis} />
-                        <Row label="Einwilligung vorhanden" value={d.einwilligungVorhanden} />
-                        <Row label="Schweigepflichtentbindung vorhanden" value={d.schweigepflichtentbindungVorhanden} />
-                    </KeyGrid>
-                </Section>
-            ) : null}
-
-            {tab === "fach" ? (
-                <Section title="Fach">
-                    <KeyGrid>
-                        <Row label="Ampel" value={d.fachAmpel} />
-                        <div className="sm:col-span-2">
-                            <Row label="Fachtext" value={d.fachText} />
-                        </div>
-                        <Row label="Abweichung zur Auto" value={d.abweichungZurAuto} />
-                        <div className="sm:col-span-2">
-                            <Row label="Abweichungs-Begründung" value={d.abweichungsBegruendung} />
-                        </div>
-                    </KeyGrid>
-                </Section>
-            ) : null}
-
-            {tab === "akut" ? (
-                <Section title="Akut">
-                    <KeyGrid>
-                        <Row label="Gefahr im Verzug" value={d.akutGefahrImVerzug} />
-                        <Row label="Notruf erforderlich" value={d.akutNotrufErforderlich} />
-                        <Row label="Kind sicher untergebracht" value={d.akutKindSicherUntergebracht} />
-                        <div className="sm:col-span-2">
-                            <Row label="Begründung" value={d.akutBegruendung} />
-                        </div>
-                    </KeyGrid>
-
-                    <Separator className="my-3" />
-
-                    <div className="text-sm font-semibold text-brand-text">Jugendamt</div>
-                    <div className="mt-3">
-                        {d.jugendamt ? (
-                            <KeyGrid>
-                                <Row label="Informiert" value={d.jugendamt.informiert} />
-                                <Row label="Kontakt am" value={formatDateTimeDE(d.jugendamt.kontaktAm)} />
-                                <Row label="Kontaktart" value={d.jugendamt.kontaktart} />
-                                <Row label="Aktenzeichen" value={d.jugendamt.aktenzeichen} />
-                                <div className="sm:col-span-2">
-                                    <Row label="Begründung" value={d.jugendamt.begruendung} />
-                                </div>
-                            </KeyGrid>
-                        ) : (
-                            <div className="text-sm text-brand-text2">—</div>
-                        )}
-                    </div>
-                </Section>
-            ) : null}
-
-            {tab === "planung" ? (
-                <Section title="Planung">
-                    <KeyGrid>
-                        <Row label="Verantwortliche Fachkraft (UserId)" value={d.verantwortlicheFachkraftUserId} />
-                        <Row label="Nächste Überprüfung am" value={formatDateDE(d.naechsteUeberpruefungAm)} />
-                        <div className="sm:col-span-2">
-                            <Row label="Zusammenfassung" value={d.zusammenfassung} />
-                        </div>
-                    </KeyGrid>
-                </Section>
-            ) : null}
-
-            {tab === "listen" ? (
-                <div className="space-y-6">
-                    <Section title="Kontakte">
-                        <SimpleTable
-                            columns={[
-                                { key: "mit", label: "Kontakt mit" },
-                                { key: "am", label: "Kontakt am" },
-                                { key: "status", label: "Status" },
-                                { key: "ergebnis", label: "Ergebnis" },
-                                { key: "notiz", label: "Notiz", className: "min-w-[260px]" },
-                            ]}
-                            rows={(d.contacts ?? []).map((c) => ({
-                                mit: c.kontaktMit ?? "—",
-                                am: formatDateTimeDE(c.kontaktAm),
-                                status: c.status ?? "—",
-                                ergebnis: c.ergebnis ?? "—",
-                                notiz: c.notiz ?? "—",
-                            }))}
-                        />
-                    </Section>
-
-                    <Section title="Extern">
-                        <SimpleTable
-                            columns={[
-                                { key: "stelle", label: "Stelle" },
-                                { key: "am", label: "Am" },
-                                { key: "sonst", label: "Stelle sonstiges" },
-                                { key: "ergebnis", label: "Ergebnis" },
-                                { key: "begruendung", label: "Begründung", className: "min-w-[260px]" },
-                            ]}
-                            rows={(d.extern ?? []).map((x) => ({
-                                stelle: x.stelle ?? "—",
-                                am: formatDateTimeDE(x.am),
-                                sonst: x.stelleSonstiges ?? "—",
-                                ergebnis: x.ergebnis ?? "—",
-                                begruendung: x.begruendung ?? "—",
-                            }))}
-                        />
-                    </Section>
-
-                    <Section title="Anhänge">
-                        <SimpleTable
-                            columns={[
-                                { key: "titel", label: "Titel" },
-                                { key: "typ", label: "Typ" },
-                                { key: "sicht", label: "Sichtbarkeit" },
-                                { key: "file", label: "FileId" },
-                                { key: "besch", label: "Beschreibung", className: "min-w-[260px]" },
-                                { key: "rg", label: "Rechtsgrundlage", className: "min-w-[260px]" },
-                            ]}
-                            rows={(d.attachments ?? []).map((a) => ({
-                                titel: a.titel ?? "—",
-                                typ: a.typ ?? "—",
-                                sicht: a.sichtbarkeit ?? "—",
-                                file: a.fileId ?? "—",
-                                besch: a.beschreibung ?? "—",
-                                rg: a.rechtsgrundlageHinweis ?? "—",
-                            }))}
-                        />
-                    </Section>
-                </div>
-            ) : null}
-
-            {tab === "audit" ? (
-                <div className="space-y-6">
-                    <Section title="Freigabe / Submit">
-                        <KeyGrid>
-                            <Row label="Submitted am" value={formatDateTimeDE(d.submittedAt)} />
-                            <Row label="Submitted von" value={d.submittedByDisplayName} />
-                            <Row label="Freigabe am" value={formatDateTimeDE(d.freigabeAm)} />
-                            <Row label="Freigabe von" value={d.freigabeVonDisplayName} />
-                        </KeyGrid>
-                    </Section>
-
-                    <Section title="Änderungen">
-                        <SimpleTable
-                            stickyHeader
-                            maxHeightClassName="max-h-[42vh] md:max-h-[52vh]"
-                            columns={[
-                                { key: "section", label: "Sektion" },
-                                { key: "field", label: "Feld" },
-                                { key: "at", label: "Zeit" },
-                                { key: "old", label: "Alt", className: "min-w-[220px]" },
-                                { key: "neu", label: "Neu", className: "min-w-[220px]" },
-                                { key: "reason", label: "Grund", className: "min-w-[220px]" },
-                                { key: "by", label: "Von" },
-                            ]}
-                            rows={(d.changes ?? []).map((c) => ({
-                                section: c.section ?? "—",
-                                field: c.fieldPath ?? "—",
-                                at: formatDateTimeDE(c.changedAt),
-                                old: c.oldValue ?? "—",
-                                neu: c.newValue ?? "—",
-                                reason: c.reason ?? "—",
-                                by: c.changedByDisplayName ?? "—",
-                            }))}
-                        />
-                    </Section>
-                </div>
-            ) : null}
+            {/* Druck */}
+            <div className="hidden print:block space-y-8">
+                <MeldungBlockInhalt d={d} ch={ch} />
+                <MeldungBlockMeta d={d} ch={ch} />
+                <MeldungBlockFach d={d} ch={ch} />
+                <MeldungBlockAkut d={d} ch={ch} />
+                <MeldungBlockPlanung d={d} ch={ch} />
+                <MeldungBlockListen d={d} />
+                <MeldungBlockAudit d={d} />
+            </div>
         </div>
     );
 }
+
+/* ---------------- Modal ---------------- */
 
 function MeldungViewModal({
                               open,
@@ -524,12 +861,12 @@ function MeldungViewModal({
     if (!open) return null;
 
     return (
-        <div className="fixed inset-0 z-50">
-            <div className="absolute inset-0 bg-black/35" onClick={onClose} />
+        <div className="fixed inset-0 z-50 print:static print:block">
+            <div className="absolute inset-0 bg-black/35 print:hidden" onClick={onClose} />
 
-            <div className="absolute inset-x-2 top-2 bottom-2 sm:inset-x-6 sm:top-6 sm:bottom-6 lg:left-1/2 lg:w-[1100px] lg:-translate-x-1/2">
-                <div className="flex h-full flex-col rounded-3xl border border-brand-border/40 bg-brand-bg shadow-2xl">
-                    <div className="flex items-center justify-between gap-3 border-b border-brand-border/40 bg-white px-4 py-3 sm:px-5">
+            <div className="absolute inset-x-2 top-2 bottom-2 sm:inset-x-6 sm:top-6 sm:bottom-6 lg:left-1/2 lg:w-[1100px] lg:-translate-x-1/2 print:static print:inset-auto print:w-auto print:translate-x-0">
+                <div className="flex h-full flex-col rounded-3xl border border-brand-border/40 bg-brand-bg shadow-2xl print:block print:h-auto print:rounded-none print:border-0 print:bg-white print:shadow-none">
+                    <div className="flex items-center justify-between gap-3 border-b border-brand-border/40 bg-white px-4 py-3 sm:px-5 print:hidden">
                         <div className="min-w-0">
                             <div className="text-base font-semibold text-brand-text truncate">{title}</div>
                             <div className="text-xs text-brand-text2">Lesemodus · druck- und PDF-taugliche Darstellung</div>
@@ -552,9 +889,9 @@ function MeldungViewModal({
                         </div>
                     </div>
 
-                    <div className="min-h-0 flex-1 overflow-y-auto p-3 sm:p-5">
+                    <div className="min-h-0 flex-1 overflow-y-auto p-3 sm:p-5 print:overflow-visible print:p-0">
                         {meldung ? (
-                            <div className="mx-auto w-full max-w-5xl rounded-3xl border border-brand-border/40 bg-white p-4 sm:p-6">
+                            <div className="mx-auto w-full max-w-5xl rounded-3xl border border-brand-border/40 bg-white p-4 sm:p-6 print:max-w-none print:rounded-none print:border-0 print:p-0">
                                 <MeldungDetailsContent d={meldung} />
                             </div>
                         ) : (
@@ -592,8 +929,6 @@ export default function FallMeldungenPage() {
     const [meldErr, setMeldErr] = useState<string | null>(null);
 
     const [actionBusyId, setActionBusyId] = useState<number | null>(null);
-
-    // Modal state
     const [viewId, setViewId] = useState<number | null>(null);
 
     const autostartMeldungen = searchParams?.get("autostart") === "meldungen";
@@ -632,8 +967,7 @@ export default function FallMeldungenPage() {
 
     async function listMeldungenFresh(fallIdValue: number) {
         const res: any = await apiFetch<any>(`/falloeffnungen/${fallIdValue}/meldungen?${cacheBust()}`, { method: "GET" });
-        const list: MeldungListItemResponse[] = Array.isArray(res) ? res : (res?.items ?? res?.data ?? res?.meldungen ?? []);
-        return list;
+        return Array.isArray(res) ? res : (res?.items ?? res?.data ?? res?.meldungen ?? []);
     }
 
     async function getMeldungFresh(fallIdValue: number, meldungId: number) {
@@ -756,11 +1090,15 @@ export default function FallMeldungenPage() {
 
                 <div className="mx-auto w-full max-w-7xl px-3 sm:px-6 pb-12 pt-4 space-y-4">
                     {err ? (
-                        <div className="rounded-2xl border border-brand-danger/20 bg-brand-danger/10 p-3 text-sm text-brand-danger">{err}</div>
+                        <div className="rounded-2xl border border-brand-danger/20 bg-brand-danger/10 p-3 text-sm text-brand-danger">
+                            {err}
+                        </div>
                     ) : null}
 
                     {meldErr ? (
-                        <div className="rounded-2xl border border-brand-danger/20 bg-brand-danger/10 p-3 text-sm text-brand-danger">{meldErr}</div>
+                        <div className="rounded-2xl border border-brand-danger/20 bg-brand-danger/10 p-3 text-sm text-brand-danger">
+                            {meldErr}
+                        </div>
                     ) : null}
 
                     {hasAnyDraft ? (
@@ -798,7 +1136,9 @@ export default function FallMeldungenPage() {
                                     <div className="text-base font-semibold text-brand-text truncate">
                                         {data?.aktenzeichen ?? (loading ? "Lade…" : fallId ? `Fall #${fallId}` : "Fall")}
                                     </div>
-                                    <div className="mt-1 text-sm text-brand-text2 truncate">{data?.kindName ? `Kind: ${data.kindName}` : "—"}</div>
+                                    <div className="mt-1 text-sm text-brand-text2 truncate">
+                                        {data?.kindName ? `Kind: ${data.kindName}` : "—"}
+                                    </div>
                                 </div>
                             </div>
 
@@ -821,7 +1161,9 @@ export default function FallMeldungenPage() {
                         <div className="flex items-end justify-between px-1">
                             <div>
                                 <div className="text-sm font-semibold text-brand-text">Meldungen</div>
-                                <div className="text-xs text-brand-text2">{meldLoading ? "Lade…" : `${meldungen.length} Einträge`}</div>
+                                <div className="text-xs text-brand-text2">
+                                    {meldLoading ? "Lade…" : `${meldungen.length} Einträge`}
+                                </div>
                             </div>
                         </div>
 
@@ -834,7 +1176,6 @@ export default function FallMeldungenPage() {
                         <div className="space-y-3">
                             {meldungen.map((m) => {
                                 const d = m.detail;
-
                                 const sachlage = d?.kurzbeschreibung ?? "—";
                                 const createdBy = d?.createdByDisplayName ?? m.createdByDisplayName ?? "Unbekannt";
                                 const createdAt = formatDateTimeDE(d?.createdAt ?? m.createdAt);
@@ -857,7 +1198,9 @@ export default function FallMeldungenPage() {
                                                         </div>
 
                                                         <div className="min-w-0 flex-1">
-                                                            <div className="text-sm font-semibold text-brand-text break-words">{sachlage}</div>
+                                                            <div className="text-sm font-semibold text-brand-text break-words">
+                                                                {sachlage}
+                                                            </div>
                                                             <div className="mt-1 text-xs text-brand-text2">
                                                                 Erstellt von {createdBy} am {createdAt}
                                                             </div>

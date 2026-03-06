@@ -1,7 +1,7 @@
 // lib/supportTickets.ts
 import { apiFetch } from "@/lib/api";
 
-export type TicketCategory = "TEAMS_FORM" | "LOGIN" | "OTHER";
+export type TicketCategory = "BUG" | "HINT" | "FEATURE_REQUEST" | "OTHER";
 export type TicketPriority = "LOW" | "MEDIUM" | "HIGH";
 
 // Optional: falls du Status typisieren willst

@@ -22,6 +22,7 @@ import org.thomcgn.backend.users.model.User;
 import org.thomcgn.backend.users.repo.UserRepository;
 
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -293,8 +294,12 @@ public class MeldungService {
             throw DomainException.conflict(ErrorCode.CONFLICT, "Meldung is abgeschlossen (immutable)");
         }
 
+        Meldung before = copyForDiff(m);
+
         applyDraftToEntity(m, req);
         meldungRepo.save(m);
+
+        writeEntityDiffs(before, m, req == null ? null : req.sectionReasons());
 
         upsertAnlassCodes(m, req == null ? null : req.anlassCodes());
         upsertJugendamt(m, req == null ? null : req.jugendamt());
@@ -475,7 +480,6 @@ public class MeldungService {
             n.setVerhaltenBezug(o.getVerhaltenBezug());
             n.setSichtbarkeit(o.getSichtbarkeit());
 
-            // wichtig: created_by_user_id ist NOT NULL
             n.setCreatedAt(Instant.now());
             n.setCreatedBy(to.getCreatedBy());
             n.setCreatedByDisplayName(to.getCreatedByDisplayName());
@@ -535,6 +539,133 @@ public class MeldungService {
 
         m.setNaechsteUeberpruefungAm(req.naechsteUeberpruefungAm());
         m.setZusammenfassung(req.zusammenfassung());
+    }
+
+    private Meldung copyForDiff(Meldung src) {
+        Meldung c = new Meldung();
+
+        c.setErfasstVonRolle(src.getErfasstVonRolle());
+        c.setMeldeweg(src.getMeldeweg());
+        c.setMeldewegSonstiges(src.getMeldewegSonstiges());
+        c.setMeldendeStelleKontakt(src.getMeldendeStelleKontakt());
+        c.setDringlichkeit(src.getDringlichkeit());
+        c.setDatenbasis(src.getDatenbasis());
+        c.setEinwilligungVorhanden(src.getEinwilligungVorhanden());
+        c.setSchweigepflichtentbindungVorhanden(src.getSchweigepflichtentbindungVorhanden());
+
+        c.setKurzbeschreibung(src.getKurzbeschreibung());
+
+        c.setFachAmpel(src.getFachAmpel());
+        c.setFachText(src.getFachText());
+        c.setAbweichungZurAuto(src.getAbweichungZurAuto());
+        c.setAbweichungsBegruendung(src.getAbweichungsBegruendung());
+
+        c.setAkutGefahrImVerzug(src.isAkutGefahrImVerzug());
+        c.setAkutBegruendung(src.getAkutBegruendung());
+        c.setAkutNotrufErforderlich(src.getAkutNotrufErforderlich());
+        c.setAkutKindSicherUntergebracht(src.getAkutKindSicherUntergebracht());
+
+        c.setNaechsteUeberpruefungAm(src.getNaechsteUeberpruefungAm());
+        c.setZusammenfassung(src.getZusammenfassung());
+
+        if (src.getVerantwortlicheFachkraft() != null) {
+            c.setVerantwortlicheFachkraft(src.getVerantwortlicheFachkraft());
+        }
+
+        return c;
+    }
+
+    private void writeEntityDiffs(Meldung before, Meldung after, Map<String, String> sectionReasons) {
+        User user = currentUser();
+
+        writeFieldChange(after, MeldungSection.META, "erfasstVonRolle",
+                before.getErfasstVonRolle(), after.getErfasstVonRolle(), sectionReasons, user);
+
+        writeFieldChange(after, MeldungSection.META, "meldeweg",
+                enumName(before.getMeldeweg()), enumName(after.getMeldeweg()), sectionReasons, user);
+
+        writeFieldChange(after, MeldungSection.META, "meldewegSonstiges",
+                before.getMeldewegSonstiges(), after.getMeldewegSonstiges(), sectionReasons, user);
+
+        writeFieldChange(after, MeldungSection.META, "meldendeStelleKontakt",
+                before.getMeldendeStelleKontakt(), after.getMeldendeStelleKontakt(), sectionReasons, user);
+
+        writeFieldChange(after, MeldungSection.META, "dringlichkeit",
+                enumName(before.getDringlichkeit()), enumName(after.getDringlichkeit()), sectionReasons, user);
+
+        writeFieldChange(after, MeldungSection.META, "datenbasis",
+                enumName(before.getDatenbasis()), enumName(after.getDatenbasis()), sectionReasons, user);
+
+        writeFieldChange(after, MeldungSection.META, "einwilligungVorhanden",
+                boolStr(before.getEinwilligungVorhanden()), boolStr(after.getEinwilligungVorhanden()), sectionReasons, user);
+
+        writeFieldChange(after, MeldungSection.META, "schweigepflichtentbindungVorhanden",
+                boolStr(before.getSchweigepflichtentbindungVorhanden()), boolStr(after.getSchweigepflichtentbindungVorhanden()), sectionReasons, user);
+
+        writeFieldChange(after, MeldungSection.INHALT, "kurzbeschreibung",
+                before.getKurzbeschreibung(), after.getKurzbeschreibung(), sectionReasons, user);
+
+        writeFieldChange(after, MeldungSection.FACH, "fachAmpel",
+                enumName(before.getFachAmpel()), enumName(after.getFachAmpel()), sectionReasons, user);
+
+        writeFieldChange(after, MeldungSection.FACH, "fachText",
+                before.getFachText(), after.getFachText(), sectionReasons, user);
+
+        writeFieldChange(after, MeldungSection.FACH, "abweichungZurAuto",
+                enumName(before.getAbweichungZurAuto()), enumName(after.getAbweichungZurAuto()), sectionReasons, user);
+
+        writeFieldChange(after, MeldungSection.FACH, "abweichungsBegruendung",
+                before.getAbweichungsBegruendung(), after.getAbweichungsBegruendung(), sectionReasons, user);
+
+        writeFieldChange(after, MeldungSection.AKUT, "akutGefahrImVerzug",
+                String.valueOf(before.isAkutGefahrImVerzug()), String.valueOf(after.isAkutGefahrImVerzug()), sectionReasons, user);
+
+        writeFieldChange(after, MeldungSection.AKUT, "akutBegruendung",
+                before.getAkutBegruendung(), after.getAkutBegruendung(), sectionReasons, user);
+
+        writeFieldChange(after, MeldungSection.AKUT, "akutNotrufErforderlich",
+                boolStr(before.getAkutNotrufErforderlich()), boolStr(after.getAkutNotrufErforderlich()), sectionReasons, user);
+
+        writeFieldChange(after, MeldungSection.AKUT, "akutKindSicherUntergebracht",
+                enumName(before.getAkutKindSicherUntergebracht()), enumName(after.getAkutKindSicherUntergebracht()), sectionReasons, user);
+
+        writeFieldChange(after, MeldungSection.PLANUNG, "verantwortlicheFachkraftUserId",
+                userIdStr(before.getVerantwortlicheFachkraft()), userIdStr(after.getVerantwortlicheFachkraft()), sectionReasons, user);
+
+        writeFieldChange(after, MeldungSection.PLANUNG, "naechsteUeberpruefungAm",
+                localDateStr(before.getNaechsteUeberpruefungAm()), localDateStr(after.getNaechsteUeberpruefungAm()), sectionReasons, user);
+
+        writeFieldChange(after, MeldungSection.PLANUNG, "zusammenfassung",
+                before.getZusammenfassung(), after.getZusammenfassung(), sectionReasons, user);
+    }
+
+    private void writeFieldChange(
+            Meldung meldung,
+            MeldungSection section,
+            String fieldPath,
+            String oldValue,
+            String newValue,
+            Map<String, String> sectionReasons,
+            User user
+    ) {
+        String oldNorm = normalizeDiffValue(oldValue);
+        String newNorm = normalizeDiffValue(newValue);
+
+        if (Objects.equals(oldNorm, newNorm)) {
+            return;
+        }
+
+        MeldungChange ch = new MeldungChange();
+        ch.setMeldung(meldung);
+        ch.setSection(section);
+        ch.setFieldPath(fieldPath);
+        ch.setOldValue(oldNorm);
+        ch.setNewValue(newNorm);
+        ch.setReason(resolveReason(section, fieldPath, sectionReasons));
+        ch.setChangedAt(Instant.now());
+        ch.setChangedBy(user);
+        ch.setChangedByDisplayName(user.getDisplayName());
+        changeRepo.save(ch);
     }
 
     private void upsertAnlassCodes(Meldung m, List<String> codes) {
@@ -911,5 +1042,40 @@ public class MeldungService {
     private String mostSpecificMessage(DataIntegrityViolationException ex) {
         Throwable root = ex.getMostSpecificCause();
         return root != null && root.getMessage() != null ? root.getMessage() : ex.getMessage();
+    }
+
+    private String normalizeDiffValue(String value) {
+        if (value == null || value.isBlank()) return null;
+        return value.trim();
+    }
+
+    private String enumName(Enum<?> e) {
+        return e == null ? null : e.name();
+    }
+
+    private String boolStr(Boolean b) {
+        return b == null ? null : String.valueOf(b);
+    }
+
+    private String localDateStr(LocalDate d) {
+        return d == null ? null : d.toString();
+    }
+
+    private String userIdStr(User u) {
+        return u == null || u.getId() == null ? null : String.valueOf(u.getId());
+    }
+
+    private String resolveReason(MeldungSection section, String fieldPath, Map<String, String> sectionReasons) {
+        if (sectionReasons == null || sectionReasons.isEmpty()) {
+            return "Änderung im Entwurf";
+        }
+
+        String exact = sectionReasons.get(fieldPath);
+        if (exact != null && !exact.isBlank()) return exact.trim();
+
+        String bySection = sectionReasons.get(section.name());
+        if (bySection != null && !bySection.isBlank()) return bySection.trim();
+
+        return "Änderung im Entwurf";
     }
 }
