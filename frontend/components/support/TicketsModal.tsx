@@ -233,9 +233,10 @@ export function TicketsModal({
                                         onChange={(e) => setCategory(e.target.value as TicketCategory)}
                                         className="mt-1 h-11 w-full rounded-xl border border-brand-border bg-white/80 px-3 text-sm shadow-sm outline-none focus:border-brand-teal focus:ring-2 focus:ring-brand-teal/25"
                                     >
-                                        <option value="TEAMS_FORM">Teams Formular</option>
-                                        <option value="LOGIN">Login</option>
-                                        <option value="OTHER">Sonstiges</option>
+                                        <option value="BUG">Kritische Bugs</option>
+                                        <option value="HINT">Hinweis Funktionalität</option>
+                                        <option value="FEATURE_REQUEST">Anregungen / Features</option>
+                                        <option value="OTHER">Anderes</option>
                                     </select>
                                 </div>
 
@@ -275,7 +276,7 @@ export function TicketsModal({
                   hover:brightness-95 active:scale-[0.99]
                 "
                             >
-                                {loading ? "Sende…" : "TicketsUIProvider.tsx erstellen"}
+                                {loading ? "Sende…" : "Ticket Erstellen"}
                             </button>
                         </div>
                     )}

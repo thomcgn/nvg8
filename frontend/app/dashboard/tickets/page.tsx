@@ -49,7 +49,6 @@ export default function TicketsPage() {
             <Topbar
                 title={`Tickets${openCount ? ` (${openCount} offen)` : ""}`}
                 onNotifications={() => {
-                    // TODO: Nachrichten-Modal öffnen
                 }}
             />
 
