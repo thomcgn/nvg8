@@ -196,3 +196,72 @@ body {
     @apply bg-background text-foreground;
   }
 }
+
+/*
+PRINT
+ */
+
+@media print {
+  @page {
+    size: A4;
+    margin: 14mm 12mm 16mm 12mm;
+  }
+
+  html,
+  body {
+    background: #fff !important;
+    color: #111827 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  body {
+    margin: 0;
+    padding: 0;
+  }
+
+  * {
+    box-shadow: none !important;
+  }
+
+  .print-root {
+    background: #fff !important;
+  }
+
+  .print-doc {
+    font-size: 10.5pt;
+    line-height: 1.45;
+  }
+
+  .print-section,
+  .print-table-wrap,
+  .print-avoid-break {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .print-page-break {
+    break-before: page;
+    page-break-before: always;
+  }
+
+  .print-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  .print-table thead {
+    display: table-header-group;
+  }
+
+  .print-table tfoot {
+    display: table-footer-group;
+  }
+
+  .print-table tr,
+  .print-table td,
+  .print-table th {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+}
