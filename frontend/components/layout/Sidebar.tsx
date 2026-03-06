@@ -122,7 +122,6 @@ function SidebarContent({ onClose, className = "" }: { onClose?: () => void; cla
     const displayName = useMemo(() => me?.displayName || me?.email || "—", [me?.displayName, me?.email]);
     const roleText = useMemo(() => (me?.roles?.length ? me.roles.join(", ") : "Keine Rolle"), [me?.roles]);
 
-    // Session timeout (Idle) UI
     const idleMinutes = Number(process.env.NEXT_PUBLIC_IDLE_TIMEOUT_MINUTES || "60");
     const idleSeconds = Math.max(5, idleMinutes) * 60;
 
@@ -169,7 +168,6 @@ function SidebarContent({ onClose, className = "" }: { onClose?: () => void; cla
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [remainingSeconds]);
 
-    // ✅ Load traeger/einrichtung labels from /auth/contexts (the endpoint returns { contexts: [...] })
     useEffect(() => {
         let mounted = true;
 
@@ -189,7 +187,7 @@ function SidebarContent({ onClose, className = "" }: { onClose?: () => void; cla
                     setEinrichtungName(found.orgUnitName);
                 }
             } catch {
-                // ignore: keep "—"
+                // ignore
             }
         }
 
@@ -202,7 +200,6 @@ function SidebarContent({ onClose, className = "" }: { onClose?: () => void; cla
 
     return (
         <div className={"flex h-full flex-col border-r border-brand-border bg-brand-bg/80 backdrop-blur p-4 " + className}>
-            {/* Header */}
             <div className="mb-4 flex items-center justify-between">
                 <BrandMark />
                 {onClose ? (
@@ -222,7 +219,6 @@ function SidebarContent({ onClose, className = "" }: { onClose?: () => void; cla
                 ) : null}
             </div>
 
-            {/* User / Context card */}
             <div className="mb-3 overflow-hidden rounded-2xl border border-brand-border bg-white/80 backdrop-blur shadow-sm">
                 <button type="button" onClick={() => setCollapsed((c) => !c)} className="w-full p-4 text-left transition hover:bg-white">
                     <div className="flex items-center gap-3">
@@ -239,7 +235,6 @@ function SidebarContent({ onClose, className = "" }: { onClose?: () => void; cla
                     </div>
                 </button>
 
-                {/* Smooth accordion */}
                 <div className={"grid transition-[grid-template-rows] duration-200 ease-out " + (collapsed ? "grid-rows-[0fr]" : "grid-rows-[1fr]")}>
                     <div className="min-h-0">
                         <div
@@ -311,12 +306,10 @@ function SidebarContent({ onClose, className = "" }: { onClose?: () => void; cla
                 </div>
             </div>
 
-            {/* Dashboard Home */}
             <div className="mb-4">
                 <NavItem href="/dashboard" label="Übersicht" icon={LayoutDashboard} description="Start & Kennzahlen" onNavigate={onClose} />
             </div>
 
-            {/* Nav */}
             <nav className="flex flex-1 flex-col gap-4 overflow-y-auto pr-1">
                 {navSections.map((sec) => (
                     <div key={sec.title}>
@@ -336,7 +329,6 @@ function SidebarContent({ onClose, className = "" }: { onClose?: () => void; cla
 export function Sidebar() {
     const [open, setOpen] = useState(false);
 
-    // swipe-to-close state
     const startX = useRef<number | null>(null);
     const startY = useRef<number | null>(null);
     const [dragX, setDragX] = useState(0);
@@ -392,7 +384,7 @@ export function Sidebar() {
     return (
         <>
             {/* Mobile topbar */}
-            <div className="lg:hidden sticky top-0 z-40 border-b border-brand-border bg-brand-bg/80 backdrop-blur">
+            <div className="lg:hidden sticky top-0 z-40 border-b border-brand-border bg-brand-bg/80 backdrop-blur print:hidden">
                 <div className="flex items-center justify-between px-4 py-3">
                     <BrandMark compact />
                     <button
@@ -412,13 +404,13 @@ export function Sidebar() {
             </div>
 
             {/* Desktop sidebar */}
-            <aside className="hidden lg:flex h-screen w-72">
+            <aside className="hidden lg:flex h-screen w-72 print:hidden">
                 <SidebarContent className="w-72" />
             </aside>
 
             {/* Drawer on mobile */}
             {open ? (
-                <div className="lg:hidden fixed inset-0 z-50">
+                <div className="lg:hidden fixed inset-0 z-50 print:hidden">
                     <button className="absolute inset-0 bg-black/40" aria-label="Overlay schließen" onClick={close} />
 
                     <div
@@ -443,3 +435,5 @@ export function Sidebar() {
         </>
     );
 }
+
+export default Sidebar;
