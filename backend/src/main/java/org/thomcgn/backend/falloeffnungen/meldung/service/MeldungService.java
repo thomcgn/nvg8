@@ -149,11 +149,17 @@ public class MeldungService {
                 Meldung current = currentOpt.get();
 
                 if (req == null || req.supersedesId() == null) {
-                    throw DomainException.conflict(ErrorCode.CONFLICT, "Current Meldung exists; update draft instead");
+                    throw DomainException.conflict(
+                            ErrorCode.CONFLICT,
+                            "Current Meldung exists; update draft instead"
+                    );
                 }
 
                 if (!Objects.equals(req.supersedesId(), current.getId())) {
-                    throw DomainException.badRequest(ErrorCode.VALIDATION_FAILED, "supersedesId must reference the current Meldung");
+                    throw DomainException.badRequest(
+                            ErrorCode.VALIDATION_FAILED,
+                            "supersedesId must reference the current Meldung"
+                    );
                 }
 
                 current.setCurrent(false);
@@ -188,7 +194,10 @@ public class MeldungService {
 
         } catch (DataIntegrityViolationException ex) {
             em.clear();
-            throw DomainException.conflict(ErrorCode.CONFLICT, "Could not create Meldung (constraint conflict)");
+            throw DomainException.conflict(
+                    ErrorCode.CONFLICT,
+                    "Could not create Meldung: " + mostSpecificMessage(ex)
+            );
         }
     }
 
@@ -257,7 +266,10 @@ public class MeldungService {
 
         } catch (DataIntegrityViolationException ex) {
             em.clear();
-            throw DomainException.conflict(ErrorCode.CONFLICT, "Could not create correction (constraint conflict)");
+            throw DomainException.conflict(
+                    ErrorCode.CONFLICT,
+                    "Could not create correction: " + mostSpecificMessage(ex)
+            );
         }
     }
 
@@ -462,6 +474,10 @@ public class MeldungService {
             n.setVerhaltenKind(o.getVerhaltenKind());
             n.setVerhaltenBezug(o.getVerhaltenBezug());
             n.setSichtbarkeit(o.getSichtbarkeit());
+
+            // wichtig: created_by_user_id ist NOT NULL
+            n.setCreatedAt(Instant.now());
+            n.setCreatedBy(to.getCreatedBy());
             n.setCreatedByDisplayName(to.getCreatedByDisplayName());
 
             MeldungObservation savedObs = obsRepo.save(n);
@@ -495,7 +511,9 @@ public class MeldungService {
         m.setEinwilligungVorhanden(req.einwilligungVorhanden());
         m.setSchweigepflichtentbindungVorhanden(req.schweigepflichtentbindungVorhanden());
 
-        if (req.kurzbeschreibung() != null) m.setKurzbeschreibung(req.kurzbeschreibung());
+        if (req.kurzbeschreibung() != null) {
+            m.setKurzbeschreibung(req.kurzbeschreibung());
+        }
 
         m.setFachAmpel(req.fachAmpel());
         m.setFachText(req.fachText());
@@ -888,5 +906,10 @@ public class MeldungService {
         Long uid = SecurityUtils.currentUserId();
         return userRepo.findById(uid)
                 .orElseThrow(() -> DomainException.notFound(ErrorCode.USER_NOT_FOUND, "User not found"));
+    }
+
+    private String mostSpecificMessage(DataIntegrityViolationException ex) {
+        Throwable root = ex.getMostSpecificCause();
+        return root != null && root.getMessage() != null ? root.getMessage() : ex.getMessage();
     }
 }

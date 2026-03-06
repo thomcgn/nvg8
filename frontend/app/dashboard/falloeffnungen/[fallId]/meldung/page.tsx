@@ -161,14 +161,16 @@ export default function ErstmeldungPage() {
     );
 
     const onSubmit = React.useCallback(
-        async (mirrorToNotizen: boolean) => {
+        async (mirrorToNotizen: boolean, changeReason?: string) => {
             if (fallId == null || !meldung) return;
             const id = fallId;
 
             // ✅ Schutz: wenn readonly erzwungen, nicht submitten
             if (readonlyFromQuery) return;
 
-            await meldungApi.submit(id, meldung.id, { mirrorToNotizen });
+            await meldungApi.submit(id, meldung.id, {
+                mirrorToNotizen,
+            changeReason: changeReason?.trim() || null});
             router.replace(`/dashboard/falloeffnungen/${id}`);
         },
         [fallId, meldung, router, readonlyFromQuery]

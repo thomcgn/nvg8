@@ -243,6 +243,7 @@ export type MeldungDraftRequest = {
 export type MeldungSubmitRequest = {
     mirrorToNotizen?: boolean | null;
     sectionReasons?: Record<string, string>;
+    changeReason?: string | null;
 };
 
 function extractHttpStatus(err: unknown): number | null {

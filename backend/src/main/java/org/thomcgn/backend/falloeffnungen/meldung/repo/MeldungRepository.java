@@ -87,4 +87,6 @@ public interface MeldungRepository extends JpaRepository<Meldung, Long> {
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select coalesce(max(m.versionNo), 0) from Meldung m where m.falleroeffnung.id = :fallId")
     Integer lockAndGetMaxVersionNo(@Param("fallId") Long fallId);
+
+
 }

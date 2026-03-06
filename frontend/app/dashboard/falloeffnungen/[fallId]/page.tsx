@@ -19,21 +19,22 @@ import {
     FileText,
     RefreshCw,
     ArrowRight,
-    ChevronDown,
-    ChevronUp,
     Eye,
     CopyPlus,
     Wrench,
     AlertTriangle,
+    X,
+    Printer,
+    Info,
 } from "lucide-react";
 
 /* =========================================================
-   Behörden-modern UI + robuste Params + klare Fachlogik
-   - nutzt brand-* Tokens (wie in deinem anderen Screen)
-   - robustes Param-Mapping (fallId / id / falloeffnungId)
-   - Buttons: "Entwurf öffnen" / "Ansehen" / "Korrigieren" / "Neue Meldung"
-   - Blockiert "Korrigieren" & "Neue Meldung", wenn ein Entwurf existiert (409 vermeiden)
-   ========================================================= */
+   Modal statt Accordion
+   - Badges nur visuell
+   - Auge-Icon klar hervorgehoben
+   - PDF-/Druck-tauglicher Detaildialog
+   - iPad 10.5 freundlich
+========================================================= */
 
 /* ---------------- Status Helpers ---------------- */
 
@@ -103,6 +104,10 @@ function formatDateDE(value: string | null) {
     return new Intl.DateTimeFormat("de-DE", { dateStyle: "medium" }).format(d);
 }
 
+function cacheBust() {
+    return `cb=${Date.now()}`;
+}
+
 function Row({ label, value }: { label: string; value: any }) {
     const v =
         value === null || value === undefined || value === ""
@@ -121,15 +126,6 @@ function Row({ label, value }: { label: string; value: any }) {
     );
 }
 
-function stop(e: React.SyntheticEvent) {
-    e.preventDefault();
-    e.stopPropagation();
-}
-
-function cacheBust() {
-    return `cb=${Date.now()}`;
-}
-
 /* ---------------- UI Helpers ---------------- */
 
 function Segmented({
@@ -142,7 +138,7 @@ function Segmented({
     items: { value: string; label: string }[];
 }) {
     return (
-        <div className="-mx-1 overflow-x-auto" onClick={(e) => e.stopPropagation()}>
+        <div className="-mx-1 overflow-x-auto">
             <div className="mx-1 inline-flex w-max rounded-2xl border border-brand-border/40 bg-white p-1 gap-1">
                 {items.map((it) => (
                     <Button
@@ -150,10 +146,7 @@ function Segmented({
                         type="button"
                         variant={value === it.value ? "default" : "secondary"}
                         className="h-10 px-4 whitespace-nowrap"
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            onChange(it.value);
-                        }}
+                        onClick={() => onChange(it.value)}
                     >
                         {it.label}
                     </Button>
@@ -263,7 +256,7 @@ function KeyFactsBar({ d }: { d: MeldungResponse }) {
                 <div className="min-w-0">
                     <div className="text-xs font-semibold text-brand-text2">Anlass-Codes</div>
                     <div className="text-sm text-brand-text break-words">
-                        {(d.anlassCodes ?? []).length ? d.anlassCodes!.join(", ") : "—"}
+                        {(d.anlassCodes ?? []).length ? d.anlassCodes.join(", ") : "—"}
                     </div>
                 </div>
             </div>
@@ -271,14 +264,29 @@ function KeyFactsBar({ d }: { d: MeldungResponse }) {
     );
 }
 
-/* ---------------- Details ---------------- */
+/* ---------------- Modal Details ---------------- */
 
-function MeldungDetailsFlat({ d }: { d: MeldungResponse }) {
+function MeldungDetailsContent({ d }: { d: MeldungResponse }) {
     const [tab, setTab] = useState<"inhalt" | "meta" | "fach" | "akut" | "planung" | "listen" | "audit">("inhalt");
+    const isCorrection = String(d.type ?? "").toUpperCase() === "KORREKTUR" || !!d.correctsId;
 
     return (
-        <div className="pt-3" onClick={(e) => e.stopPropagation()}>
-            <Separator className="mb-3" />
+        <div className="space-y-4">
+            {isCorrection ? (
+                <div className="rounded-2xl border border-brand-warning/25 bg-brand-warning/10 p-3 text-sm text-brand-text">
+                    <div className="flex items-start gap-2">
+                        <Info className="h-4 w-4 mt-0.5 text-brand-text2" />
+                        <div>
+                            <div className="font-semibold">Korrekturvermerk</div>
+                            <div className="text-brand-text2">
+                                Diese Meldung ist eine Korrektur{d.correctsId ? ` zur Meldung #${d.correctsId}` : ""}. Änderungen und Begründungen sind im Bereich „Audit“ dokumentiert.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            ) : null}
+
+            <KeyFactsBar d={d} />
 
             <Segmented
                 value={tab}
@@ -294,207 +302,268 @@ function MeldungDetailsFlat({ d }: { d: MeldungResponse }) {
                 ]}
             />
 
-            <div className="mt-3">
-                <KeyFactsBar d={d} />
-            </div>
-
-            <div className="mt-4">
-                {tab === "inhalt" ? (
-                    <Section title="Inhalt">
-                        <KeyGrid>
-                            <div className="sm:col-span-2">
-                                <Row label="Kurzbeschreibung (Sachlage)" value={d.kurzbeschreibung} />
-                            </div>
-                            <Row label="Anlass-Codes" value={(d.anlassCodes ?? []).length ? d.anlassCodes.join(", ") : "—"} />
-                            <div className="sm:col-span-2">
-                                <Row label="Zusammenfassung" value={d.zusammenfassung} />
-                            </div>
-                        </KeyGrid>
-                    </Section>
-                ) : null}
-
-                {tab === "meta" ? (
-                    <Section title="Meta">
-                        <KeyGrid>
-                            <Row label="Erfasst von Rolle" value={d.erfasstVonRolle} />
-                            <Row
-                                label="Meldeweg"
-                                value={
-                                    d.meldeweg
-                                        ? d.meldewegSonstiges
-                                            ? `${d.meldeweg} (${d.meldewegSonstiges})`
-                                            : d.meldeweg
-                                        : "—"
-                                }
-                            />
-                            <Row label="Meldende Stelle Kontakt" value={d.meldendeStelleKontakt} />
-                            <Row label="Dringlichkeit" value={d.dringlichkeit} />
-                            <Row label="Datenbasis" value={d.datenbasis} />
-                            <Row label="Einwilligung vorhanden" value={d.einwilligungVorhanden} />
-                            <Row label="Schweigepflichtentbindung vorhanden" value={d.schweigepflichtentbindungVorhanden} />
-                        </KeyGrid>
-                    </Section>
-                ) : null}
-
-                {tab === "fach" ? (
-                    <Section title="Fach">
-                        <KeyGrid>
-                            <Row label="Ampel" value={d.fachAmpel} />
-                            <div className="sm:col-span-2">
-                                <Row label="Fachtext" value={d.fachText} />
-                            </div>
-                            <Row label="Abweichung zur Auto" value={d.abweichungZurAuto} />
-                            <div className="sm:col-span-2">
-                                <Row label="Abweichungs-Begründung" value={d.abweichungsBegruendung} />
-                            </div>
-                        </KeyGrid>
-                    </Section>
-                ) : null}
-
-                {tab === "akut" ? (
-                    <Section title="Akut">
-                        <KeyGrid>
-                            <Row label="Gefahr im Verzug" value={d.akutGefahrImVerzug} />
-                            <Row label="Notruf erforderlich" value={d.akutNotrufErforderlich} />
-                            <Row label="Kind sicher untergebracht" value={d.akutKindSicherUntergebracht} />
-                            <div className="sm:col-span-2">
-                                <Row label="Begründung" value={d.akutBegruendung} />
-                            </div>
-                        </KeyGrid>
-
-                        <Separator className="my-3" />
-
-                        <div className="text-sm font-semibold text-brand-text">Jugendamt</div>
-                        <div className="mt-3">
-                            {d.jugendamt ? (
-                                <KeyGrid>
-                                    <Row label="Informiert" value={d.jugendamt.informiert} />
-                                    <Row label="Kontakt am" value={formatDateTimeDE(d.jugendamt.kontaktAm)} />
-                                    <Row label="Kontaktart" value={d.jugendamt.kontaktart} />
-                                    <Row label="Aktenzeichen" value={d.jugendamt.aktenzeichen} />
-                                    <div className="sm:col-span-2">
-                                        <Row label="Begründung" value={d.jugendamt.begruendung} />
-                                    </div>
-                                </KeyGrid>
-                            ) : (
-                                <div className="text-sm text-brand-text2">—</div>
-                            )}
+            {tab === "inhalt" ? (
+                <Section title="Inhalt">
+                    <KeyGrid>
+                        <div className="sm:col-span-2">
+                            <Row label="Kurzbeschreibung (Sachlage)" value={d.kurzbeschreibung} />
                         </div>
-                    </Section>
-                ) : null}
+                        <Row label="Anlass-Codes" value={(d.anlassCodes ?? []).length ? d.anlassCodes.join(", ") : "—"} />
+                        <div className="sm:col-span-2">
+                            <Row label="Zusammenfassung" value={d.zusammenfassung} />
+                        </div>
+                    </KeyGrid>
+                </Section>
+            ) : null}
 
-                {tab === "planung" ? (
-                    <Section title="Planung">
+            {tab === "meta" ? (
+                <Section title="Meta">
+                    <KeyGrid>
+                        <Row label="Erfasst von Rolle" value={d.erfasstVonRolle} />
+                        <Row
+                            label="Meldeweg"
+                            value={
+                                d.meldeweg
+                                    ? d.meldewegSonstiges
+                                        ? `${d.meldeweg} (${d.meldewegSonstiges})`
+                                        : d.meldeweg
+                                    : "—"
+                            }
+                        />
+                        <Row label="Meldende Stelle Kontakt" value={d.meldendeStelleKontakt} />
+                        <Row label="Dringlichkeit" value={d.dringlichkeit} />
+                        <Row label="Datenbasis" value={d.datenbasis} />
+                        <Row label="Einwilligung vorhanden" value={d.einwilligungVorhanden} />
+                        <Row label="Schweigepflichtentbindung vorhanden" value={d.schweigepflichtentbindungVorhanden} />
+                    </KeyGrid>
+                </Section>
+            ) : null}
+
+            {tab === "fach" ? (
+                <Section title="Fach">
+                    <KeyGrid>
+                        <Row label="Ampel" value={d.fachAmpel} />
+                        <div className="sm:col-span-2">
+                            <Row label="Fachtext" value={d.fachText} />
+                        </div>
+                        <Row label="Abweichung zur Auto" value={d.abweichungZurAuto} />
+                        <div className="sm:col-span-2">
+                            <Row label="Abweichungs-Begründung" value={d.abweichungsBegruendung} />
+                        </div>
+                    </KeyGrid>
+                </Section>
+            ) : null}
+
+            {tab === "akut" ? (
+                <Section title="Akut">
+                    <KeyGrid>
+                        <Row label="Gefahr im Verzug" value={d.akutGefahrImVerzug} />
+                        <Row label="Notruf erforderlich" value={d.akutNotrufErforderlich} />
+                        <Row label="Kind sicher untergebracht" value={d.akutKindSicherUntergebracht} />
+                        <div className="sm:col-span-2">
+                            <Row label="Begründung" value={d.akutBegruendung} />
+                        </div>
+                    </KeyGrid>
+
+                    <Separator className="my-3" />
+
+                    <div className="text-sm font-semibold text-brand-text">Jugendamt</div>
+                    <div className="mt-3">
+                        {d.jugendamt ? (
+                            <KeyGrid>
+                                <Row label="Informiert" value={d.jugendamt.informiert} />
+                                <Row label="Kontakt am" value={formatDateTimeDE(d.jugendamt.kontaktAm)} />
+                                <Row label="Kontaktart" value={d.jugendamt.kontaktart} />
+                                <Row label="Aktenzeichen" value={d.jugendamt.aktenzeichen} />
+                                <div className="sm:col-span-2">
+                                    <Row label="Begründung" value={d.jugendamt.begruendung} />
+                                </div>
+                            </KeyGrid>
+                        ) : (
+                            <div className="text-sm text-brand-text2">—</div>
+                        )}
+                    </div>
+                </Section>
+            ) : null}
+
+            {tab === "planung" ? (
+                <Section title="Planung">
+                    <KeyGrid>
+                        <Row label="Verantwortliche Fachkraft (UserId)" value={d.verantwortlicheFachkraftUserId} />
+                        <Row label="Nächste Überprüfung am" value={formatDateDE(d.naechsteUeberpruefungAm)} />
+                        <div className="sm:col-span-2">
+                            <Row label="Zusammenfassung" value={d.zusammenfassung} />
+                        </div>
+                    </KeyGrid>
+                </Section>
+            ) : null}
+
+            {tab === "listen" ? (
+                <div className="space-y-6">
+                    <Section title="Kontakte">
+                        <SimpleTable
+                            columns={[
+                                { key: "mit", label: "Kontakt mit" },
+                                { key: "am", label: "Kontakt am" },
+                                { key: "status", label: "Status" },
+                                { key: "ergebnis", label: "Ergebnis" },
+                                { key: "notiz", label: "Notiz", className: "min-w-[260px]" },
+                            ]}
+                            rows={(d.contacts ?? []).map((c) => ({
+                                mit: c.kontaktMit ?? "—",
+                                am: formatDateTimeDE(c.kontaktAm),
+                                status: c.status ?? "—",
+                                ergebnis: c.ergebnis ?? "—",
+                                notiz: c.notiz ?? "—",
+                            }))}
+                        />
+                    </Section>
+
+                    <Section title="Extern">
+                        <SimpleTable
+                            columns={[
+                                { key: "stelle", label: "Stelle" },
+                                { key: "am", label: "Am" },
+                                { key: "sonst", label: "Stelle sonstiges" },
+                                { key: "ergebnis", label: "Ergebnis" },
+                                { key: "begruendung", label: "Begründung", className: "min-w-[260px]" },
+                            ]}
+                            rows={(d.extern ?? []).map((x) => ({
+                                stelle: x.stelle ?? "—",
+                                am: formatDateTimeDE(x.am),
+                                sonst: x.stelleSonstiges ?? "—",
+                                ergebnis: x.ergebnis ?? "—",
+                                begruendung: x.begruendung ?? "—",
+                            }))}
+                        />
+                    </Section>
+
+                    <Section title="Anhänge">
+                        <SimpleTable
+                            columns={[
+                                { key: "titel", label: "Titel" },
+                                { key: "typ", label: "Typ" },
+                                { key: "sicht", label: "Sichtbarkeit" },
+                                { key: "file", label: "FileId" },
+                                { key: "besch", label: "Beschreibung", className: "min-w-[260px]" },
+                                { key: "rg", label: "Rechtsgrundlage", className: "min-w-[260px]" },
+                            ]}
+                            rows={(d.attachments ?? []).map((a) => ({
+                                titel: a.titel ?? "—",
+                                typ: a.typ ?? "—",
+                                sicht: a.sichtbarkeit ?? "—",
+                                file: a.fileId ?? "—",
+                                besch: a.beschreibung ?? "—",
+                                rg: a.rechtsgrundlageHinweis ?? "—",
+                            }))}
+                        />
+                    </Section>
+                </div>
+            ) : null}
+
+            {tab === "audit" ? (
+                <div className="space-y-6">
+                    <Section title="Freigabe / Submit">
                         <KeyGrid>
-                            <Row label="Verantwortliche Fachkraft (UserId)" value={d.verantwortlicheFachkraftUserId} />
-                            <Row label="Nächste Überprüfung am" value={formatDateDE(d.naechsteUeberpruefungAm)} />
-                            <div className="sm:col-span-2">
-                                <Row label="Zusammenfassung" value={d.zusammenfassung} />
-                            </div>
+                            <Row label="Submitted am" value={formatDateTimeDE(d.submittedAt)} />
+                            <Row label="Submitted von" value={d.submittedByDisplayName} />
+                            <Row label="Freigabe am" value={formatDateTimeDE(d.freigabeAm)} />
+                            <Row label="Freigabe von" value={d.freigabeVonDisplayName} />
                         </KeyGrid>
                     </Section>
-                ) : null}
 
-                {tab === "listen" ? (
-                    <div className="space-y-6">
-                        <Section title="Kontakte">
-                            <SimpleTable
-                                columns={[
-                                    { key: "mit", label: "Kontakt mit" },
-                                    { key: "am", label: "Kontakt am" },
-                                    { key: "status", label: "Status" },
-                                    { key: "ergebnis", label: "Ergebnis" },
-                                    { key: "notiz", label: "Notiz", className: "min-w-[260px]" },
-                                ]}
-                                rows={(d.contacts ?? []).map((c) => ({
-                                    mit: c.kontaktMit ?? "—",
-                                    am: formatDateTimeDE(c.kontaktAm),
-                                    status: c.status ?? "—",
-                                    ergebnis: c.ergebnis ?? "—",
-                                    notiz: c.notiz ?? "—",
-                                }))}
-                            />
-                        </Section>
+                    <Section title="Änderungen">
+                        <SimpleTable
+                            stickyHeader
+                            maxHeightClassName="max-h-[42vh] md:max-h-[52vh]"
+                            columns={[
+                                { key: "section", label: "Sektion" },
+                                { key: "field", label: "Feld" },
+                                { key: "at", label: "Zeit" },
+                                { key: "old", label: "Alt", className: "min-w-[220px]" },
+                                { key: "neu", label: "Neu", className: "min-w-[220px]" },
+                                { key: "reason", label: "Grund", className: "min-w-[220px]" },
+                                { key: "by", label: "Von" },
+                            ]}
+                            rows={(d.changes ?? []).map((c) => ({
+                                section: c.section ?? "—",
+                                field: c.fieldPath ?? "—",
+                                at: formatDateTimeDE(c.changedAt),
+                                old: c.oldValue ?? "—",
+                                neu: c.newValue ?? "—",
+                                reason: c.reason ?? "—",
+                                by: c.changedByDisplayName ?? "—",
+                            }))}
+                        />
+                    </Section>
+                </div>
+            ) : null}
+        </div>
+    );
+}
 
-                        <Section title="Extern">
-                            <SimpleTable
-                                columns={[
-                                    { key: "stelle", label: "Stelle" },
-                                    { key: "am", label: "Am" },
-                                    { key: "sonst", label: "Stelle sonstiges" },
-                                    { key: "ergebnis", label: "Ergebnis" },
-                                    { key: "begruendung", label: "Begründung", className: "min-w-[260px]" },
-                                ]}
-                                rows={(d.extern ?? []).map((x) => ({
-                                    stelle: x.stelle ?? "—",
-                                    am: formatDateTimeDE(x.am),
-                                    sonst: x.stelleSonstiges ?? "—",
-                                    ergebnis: x.ergebnis ?? "—",
-                                    begruendung: x.begruendung ?? "—",
-                                }))}
-                            />
-                        </Section>
+function MeldungViewModal({
+                              open,
+                              onClose,
+                              meldung,
+                              title,
+                          }: {
+    open: boolean;
+    onClose: () => void;
+    meldung: MeldungResponse | null;
+    title: string;
+}) {
+    useEffect(() => {
+        function onKeyDown(e: KeyboardEvent) {
+            if (e.key === "Escape") onClose();
+        }
+        if (open) window.addEventListener("keydown", onKeyDown);
+        return () => window.removeEventListener("keydown", onKeyDown);
+    }, [open, onClose]);
 
-                        <Section title="Anhänge">
-                            <SimpleTable
-                                columns={[
-                                    { key: "titel", label: "Titel" },
-                                    { key: "typ", label: "Typ" },
-                                    { key: "sicht", label: "Sichtbarkeit" },
-                                    { key: "file", label: "FileId" },
-                                    { key: "besch", label: "Beschreibung", className: "min-w-[260px]" },
-                                    { key: "rg", label: "Rechtsgrundlage", className: "min-w-[260px]" },
-                                ]}
-                                rows={(d.attachments ?? []).map((a) => ({
-                                    titel: a.titel ?? "—",
-                                    typ: a.typ ?? "—",
-                                    sicht: a.sichtbarkeit ?? "—",
-                                    file: a.fileId ?? "—",
-                                    besch: a.beschreibung ?? "—",
-                                    rg: a.rechtsgrundlageHinweis ?? "—",
-                                }))}
-                            />
-                        </Section>
+    if (!open) return null;
+
+    return (
+        <div className="fixed inset-0 z-50">
+            <div className="absolute inset-0 bg-black/35" onClick={onClose} />
+
+            <div className="absolute inset-x-2 top-2 bottom-2 sm:inset-x-6 sm:top-6 sm:bottom-6 lg:left-1/2 lg:w-[1100px] lg:-translate-x-1/2">
+                <div className="flex h-full flex-col rounded-3xl border border-brand-border/40 bg-brand-bg shadow-2xl">
+                    <div className="flex items-center justify-between gap-3 border-b border-brand-border/40 bg-white px-4 py-3 sm:px-5">
+                        <div className="min-w-0">
+                            <div className="text-base font-semibold text-brand-text truncate">{title}</div>
+                            <div className="text-xs text-brand-text2">Lesemodus · druck- und PDF-taugliche Darstellung</div>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                            <Button
+                                variant="secondary"
+                                className="h-10 gap-2"
+                                onClick={() => window.print()}
+                                title="Drucken / Als PDF sichern"
+                            >
+                                <Printer className="h-4 w-4" />
+                                Drucken
+                            </Button>
+
+                            <Button variant="secondary" className="h-10 w-10 p-0" onClick={onClose} title="Schließen">
+                                <X className="h-4 w-4" />
+                            </Button>
+                        </div>
                     </div>
-                ) : null}
 
-                {tab === "audit" ? (
-                    <div className="space-y-6">
-                        <Section title="Freigabe / Submit">
-                            <KeyGrid>
-                                <Row label="Submitted am" value={formatDateTimeDE(d.submittedAt)} />
-                                <Row label="Submitted von" value={d.submittedByDisplayName} />
-                                <Row label="Freigabe am" value={formatDateTimeDE(d.freigabeAm)} />
-                                <Row label="Freigabe von" value={d.freigabeVonDisplayName} />
-                            </KeyGrid>
-                        </Section>
-
-                        <Section title="Änderungen">
-                            <SimpleTable
-                                stickyHeader
-                                maxHeightClassName="max-h-[50vh] md:max-h-[60vh]"
-                                columns={[
-                                    { key: "section", label: "Sektion" },
-                                    { key: "field", label: "Feld" },
-                                    { key: "at", label: "Zeit" },
-                                    { key: "old", label: "Alt", className: "min-w-[260px]" },
-                                    { key: "neu", label: "Neu", className: "min-w-[260px]" },
-                                    { key: "reason", label: "Grund", className: "min-w-[260px]" },
-                                    { key: "by", label: "Von" },
-                                ]}
-                                rows={(d.changes ?? []).map((c) => ({
-                                    section: c.section ?? "—",
-                                    field: c.fieldPath ?? "—",
-                                    at: formatDateTimeDE(c.changedAt),
-                                    old: c.oldValue ?? "—",
-                                    neu: c.newValue ?? "—",
-                                    reason: c.reason ?? "—",
-                                    by: c.changedByDisplayName ?? "—",
-                                }))}
-                            />
-                        </Section>
+                    <div className="min-h-0 flex-1 overflow-y-auto p-3 sm:p-5">
+                        {meldung ? (
+                            <div className="mx-auto w-full max-w-5xl rounded-3xl border border-brand-border/40 bg-white p-4 sm:p-6">
+                                <MeldungDetailsContent d={meldung} />
+                            </div>
+                        ) : (
+                            <div className="mx-auto w-full max-w-5xl rounded-3xl border border-brand-border/40 bg-white p-6 text-sm text-brand-text2">
+                                Lade Meldung…
+                            </div>
+                        )}
                     </div>
-                ) : null}
+                </div>
             </div>
         </div>
     );
@@ -509,7 +578,6 @@ export default function FallMeldungenPage() {
     const searchParams = useSearchParams();
     const params = useParams();
 
-    // robust: akzeptiert /dashboard/falloeffnungen/[fallId] ODER [id] etc.
     const fallId = useMemo(() => {
         const p: any = params as any;
         return safeNumber(p?.fallId) ?? safeNumber(p?.id) ?? safeNumber(p?.falloeffnungId) ?? null;
@@ -523,12 +591,13 @@ export default function FallMeldungenPage() {
     const [meldLoading, setMeldLoading] = useState(false);
     const [meldErr, setMeldErr] = useState<string | null>(null);
 
-    const [openId, setOpenId] = useState<number | null>(null);
     const [actionBusyId, setActionBusyId] = useState<number | null>(null);
+
+    // Modal state
+    const [viewId, setViewId] = useState<number | null>(null);
 
     const autostartMeldungen = searchParams?.get("autostart") === "meldungen";
 
-    // Editor-Route: bei dir ist das bereits etabliert
     function editorUrl(opts: { meldungId?: number; readonly?: boolean }) {
         if (!fallId) return "/dashboard";
         const qs = new URLSearchParams();
@@ -538,9 +607,11 @@ export default function FallMeldungenPage() {
         return `/dashboard/falloeffnungen/${fallId}/meldung${q ? `?${q}` : ""}`;
     }
 
-    // Draft-Sperre (409 vermeiden): Wenn irgendeine Meldung ENTWURF ist -> keine Korrektur / neue Meldung starten
     const hasAnyDraft = useMemo(() => meldungen.some((m) => isDraftStatus(m.status)), [meldungen]);
     const draftItem = useMemo(() => meldungen.find((m) => isDraftStatus(m.status)) ?? null, [meldungen]);
+
+    const viewedItem = useMemo(() => meldungen.find((m) => m.id === viewId) ?? null, [meldungen, viewId]);
+    const viewedDetail = viewedItem?.detail ?? null;
 
     async function loadFall() {
         if (!fallId) return;
@@ -560,7 +631,6 @@ export default function FallMeldungenPage() {
     }
 
     async function listMeldungenFresh(fallIdValue: number) {
-        // nutzt dein existierendes Endpoint-Shape:
         const res: any = await apiFetch<any>(`/falloeffnungen/${fallIdValue}/meldungen?${cacheBust()}`, { method: "GET" });
         const list: MeldungListItemResponse[] = Array.isArray(res) ? res : (res?.items ?? res?.data ?? res?.meldungen ?? []);
         return list;
@@ -601,38 +671,27 @@ export default function FallMeldungenPage() {
     }
 
     async function ensureDetail(m: MeldungVM) {
-        if (!fallId) return;
+        if (!fallId) return m.detail ?? null;
+        if (m.detail) return m.detail;
 
         try {
             const d = await getMeldungFresh(fallId, m.id);
             setMeldungen((prev) => prev.map((x) => (x.id === m.id ? { ...x, detail: d } : x)));
+            return d;
         } catch (e) {
             console.error("detail error =", e);
+            return null;
         }
     }
 
-    async function toggleOpen(m: MeldungVM) {
-        const next = openId === m.id ? null : m.id;
-        setOpenId(next);
-        if (next) void ensureDetail(m);
-    }
-
-    // jump helper (für spätere Referenzen / korrigiert/ersetzt)
-    function jumpTo(id: number) {
-        setOpenId(id);
-        const found = meldungen.find((x) => x.id === id);
-        if (found) void ensureDetail(found);
-
-        requestAnimationFrame(() => {
-            const el = document.getElementById(`meldung-${id}`);
-            el?.scrollIntoView({ behavior: "smooth", block: "start" });
-        });
+    async function openViewModal(m: MeldungVM) {
+        setViewId(m.id);
+        void ensureDetail(m);
     }
 
     async function doCorrect(targetId: number) {
         if (!fallId) return;
 
-        // hard block, um 409/constraint-konflikte sauber zu vermeiden
         if (hasAnyDraft) {
             setMeldErr(
                 `Aktion nicht möglich: Es existiert bereits ein Entwurf (${draftItem ? `#${draftItem.id}` : "—"}). Bitte zuerst Entwurf abschließen oder verwerfen.`
@@ -679,10 +738,6 @@ export default function FallMeldungenPage() {
     }
 
     useEffect(() => {
-        setOpenId(null);
-    }, [fallId]);
-
-    useEffect(() => {
         loadFall();
         loadMeldungen();
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -690,7 +745,6 @@ export default function FallMeldungenPage() {
 
     useEffect(() => {
         if (fallId && autostartMeldungen) {
-            // bewusst: kein redirect – nur Hook für deine Logik
             console.log("[FallMeldungenPage] autostart=meldungen");
         }
     }, [fallId, autostartMeldungen]);
@@ -709,7 +763,6 @@ export default function FallMeldungenPage() {
                         <div className="rounded-2xl border border-brand-danger/20 bg-brand-danger/10 p-3 text-sm text-brand-danger">{meldErr}</div>
                     ) : null}
 
-                    {/* Draft notice (blocker) */}
                     {hasAnyDraft ? (
                         <div className="rounded-2xl border border-brand-warning/25 bg-brand-warning/10 p-3 text-sm text-brand-text">
                             <div className="flex items-start gap-2">
@@ -718,7 +771,7 @@ export default function FallMeldungenPage() {
                                     <div className="font-semibold">Entwurf vorhanden</div>
                                     <div className="text-brand-text2">
                                         Es existiert bereits ein Entwurf{draftItem ? ` (Meldung #${draftItem.id})` : ""}. Solange dieser Entwurf existiert, sind
-                                        <span className="font-semibold"> „Korrigieren“</span> und <span className="font-semibold">„Neue Meldung“</span> gesperrt.
+                                        <span className="font-semibold"> „Korrigieren“</span> und <span className="font-semibold"> „Neue Meldung“</span> gesperrt.
                                     </div>
                                     <div className="mt-2">
                                         <Button
@@ -727,7 +780,6 @@ export default function FallMeldungenPage() {
                                                 if (draftItem) router.push(editorUrl({ meldungId: draftItem.id }));
                                             }}
                                             disabled={!draftItem}
-                                            title={!draftItem ? "Entwurf konnte nicht ermittelt werden." : undefined}
                                         >
                                             Entwurf öffnen
                                             <ArrowRight className="h-4 w-4" />
@@ -738,7 +790,6 @@ export default function FallMeldungenPage() {
                         </div>
                     ) : null}
 
-                    {/* Header */}
                     <div className="rounded-2xl border border-brand-border/40 bg-white p-4 sm:p-5">
                         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                             <div className="flex items-start gap-3 min-w-0">
@@ -766,7 +817,6 @@ export default function FallMeldungenPage() {
                         </div>
                     </div>
 
-                    {/* List header */}
                     <div className="space-y-3">
                         <div className="flex items-end justify-between px-1">
                             <div>
@@ -781,176 +831,142 @@ export default function FallMeldungenPage() {
                             </div>
                         ) : null}
 
-                        <div className="space-y-2">
+                        <div className="space-y-3">
                             {meldungen.map((m) => {
                                 const d = m.detail;
 
                                 const sachlage = d?.kurzbeschreibung ?? "—";
                                 const createdBy = d?.createdByDisplayName ?? m.createdByDisplayName ?? "Unbekannt";
                                 const createdAt = formatDateTimeDE(d?.createdAt ?? m.createdAt);
-                                const isOpen = openId === m.id;
 
                                 const closed = isClosedStatus(m.status);
                                 const draft = isDraftStatus(m.status);
                                 const busy = actionBusyId === m.id;
 
-                                // Fachlogik:
-                                // - "Neue Meldung" nur von current UND abgeschlossen
-                                // - "Korrigieren" nur wenn abgeschlossen
-                                // - beides zusätzlich gesperrt wenn irgendein Draft existiert
                                 const canStartNewMeldung = closed && !!m.current && !hasAnyDraft;
                                 const canCorrect = closed && !hasAnyDraft;
 
                                 return (
-                                    <Card key={m.id} id={`meldung-${m.id}`} className="border border-brand-border/25 shadow-sm">
-                                        <CardHeader
-                                            className="py-3 cursor-pointer select-none"
-                                            role="button"
-                                            tabIndex={0}
-                                            onClick={() => toggleOpen(m)}
-                                            onKeyDown={(e) => {
-                                                if (e.key === "Enter" || e.key === " ") {
-                                                    e.preventDefault();
-                                                    toggleOpen(m);
-                                                }
-                                            }}
-                                        >
-                                            <div className="flex items-start gap-3">
+                                    <Card key={m.id} className="border border-brand-border/25 shadow-sm">
+                                        <CardHeader className="py-4">
+                                            <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                                                 <div className="min-w-0 flex-1">
-                                                    <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                                                        <div className="min-w-0">
-                                                            <div className="text-sm font-semibold text-brand-text break-words">Sachlage: {sachlage}</div>
+                                                    <div className="flex items-start gap-3">
+                                                        <div className="rounded-2xl border border-brand-border/30 bg-brand-bg p-2 shrink-0">
+                                                            <FileText className="h-5 w-5 text-brand-text2" />
+                                                        </div>
+
+                                                        <div className="min-w-0 flex-1">
+                                                            <div className="text-sm font-semibold text-brand-text break-words">{sachlage}</div>
                                                             <div className="mt-1 text-xs text-brand-text2">
                                                                 Erstellt von {createdBy} am {createdAt}
                                                             </div>
-                                                        </div>
 
-                                                        <div className="flex flex-wrap items-center gap-2" onClick={(e) => e.stopPropagation()}>
-                                                            <Badge tone={toneForStatus(m.status)}>{statusLabel(m.status)}</Badge>
-
-                                                            {m.current ? <Badge tone="info">aktuell</Badge> : <Badge tone="neutral">v{m.versionNo}</Badge>}
-
-                                                            {m.type ? <Badge tone="neutral">{m.type}</Badge> : null}
-
-                                                            {m.correctsId ? <Badge tone="warning">korrigiert #{m.correctsId}</Badge> : null}
-                                                            {m.supersedesId ? <Badge tone="neutral">ersetzt #{m.supersedesId}</Badge> : null}
-
-                                                            <Button
-                                                                variant="secondary"
-                                                                onClick={(e) => {
-                                                                    stop(e);
-                                                                    router.push(editorUrl({ meldungId: m.id, readonly: true }));
-                                                                }}
-                                                                className="h-9 px-3 gap-2"
-                                                                title="Meldung im Lesemodus öffnen"
-                                                            >
-                                                                <Eye className="h-4 w-4" />
-                                                                Ansehen
-                                                            </Button>
-
-                                                            {draft ? (
-                                                                <Button
-                                                                    onClick={(e) => {
-                                                                        stop(e);
-                                                                        router.push(editorUrl({ meldungId: m.id }));
-                                                                    }}
-                                                                    className="h-9 px-3 gap-2"
-                                                                    title="Entwurf weiterbearbeiten"
-                                                                >
-                                                                    Entwurf öffnen
-                                                                    <ArrowRight className="h-4 w-4" />
-                                                                </Button>
-                                                            ) : null}
-
-                                                            {closed ? (
-                                                                <Button
-                                                                    variant="default"
-                                                                    disabled={busy || !canCorrect}
-                                                                    onClick={(e) => {
-                                                                        stop(e);
-                                                                        void doCorrect(m.id);
-                                                                    }}
-                                                                    className="h-9 px-3 gap-2"
-                                                                    title={!canCorrect ? "Gesperrt: Entwurf vorhanden" : "Korrektur (mit Vorbefüllung) starten"}
-                                                                >
-                                                                    <Wrench className="h-4 w-4" />
-                                                                    Korrigieren
-                                                                </Button>
-                                                            ) : null}
-
-                                                            {canStartNewMeldung ? (
-                                                                <Button
-                                                                    variant="secondary"
-                                                                    disabled={busy}
-                                                                    onClick={(e) => {
-                                                                        stop(e);
-                                                                        void doNewMeldungFromCurrent(m.id);
-                                                                    }}
-                                                                    className="h-9 px-3 gap-2"
-                                                                    title="Neue Meldung als Folgemeldung starten"
-                                                                >
-                                                                    <CopyPlus className="h-4 w-4" />
-                                                                    Neue Meldung
-                                                                </Button>
-                                                            ) : null}
+                                                            <div className="mt-3 flex flex-wrap gap-2">
+                                                                <Badge tone={toneForStatus(m.status)}>{statusLabel(m.status)}</Badge>
+                                                                {m.current ? <Badge tone="info">aktuell</Badge> : <Badge tone="neutral">v{m.versionNo}</Badge>}
+                                                                {m.type ? <Badge tone="neutral">{m.type}</Badge> : null}
+                                                                {m.correctsId ? <Badge tone="warning">korrigiert #{m.correctsId}</Badge> : null}
+                                                                {m.supersedesId ? <Badge tone="neutral">ersetzt #{m.supersedesId}</Badge> : null}
+                                                            </div>
                                                         </div>
                                                     </div>
                                                 </div>
 
-                                                <div className="shrink-0 mt-0.5">
-                                                    {isOpen ? <ChevronUp className="h-7 w-7 text-brand-text2" /> : <ChevronDown className="h-7 w-7 text-brand-text2" />}
+                                                <div className="flex flex-wrap items-center gap-2 lg:justify-end">
+                                                    <Button
+                                                        className="h-11 w-11 rounded-2xl p-0 shadow-sm"
+                                                        onClick={() => void openViewModal(m)}
+                                                        title="Meldung ansehen"
+                                                        aria-label="Meldung ansehen"
+                                                    >
+                                                        <Eye className="h-5 w-5" />
+                                                    </Button>
+
+                                                    {draft ? (
+                                                        <Button
+                                                            onClick={() => router.push(editorUrl({ meldungId: m.id }))}
+                                                            className="h-11 gap-2"
+                                                            title="Entwurf weiterbearbeiten"
+                                                        >
+                                                            Entwurf öffnen
+                                                            <ArrowRight className="h-4 w-4" />
+                                                        </Button>
+                                                    ) : null}
+
+                                                    {closed ? (
+                                                        <Button
+                                                            variant="default"
+                                                            disabled={busy || !canCorrect}
+                                                            onClick={() => void doCorrect(m.id)}
+                                                            className="h-11 gap-2"
+                                                            title={!canCorrect ? "Gesperrt: Entwurf vorhanden" : "Korrektur starten"}
+                                                        >
+                                                            <Wrench className="h-4 w-4" />
+                                                            Korrigieren
+                                                        </Button>
+                                                    ) : null}
+
+                                                    {canStartNewMeldung ? (
+                                                        <Button
+                                                            variant="secondary"
+                                                            disabled={busy}
+                                                            onClick={() => void doNewMeldungFromCurrent(m.id)}
+                                                            className="h-11 gap-2"
+                                                            title="Neue Meldung als Folgemeldung starten"
+                                                        >
+                                                            <CopyPlus className="h-4 w-4" />
+                                                            Neue Meldung
+                                                        </Button>
+                                                    ) : null}
                                                 </div>
                                             </div>
                                         </CardHeader>
 
-                                        {isOpen ? (
-                                            <CardContent className="pt-0 pb-4">
-                                                {!d ? (
-                                                    <div className="rounded-2xl border border-brand-border/40 bg-white p-4 text-sm text-brand-text2">
-                                                        Lade Details…
-                                                    </div>
-                                                ) : (
-                                                    <MeldungDetailsFlat d={d} />
-                                                )}
+                                        <CardContent className="pt-0">
+                                            <Separator className="mb-4" />
 
-                                                {(d?.supersedesId || d?.correctsId) ? (
-                                                    <div className="mt-3 rounded-2xl border border-brand-border/30 bg-white p-3">
-                                                        <div className="text-sm font-semibold text-brand-text">Referenzen</div>
-                                                        <div className="mt-2 flex flex-wrap gap-2">
-                                                            {d?.supersedesId ? (
-                                                                <Button
-                                                                    type="button"
-                                                                    variant="secondary"
-                                                                    className="h-9 gap-2"
-                                                                    onClick={() => jumpTo(d.supersedesId!)}
-                                                                >
-                                                                    <ArrowRight className="h-4 w-4" />
-                                                                    Ersetzt #{d.supersedesId} öffnen
-                                                                </Button>
-                                                            ) : null}
+                                            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                                                <div className="rounded-2xl border border-brand-border/25 bg-white p-3">
+                                                    <div className="text-xs font-semibold text-brand-text2">Status</div>
+                                                    <div className="mt-1 text-sm text-brand-text">{statusLabel(m.status)}</div>
+                                                </div>
 
-                                                            {d?.correctsId ? (
-                                                                <Button
-                                                                    type="button"
-                                                                    variant="secondary"
-                                                                    className="h-9 gap-2"
-                                                                    onClick={() => jumpTo(d.correctsId!)}
-                                                                >
-                                                                    <ArrowRight className="h-4 w-4" />
-                                                                    Korrigiert #{d.correctsId} öffnen
-                                                                </Button>
-                                                            ) : null}
-                                                        </div>
+                                                <div className="rounded-2xl border border-brand-border/25 bg-white p-3">
+                                                    <div className="text-xs font-semibold text-brand-text2">Typ</div>
+                                                    <div className="mt-1 text-sm text-brand-text">{m.type || "—"}</div>
+                                                </div>
+
+                                                <div className="rounded-2xl border border-brand-border/25 bg-white p-3">
+                                                    <div className="text-xs font-semibold text-brand-text2">Version</div>
+                                                    <div className="mt-1 text-sm text-brand-text">v{m.versionNo}</div>
+                                                </div>
+
+                                                <div className="rounded-2xl border border-brand-border/25 bg-white p-3">
+                                                    <div className="text-xs font-semibold text-brand-text2">Bezug</div>
+                                                    <div className="mt-1 text-sm text-brand-text">
+                                                        {m.correctsId ? `Korrigiert #${m.correctsId}` : m.supersedesId ? `Ersetzt #${m.supersedesId}` : "—"}
                                                     </div>
-                                                ) : null}
-                                            </CardContent>
-                                        ) : null}
+                                                </div>
+                                            </div>
+                                        </CardContent>
                                     </Card>
                                 );
                             })}
                         </div>
                     </div>
                 </div>
+
+                <MeldungViewModal
+                    open={viewId !== null}
+                    onClose={() => setViewId(null)}
+                    meldung={viewedDetail}
+                    title={
+                        viewedItem
+                            ? `Meldung #${viewedItem.id} · ${viewedItem.type || "Meldung"} · v${viewedItem.versionNo}`
+                            : "Meldung ansehen"
+                    }
+                />
             </div>
         </AuthGate>
     );
