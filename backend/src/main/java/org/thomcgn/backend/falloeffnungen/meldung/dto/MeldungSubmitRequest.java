@@ -4,5 +4,6 @@ import java.util.Map;
 
 public record MeldungSubmitRequest(
         Boolean mirrorToNotizen,
-        Map<String, String> sectionReasons
+        Map<String, String> sectionReasons,
+        String correctionReason
 ) {}

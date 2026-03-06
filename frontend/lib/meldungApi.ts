@@ -1,9 +1,4 @@
-// /lib/meldungApi.ts
 import { apiFetch } from "@/lib/api";
-
-/**
- * Backend: /falloeffnungen/{fallId}/meldungen
- */
 
 export type MeldungListItemResponse = {
     id: number;
@@ -11,7 +6,7 @@ export type MeldungListItemResponse = {
     current: boolean;
     status: string;
     type: string;
-    createdAt: string | null; // Instant
+    createdAt: string | null;
     createdByDisplayName: string | null;
     supersedesId: number | null;
     correctsId: number | null;
@@ -24,7 +19,7 @@ export type MeldungChangeResponse = {
     oldValue: string | null;
     newValue: string | null;
     reason: string | null;
-    changedAt: string | null; // Instant
+    changedAt: string | null;
     changedByDisplayName: string | null;
 };
 
@@ -32,11 +27,6 @@ export type MeldungResponse = {
     id: number;
     fallId: number;
 
-    /**
-     * ✅ NEU: Ziel für Redirect nach /dashboard/akten/[id]
-     * - ideal: Backend liefert aktenId direkt
-     * - optional kompatibel: kindId/akteId (falls Backend so heißt)
-     */
     aktenId?: number | null;
     kindId?: number | null;
     akteId?: number | null;
@@ -46,14 +36,13 @@ export type MeldungResponse = {
     status: string;
     type: string;
 
-    createdAt: string | null; // Instant
-    updatedAt: string | null; // Instant
+    createdAt: string | null;
+    updatedAt: string | null;
     createdByDisplayName: string | null;
 
     supersedesId: number | null;
     correctsId: number | null;
 
-    // Meta
     erfasstVonRolle: string | null;
     meldeweg: string | null;
     meldewegSonstiges: string | null;
@@ -63,32 +52,28 @@ export type MeldungResponse = {
     einwilligungVorhanden: boolean | null;
     schweigepflichtentbindungVorhanden: boolean | null;
 
-    // Inhalt
     kurzbeschreibung: string | null;
 
-    // Fach
     fachAmpel: string | null;
     fachText: string | null;
     abweichungZurAuto: string | null;
     abweichungsBegruendung: string | null;
 
-    // Akut
     akutGefahrImVerzug: boolean;
     akutBegruendung: string | null;
     akutNotrufErforderlich: boolean | null;
     akutKindSicherUntergebracht: string | null;
 
-    // Planung
     verantwortlicheFachkraftUserId: number | null;
-    naechsteUeberpruefungAm: string | null; // LocalDate (yyyy-mm-dd)
+    naechsteUeberpruefungAm: string | null;
     zusammenfassung: string | null;
 
-    // Sections
     anlassCodes: string[];
+
     jugendamt:
         | {
         informiert: string | null;
-        kontaktAm: string | null; // Instant
+        kontaktAm: string | null;
         kontaktart: string | null;
         aktenzeichen: string | null;
         begruendung: string | null;
@@ -98,7 +83,7 @@ export type MeldungResponse = {
     contacts: Array<{
         id: number;
         kontaktMit: string | null;
-        kontaktAm: string | null; // Instant
+        kontaktAm: string | null;
         status: string | null;
         notiz: string | null;
         ergebnis: string | null;
@@ -108,7 +93,7 @@ export type MeldungResponse = {
         id: number;
         stelle: string | null;
         stelleSonstiges: string | null;
-        am: string | null; // Instant
+        am: string | null;
         begruendung: string | null;
         ergebnis: string | null;
     }>;
@@ -125,7 +110,7 @@ export type MeldungResponse = {
 
     observations: Array<{
         id: number;
-        zeitpunkt: string | null; // Instant
+        zeitpunkt: string | null;
         zeitraum: string | null;
         ort: string | null;
         ortSonstiges: string | null;
@@ -136,7 +121,7 @@ export type MeldungResponse = {
         verhaltenKind: string | null;
         verhaltenBezug: string | null;
         sichtbarkeit: string | null;
-        createdAt: string | null; // Instant
+        createdAt: string | null;
         createdByDisplayName: string | null;
         tags: Array<{
             id: number;
@@ -147,13 +132,11 @@ export type MeldungResponse = {
         }>;
     }>;
 
-    // Submit
-    submittedAt: string | null; // Instant
+    submittedAt: string | null;
     submittedByDisplayName: string | null;
-    freigabeAm: string | null; // Instant
+    freigabeAm: string | null;
     freigabeVonDisplayName: string | null;
 
-    // Changes
     changes: MeldungChangeResponse[];
 };
 
@@ -167,38 +150,29 @@ export type MeldungCorrectRequest = {
 
 export type MeldungDraftRequest = {
     erfasstVonRolle?: string | null;
-
     meldeweg?: string | null;
     meldewegSonstiges?: string | null;
     meldendeStelleKontakt?: string | null;
-
     dringlichkeit?: string | null;
     datenbasis?: string | null;
-
     einwilligungVorhanden?: boolean | null;
     schweigepflichtentbindungVorhanden?: boolean | null;
-
     kurzbeschreibung?: string | null;
-
     fachAmpel?: string | null;
     fachText?: string | null;
-
     abweichungZurAuto?: string | null;
     abweichungsBegruendung?: string | null;
-
     akutGefahrImVerzug?: boolean;
     akutBegruendung?: string | null;
     akutNotrufErforderlich?: boolean | null;
     akutKindSicherUntergebracht?: string | null;
-
     verantwortlicheFachkraftUserId?: number | null;
-    naechsteUeberpruefungAm?: string | null; // yyyy-mm-dd
+    naechsteUeberpruefungAm?: string | null;
     zusammenfassung?: string | null;
-
     anlassCodes?: string[];
 
     observations?: Array<{
-        zeitpunkt?: string | null; // Instant
+        zeitpunkt?: string | null;
         zeitraum?: string | null;
         ort?: string | null;
         ortSonstiges?: string | null;
@@ -220,7 +194,7 @@ export type MeldungDraftRequest = {
     jugendamt?:
         | {
         informiert?: string | null;
-        kontaktAm?: string | null; // Instant
+        kontaktAm?: string | null;
         kontaktart?: string | null;
         aktenzeichen?: string | null;
         begruendung?: string | null;
@@ -229,7 +203,7 @@ export type MeldungDraftRequest = {
 
     contacts?: Array<{
         kontaktMit?: string | null;
-        kontaktAm?: string | null; // Instant
+        kontaktAm?: string | null;
         status?: string | null;
         notiz?: string | null;
         ergebnis?: string | null;
@@ -238,7 +212,7 @@ export type MeldungDraftRequest = {
     extern?: Array<{
         stelle?: string | null;
         stelleSonstiges?: string | null;
-        am?: string | null; // Instant
+        am?: string | null;
         begruendung?: string | null;
         ergebnis?: string | null;
     }>;
@@ -266,12 +240,6 @@ function extractHttpStatus(err: unknown): number | null {
     return typeof s === "number" ? s : null;
 }
 
-/**
- * ✅ Robust:
- * - GET current
- * - nur wenn 404: POST create
- * - wenn create 409: GET current (Race / parallel tab)
- */
 async function ensureCurrentMeldung(fallId: number): Promise<MeldungResponse> {
     try {
         return await apiFetch<MeldungResponse>(`/falloeffnungen/${fallId}/meldungen/current`, { method: "GET" });

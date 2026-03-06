@@ -57,6 +57,25 @@ public class Meldung extends AuditableEntity {
     @JoinColumn(name="corrects_id")
     private Meldung corrects;
 
+    // ===== Version-Metadaten =====
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "change_reason", length = 20)
+    private MeldungChangeReason changeReason;
+
+    /**
+     * Zeitpunkt, ab dem die neue Information fachlich wirksam wurde.
+     * Für FIX typischerweise null.
+     */
+    @Column(name = "info_effective_at")
+    private Instant infoEffectiveAt;
+
+    /**
+     * Freitextbegründung (z.B. bei kritischen Änderungen / Neubewertung).
+     */
+    @Column(name = "reason_text", columnDefinition = "text")
+    private String reasonText;
+
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name="created_by_user_id", nullable = false)
     private User createdBy;
@@ -172,6 +191,15 @@ public class Meldung extends AuditableEntity {
 
     public Meldung getCorrects() { return corrects; }
     public void setCorrects(Meldung corrects) { this.corrects = corrects; }
+
+    public MeldungChangeReason getChangeReason() { return changeReason; }
+    public void setChangeReason(MeldungChangeReason changeReason) { this.changeReason = changeReason; }
+
+    public Instant getInfoEffectiveAt() { return infoEffectiveAt; }
+    public void setInfoEffectiveAt(Instant infoEffectiveAt) { this.infoEffectiveAt = infoEffectiveAt; }
+
+    public String getReasonText() { return reasonText; }
+    public void setReasonText(String reasonText) { this.reasonText = reasonText; }
 
     public User getCreatedBy() { return createdBy; }
     public void setCreatedBy(User createdBy) { this.createdBy = createdBy; }

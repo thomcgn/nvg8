@@ -1,10 +1,10 @@
 "use client";
 
 import * as React from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 
 import { AuthGate } from "@/components/AuthGate";
-import { TopbarConnected as Topbar } from "@/components/layout/TopbarConnected";;
+import { TopbarConnected as Topbar } from "@/components/layout/TopbarConnected";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -22,6 +22,12 @@ function parseId(param: ParamValue): number | null {
     const raw = Array.isArray(param) ? param[0] : param;
     if (typeof raw !== "string") return null;
 
+    const n = Number(raw);
+    return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+function parseQueryId(raw: string | null): number | null {
+    if (!raw) return null;
     const n = Number(raw);
     return Number.isFinite(n) && n > 0 ? n : null;
 }
@@ -66,16 +72,28 @@ function getStatus(e: unknown): number | undefined {
 export default function ErstmeldungPage() {
     const params = useParams<{ fallId?: string | string[] }>();
     const router = useRouter();
+    const searchParams = useSearchParams();
 
     const fallId = parseId(params.fallId);
+
+    // ✅ optional: gezielt Meldung öffnen (z.B. aus Liste/Audit)
+    const meldungIdFromQuery = React.useMemo(() => {
+        return parseQueryId(searchParams?.get("meldungId") ?? null);
+    }, [searchParams]);
+
+    // ✅ optional: readonly mode erzwingen (auch wenn Draft)
+    const readonlyFromQuery = React.useMemo(() => {
+        const m = (searchParams?.get("mode") ?? "").toLowerCase();
+        return m === "readonly" || m === "view";
+    }, [searchParams]);
 
     const [loading, setLoading] = React.useState(true);
     const [err, setErr] = React.useState<string | null>(null);
     const [meldung, setMeldung] = React.useState<MeldungResponse | null>(null);
 
     React.useEffect(() => {
-        if (fallId == null) return; // ✅ narrow first
-        const id = fallId; // ✅ id is now `number`
+        if (fallId == null) return;
+        const id = fallId;
 
         let cancelled = false;
 
@@ -84,6 +102,20 @@ export default function ErstmeldungPage() {
             setLoading(true);
 
             try {
+                // ✅ 0) Wenn meldungId explizit mitgegeben → genau diese laden
+                if (meldungIdFromQuery != null) {
+                    try {
+                        const m = await meldungApi.get(id, meldungIdFromQuery);
+                        if (!cancelled) setMeldung(m);
+                        return;
+                    } catch (e: unknown) {
+                        // wenn die gezielte Meldung nicht geht: klare Meldung + fallback auf current
+                        if (!cancelled) {
+                            setErr("Die angeforderte Meldung konnte nicht geladen werden (Fallback auf aktuelle Meldung).");
+                        }
+                    }
+                }
+
                 // 1️⃣ Versuche vorhandenes current zu laden
                 const current = await meldungApi.current(id);
                 if (!cancelled) setMeldung(current);
@@ -111,18 +143,21 @@ export default function ErstmeldungPage() {
         return () => {
             cancelled = true;
         };
-    }, [fallId]);
+    }, [fallId, meldungIdFromQuery]);
 
     const onSaveDraft = React.useCallback(
         async (req: MeldungDraftRequest) => {
             if (fallId == null || !meldung) return;
             const id = fallId;
 
+            // ✅ Schutz: wenn readonly erzwungen, nicht speichern
+            if (readonlyFromQuery) return;
+
             const updated = await meldungApi.saveDraft(id, meldung.id, req);
             setMeldung(updated);
             return updated;
         },
-        [fallId, meldung]
+        [fallId, meldung, readonlyFromQuery]
     );
 
     const onSubmit = React.useCallback(
@@ -130,13 +165,17 @@ export default function ErstmeldungPage() {
             if (fallId == null || !meldung) return;
             const id = fallId;
 
+            // ✅ Schutz: wenn readonly erzwungen, nicht submitten
+            if (readonlyFromQuery) return;
+
             await meldungApi.submit(id, meldung.id, { mirrorToNotizen });
-            router.replace(`/dashboard/falloeffnungen/${id}/meldungen`);
+            router.replace(`/dashboard/falloeffnungen/${id}`);
         },
-        [fallId, meldung, router]
+        [fallId, meldung, router, readonlyFromQuery]
     );
 
-    const disabled = isLockedStatus(meldung?.status);
+    // ✅ disabled wenn Status locked ODER mode=readonly
+    const disabled = readonlyFromQuery || isLockedStatus(meldung?.status);
 
     if (fallId == null) {
         return (
@@ -167,6 +206,8 @@ export default function ErstmeldungPage() {
                         <div className="text-xs text-muted-foreground">
                             Fall #{fallId}
                             {meldung ? ` · Meldung #${meldung.id} · v${meldung.versionNo}` : ""}
+                            {readonlyFromQuery ? " · read-only" : ""}
+                            {meldungIdFromQuery ? ` · requested=${meldungIdFromQuery}` : ""}
                         </div>
                     </div>
 

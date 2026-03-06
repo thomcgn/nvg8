@@ -19,6 +19,11 @@ public record MeldungResponse(
         Long supersedesId,
         Long correctsId,
 
+        // Version-Metadaten
+        String changeReason,
+        Instant infoEffectiveAt,
+        String reasonText,
+
         // Meta
         String erfasstVonRolle,
         String meldeweg,
