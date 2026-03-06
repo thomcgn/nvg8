@@ -43,6 +43,11 @@ export type MeldungResponse = {
     supersedesId: number | null;
     correctsId: number | null;
 
+    // ✅ vom Backend geliefert
+    changeReason?: string | null;
+    infoEffectiveAt?: string | null;
+    reasonText?: string | null;
+
     erfasstVonRolle: string | null;
     meldeweg: string | null;
     meldewegSonstiges: string | null;
@@ -146,9 +151,17 @@ export type MeldungCreateRequest = {
 
 export type MeldungCorrectRequest = {
     targetMeldungId: number;
+    changeReason?: string | null;
+    infoEffectiveAt?: string | null;
+    reasonText?: string | null;
 };
 
 export type MeldungDraftRequest = {
+    // ✅ Versions-Metadaten optional im Draft
+    changeReason?: string | null;
+    infoEffectiveAt?: string | null;
+    reasonText?: string | null;
+
     erfasstVonRolle?: string | null;
     meldeweg?: string | null;
     meldewegSonstiges?: string | null;
@@ -232,6 +245,9 @@ export type MeldungDraftRequest = {
 export type MeldungSubmitRequest = {
     mirrorToNotizen?: boolean | null;
     sectionReasons?: Record<string, string>;
+
+    // ✅ nur für Korrektur Pflicht
+    changeReason?: string | null;
 };
 
 function extractHttpStatus(err: unknown): number | null {
@@ -242,7 +258,9 @@ function extractHttpStatus(err: unknown): number | null {
 
 async function ensureCurrentMeldung(fallId: number): Promise<MeldungResponse> {
     try {
-        return await apiFetch<MeldungResponse>(`/falloeffnungen/${fallId}/meldungen/current`, { method: "GET" });
+        return await apiFetch<MeldungResponse>(`/falloeffnungen/${fallId}/meldungen/current`, {
+            method: "GET",
+        });
     } catch (e: any) {
         const st = extractHttpStatus(e);
         if (st !== 404) throw e;
@@ -255,7 +273,9 @@ async function ensureCurrentMeldung(fallId: number): Promise<MeldungResponse> {
         } catch (e2: any) {
             const st2 = extractHttpStatus(e2);
             if (st2 === 409) {
-                return await apiFetch<MeldungResponse>(`/falloeffnungen/${fallId}/meldungen/current`, { method: "GET" });
+                return await apiFetch<MeldungResponse>(`/falloeffnungen/${fallId}/meldungen/current`, {
+                    method: "GET",
+                });
             }
             throw e2;
         }
@@ -264,13 +284,19 @@ async function ensureCurrentMeldung(fallId: number): Promise<MeldungResponse> {
 
 export const meldungApi = {
     list: (fallId: number) =>
-        apiFetch<MeldungListItemResponse[]>(`/falloeffnungen/${fallId}/meldungen`, { method: "GET" }),
+        apiFetch<MeldungListItemResponse[]>(`/falloeffnungen/${fallId}/meldungen`, {
+            method: "GET",
+        }),
 
     current: (fallId: number) =>
-        apiFetch<MeldungResponse>(`/falloeffnungen/${fallId}/meldungen/current`, { method: "GET" }),
+        apiFetch<MeldungResponse>(`/falloeffnungen/${fallId}/meldungen/current`, {
+            method: "GET",
+        }),
 
     get: (fallId: number, meldungId: number) =>
-        apiFetch<MeldungResponse>(`/falloeffnungen/${fallId}/meldungen/${meldungId}`, { method: "GET" }),
+        apiFetch<MeldungResponse>(`/falloeffnungen/${fallId}/meldungen/${meldungId}`, {
+            method: "GET",
+        }),
 
     createNew: (fallId: number, req?: MeldungCreateRequest | null) =>
         apiFetch<MeldungResponse>(`/falloeffnungen/${fallId}/meldungen`, {

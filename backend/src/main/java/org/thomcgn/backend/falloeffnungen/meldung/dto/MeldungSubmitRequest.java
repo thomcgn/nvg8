@@ -7,8 +7,7 @@ import java.util.Map;
 public record MeldungSubmitRequest(
         Boolean mirrorToNotizen,
         Map<String, String> sectionReasons,
+        @JsonAlias({"changeReason", "correctionReason"}) String changeReason
+) {}
 
-        @JsonAlias({"changeReason", "correctionReason"})
-        String changeReason
-) {
-}
+
