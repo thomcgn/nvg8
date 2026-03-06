@@ -8,6 +8,8 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.thomcgn.backend.falloeffnungen.meldung.model.Meldung;
+import org.thomcgn.backend.falloeffnungen.meldung.model.MeldungStatus;
+import org.thomcgn.backend.falloeffnungen.meldung.model.MeldungType;
 
 import java.util.Collection;
 import java.util.List;
@@ -15,6 +17,12 @@ import java.util.Optional;
 
 public interface MeldungRepository extends JpaRepository<Meldung, Long> {
 
+    Optional<Meldung> findFirstByFalleroeffnung_IdAndTypeAndStatusAndCorrects_Id(
+            Long fallId,
+            MeldungType type,
+            MeldungStatus status,
+            Long correctsId
+    );
     // =========================================================
     // CURRENT
     // =========================================================
