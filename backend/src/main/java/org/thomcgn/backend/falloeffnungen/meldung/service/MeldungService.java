@@ -351,6 +351,23 @@ public class MeldungService {
 
         User user = currentUser();
 
+        // Current-Switch für Korrekturen erst beim Submit
+        if (isCorrection) {
+            fallRepo.lockById(fall.getId())
+                    .orElseThrow(() -> DomainException.notFound(ErrorCode.NOT_FOUND, "Fall not found"));
+
+            Optional<Meldung> currentOpt = meldungRepo.findCurrentByFallIdForUpdate(fall.getId());
+
+            if (currentOpt.isPresent()) {
+                Meldung current = currentOpt.get();
+                if (!Objects.equals(current.getId(), m.getId())) {
+                    current.setCurrent(false);
+                }
+            }
+
+            m.setCurrent(true);
+        }
+
         m.setStatus(MeldungStatus.ABGESCHLOSSEN);
         m.setSubmittedAt(Instant.now());
         m.setSubmittedBy(user);
