@@ -164,6 +164,7 @@ public class MeldungService {
                 }
 
                 current.setCurrent(false);
+                meldungRepo.saveAndFlush(current);
 
                 int nextVersion = meldungRepo.getMaxVersionNo(fall.getId()) + 1;
 
@@ -364,7 +365,7 @@ public class MeldungService {
 
                 if (!Objects.equals(current.getId(), m.getId())) {
                     current.setCurrent(false);
-                    meldungRepo.save(current);
+                    meldungRepo.saveAndFlush(current);
                 }
             }
 
