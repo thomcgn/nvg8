@@ -11,27 +11,25 @@ type PageProps = {
     }>;
 };
 
-const API_BASE = process.env.API_BASE_URL ?? process.env.API_BASE;
+const API_BASE =
+    process.env.API_BASE_URL ??
+    process.env.API_BASE ??
+    process.env.BACKEND_URL;
 
-class ApiError extends Error {
-    status: number;
-    url: string;
-    body: string;
-
-    constructor(message: string, status: number, url: string, body = "") {
-        super(message);
-        this.name = "ApiError";
-        this.status = status;
-        this.url = url;
-        this.body = body;
-    }
-}
+type ApiFetchError = Error & {
+    status?: number;
+    url?: string;
+    responseText?: string;
+    cause?: unknown;
+};
 
 async function serverApiFetch<T>(path: string): Promise<T> {
     if (!API_BASE) {
-        throw new Error(
-            "API_BASE_URL/API_BASE is not configured on the server."
+        const err: ApiFetchError = new Error(
+            "API_BASE_URL/API_BASE/BACKEND_URL is not configured on the server."
         );
+        err.url = path;
+        throw err;
     }
 
     const cookieStore = await cookies();
@@ -54,12 +52,13 @@ async function serverApiFetch<T>(path: string): Promise<T> {
             },
             cache: "no-store",
         });
-    } catch (error) {
-        console.error("Server API fetch network error:", {
-            url,
-            message: error instanceof Error ? error.message : String(error),
-        });
-        throw new Error(`Network error while fetching ${url}`);
+    } catch (cause) {
+        const err: ApiFetchError = new Error(
+            `Network error while fetching ${url}`
+        );
+        err.url = url;
+        err.cause = cause;
+        throw err;
     }
 
     if (res.status === 404) {
@@ -68,12 +67,13 @@ async function serverApiFetch<T>(path: string): Promise<T> {
 
     if (!res.ok) {
         const text = await res.text().catch(() => "");
-        throw new ApiError(
-            `Request failed: ${res.status} ${res.statusText}`,
-            res.status,
-            url,
-            text
+        const err: ApiFetchError = new Error(
+            `API request failed with ${res.status} ${res.statusText}`
         );
+        err.status = res.status;
+        err.url = url;
+        err.responseText = text;
+        throw err;
     }
 
     if (res.status === 204) {
@@ -82,13 +82,11 @@ async function serverApiFetch<T>(path: string): Promise<T> {
 
     try {
         return (await res.json()) as T;
-    } catch (error) {
-        console.error("Failed to parse JSON response:", {
-            url,
-            status: res.status,
-            message: error instanceof Error ? error.message : String(error),
-        });
-        throw new Error(`Invalid JSON returned from ${url}`);
+    } catch (cause) {
+        const err: ApiFetchError = new Error(`Invalid JSON from ${url}`);
+        err.url = url;
+        err.cause = cause;
+        throw err;
     }
 }
 
@@ -102,172 +100,199 @@ export default async function MeldungPrintPage({ params }: PageProps) {
         notFound();
     }
 
-    const [fall, meldung] = await Promise.all([
-        serverApiFetch<FalleroeffnungResponse>(`/falloeffnungen/${fallIdNum}`),
-        serverApiFetch<MeldungResponse>(
-            `/falloeffnungen/${fallIdNum}/meldungen/${meldungIdNum}`
-        ),
-    ]);
+    try {
+        const [fall, meldung] = await Promise.all([
+            serverApiFetch<FalleroeffnungResponse>(`/falloeffnungen/${fallIdNum}`),
+            serverApiFetch<MeldungResponse>(
+                `/falloeffnungen/${fallIdNum}/meldungen/${meldungIdNum}`
+            ),
+        ]);
 
-    return (
-        <main className="min-h-screen bg-white text-slate-900">
-            <AutoPrint />
+        return (
+            <main className="min-h-screen bg-white text-slate-900">
+                <AutoPrint />
 
-            <div className="mx-auto w-full max-w-[960px] px-6 py-8 print-doc print:max-w-none print:px-0 print:py-0">
-                <MeldungPrintDocument fall={fall} d={meldung} />
-            </div>
+                <div className="mx-auto w-full max-w-[960px] px-6 py-8 print-doc print:max-w-none print:px-0 print:py-0">
+                    <MeldungPrintDocument fall={fall} d={meldung} />
+                </div>
 
-            <style>{`
-                @page {
-                    size: A4;
-                    margin: 14mm 12mm 16mm 12mm;
-                }
-
-                @media print {
-                    html, body {
-                        background: #fff !important;
-                        color: #0f172a !important;
-                        -webkit-print-color-adjust: exact;
-                        print-color-adjust: exact;
-                        font-size: 10.5pt;
-                        line-height: 1.45;
+                <style>{`
+                    @page {
+                        size: A4;
+                        margin: 14mm 12mm 16mm 12mm;
                     }
 
-                    body {
-                        margin: 0 !important;
-                        padding: 0 !important;
+                    @media print {
+                        html, body {
+                            background: #fff !important;
+                            color: #0f172a !important;
+                            -webkit-print-color-adjust: exact;
+                            print-color-adjust: exact;
+                            font-size: 10.5pt;
+                            line-height: 1.45;
+                        }
+
+                        body {
+                            margin: 0 !important;
+                            padding: 0 !important;
+                        }
+
+                        * {
+                            box-shadow: none !important;
+                        }
+
+                        aside,
+                        nav,
+                        header,
+                        .sidebar,
+                        .topbar,
+                        .print-hide,
+                        [data-sidebar],
+                        [data-topbar] {
+                            display: none !important;
+                        }
+
+                        main {
+                            margin: 0 !important;
+                            padding: 0 !important;
+                            width: 100% !important;
+                            max-width: none !important;
+                            min-height: auto !important;
+                        }
+
+                        .print-doc {
+                            width: 100% !important;
+                            max-width: none !important;
+                        }
+
+                        .print-section {
+                            margin: 0 0 8mm 0;
+                        }
+
+                        .print-section-title {
+                            font-size: 14pt;
+                            font-weight: 700;
+                            margin: 0 0 4mm 0;
+                            padding-bottom: 2mm;
+                            border-bottom: 1px solid #cbd5e1;
+                        }
+
+                        .print-section,
+                        .print-table-wrap,
+                        .print-avoid-break,
+                        .print-card,
+                        .print-row {
+                            break-inside: avoid;
+                            page-break-inside: avoid;
+                        }
+
+                        .print-page-break {
+                            break-before: page;
+                            page-break-before: always;
+                        }
+
+                        .print-table {
+                            width: 100%;
+                            border-collapse: collapse;
+                            table-layout: fixed;
+                            font-size: 9.5pt;
+                        }
+
+                        .print-table thead {
+                            display: table-header-group;
+                        }
+
+                        .print-table tfoot {
+                            display: table-footer-group;
+                        }
+
+                        .print-table tr,
+                        .print-table td,
+                        .print-table th {
+                            break-inside: avoid;
+                            page-break-inside: avoid;
+                        }
+
+                        .print-table th,
+                        .print-table td {
+                            border: 1px solid #cbd5e1;
+                            padding: 6px 8px;
+                            vertical-align: top;
+                            text-align: left;
+                            word-break: break-word;
+                            overflow-wrap: anywhere;
+                        }
+
+                        .print-table th {
+                            background: #f8fafc !important;
+                            font-weight: 700;
+                        }
+
+                        .print-small {
+                            font-size: 8.8pt;
+                            color: #475569;
+                        }
+
+                        .print-muted {
+                            color: #64748b !important;
+                        }
+
+                        .print-korrektur {
+                            border-left: 4px solid #dc2626 !important;
+                            background: #fef2f2 !important;
+                        }
+
+                        .print-grid-2 {
+                            display: grid;
+                            grid-template-columns: 1fr 1fr;
+                            gap: 10px;
+                        }
+
+                        .print-grid-1 {
+                            display: grid;
+                            grid-template-columns: 1fr;
+                            gap: 10px;
+                        }
+
+                        .print-toolbar {
+                            display: none !important;
+                        }
                     }
 
-                    * {
-                        box-shadow: none !important;
+                    @media screen {
+                        .print-only {
+                            display: none !important;
+                        }
                     }
+                `}</style>
+            </main>
+        );
+    } catch (error) {
+        console.error("MeldungPrintPage failed", {
+            fallId,
+            meldungId,
+            apiBase: API_BASE,
+            message: error instanceof Error ? error.message : String(error),
+            status:
+                typeof error === "object" && error && "status" in error
+                    ? (error as ApiFetchError).status
+                    : undefined,
+            url:
+                typeof error === "object" && error && "url" in error
+                    ? (error as ApiFetchError).url
+                    : undefined,
+            responseText:
+                typeof error === "object" && error && "responseText" in error
+                    ? (error as ApiFetchError).responseText
+                    : undefined,
+            cause:
+                typeof error === "object" && error && "cause" in error
+                    ? (error as ApiFetchError).cause
+                    : undefined,
+        });
 
-                    aside,
-                    nav,
-                    header,
-                    .sidebar,
-                    .topbar,
-                    .print-hide,
-                    [data-sidebar],
-                    [data-topbar] {
-                        display: none !important;
-                    }
-
-                    main {
-                        margin: 0 !important;
-                        padding: 0 !important;
-                        width: 100% !important;
-                        max-width: none !important;
-                        min-height: auto !important;
-                    }
-
-                    .print-doc {
-                        width: 100% !important;
-                        max-width: none !important;
-                    }
-
-                    .print-section {
-                        margin: 0 0 8mm 0;
-                    }
-
-                    .print-section-title {
-                        font-size: 14pt;
-                        font-weight: 700;
-                        margin: 0 0 4mm 0;
-                        padding-bottom: 2mm;
-                        border-bottom: 1px solid #cbd5e1;
-                    }
-
-                    .print-section,
-                    .print-table-wrap,
-                    .print-avoid-break,
-                    .print-card,
-                    .print-row {
-                        break-inside: avoid;
-                        page-break-inside: avoid;
-                    }
-
-                    .print-page-break {
-                        break-before: page;
-                        page-break-before: always;
-                    }
-
-                    .print-table {
-                        width: 100%;
-                        border-collapse: collapse;
-                        table-layout: fixed;
-                        font-size: 9.5pt;
-                    }
-
-                    .print-table thead {
-                        display: table-header-group;
-                    }
-
-                    .print-table tfoot {
-                        display: table-footer-group;
-                    }
-
-                    .print-table tr,
-                    .print-table td,
-                    .print-table th {
-                        break-inside: avoid;
-                        page-break-inside: avoid;
-                    }
-
-                    .print-table th,
-                    .print-table td {
-                        border: 1px solid #cbd5e1;
-                        padding: 6px 8px;
-                        vertical-align: top;
-                        text-align: left;
-                        word-break: break-word;
-                        overflow-wrap: anywhere;
-                    }
-
-                    .print-table th {
-                        background: #f8fafc !important;
-                        font-weight: 700;
-                    }
-
-                    .print-small {
-                        font-size: 8.8pt;
-                        color: #475569;
-                    }
-
-                    .print-muted {
-                        color: #64748b !important;
-                    }
-
-                    .print-korrektur {
-                        border-left: 4px solid #dc2626 !important;
-                        background: #fef2f2 !important;
-                    }
-
-                    .print-grid-2 {
-                        display: grid;
-                        grid-template-columns: 1fr 1fr;
-                        gap: 10px;
-                    }
-
-                    .print-grid-1 {
-                        display: grid;
-                        grid-template-columns: 1fr;
-                        gap: 10px;
-                    }
-
-                    .print-toolbar {
-                        display: none !important;
-                    }
-                }
-
-                @media screen {
-                    .print-only {
-                        display: none !important;
-                    }
-                }
-            `}</style>
-        </main>
-    );
+        throw error;
+    }
 }
 
 function AutoPrint() {
