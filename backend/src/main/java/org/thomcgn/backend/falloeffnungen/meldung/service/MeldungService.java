@@ -324,6 +324,9 @@ public class MeldungService {
         Falleroeffnung fall = loadFallScoped(fallId);
         accessWrite(fall);
 
+        fallRepo.lockById(fall.getId())
+                .orElseThrow(() -> DomainException.notFound(ErrorCode.NOT_FOUND, "Fall not found"));
+
         Meldung m = meldungRepo.findById(meldungId)
                 .orElseThrow(() -> DomainException.notFound(ErrorCode.NOT_FOUND, "Meldung not found"));
 
@@ -345,23 +348,23 @@ public class MeldungService {
             writeSectionReasons(m, Map.of("KORREKTURGRUND", reason.trim()));
         }
 
-        if (m.getChangeReason() != null && requiresInfoEffectiveAt(m.getChangeReason()) && m.getInfoEffectiveAt() == null) {
+        if (m.getChangeReason() != null
+                && requiresInfoEffectiveAt(m.getChangeReason())
+                && m.getInfoEffectiveAt() == null) {
             throw DomainException.badRequest(ErrorCode.VALIDATION_FAILED, "infoEffectiveAt missing");
         }
 
         User user = currentUser();
 
-        // Current-Switch für Korrekturen erst beim Submit
         if (isCorrection) {
-            fallRepo.lockById(fall.getId())
-                    .orElseThrow(() -> DomainException.notFound(ErrorCode.NOT_FOUND, "Fall not found"));
-
             Optional<Meldung> currentOpt = meldungRepo.findCurrentByFallIdForUpdate(fall.getId());
 
             if (currentOpt.isPresent()) {
                 Meldung current = currentOpt.get();
+
                 if (!Objects.equals(current.getId(), m.getId())) {
                     current.setCurrent(false);
+                    meldungRepo.save(current);
                 }
             }
 
@@ -373,18 +376,18 @@ public class MeldungService {
         m.setSubmittedBy(user);
         m.setSubmittedByDisplayName(user.getDisplayName());
 
-        meldungRepo.save(m);
+        Meldung saved = meldungRepo.saveAndFlush(m);
 
         if (req != null && req.sectionReasons() != null && !req.sectionReasons().isEmpty()) {
-            writeSectionReasons(m, req.sectionReasons());
+            writeSectionReasons(saved, req.sectionReasons());
         }
 
         boolean mirror = req != null && Boolean.TRUE.equals(req.mirrorToNotizen());
         if (mirror) {
-            mirrorToNotizen(m);
+            mirrorToNotizen(saved);
         }
 
-        return buildResponse(m, true);
+        return buildResponse(saved, true);
     }
 
     private boolean requiresInfoEffectiveAt(MeldungChangeReason reason) {
