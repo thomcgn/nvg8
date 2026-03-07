@@ -11,15 +11,27 @@ type PageProps = {
     }>;
 };
 
-const API_BASE =
-    process.env.NEXT_PUBLIC_API_BASE_URL ??
-    process.env.API_BASE_URL ??
-    process.env.NEXT_PUBLIC_API_BASE ??
-    process.env.API_BASE;
+const API_BASE = process.env.API_BASE_URL ?? process.env.API_BASE;
+
+class ApiError extends Error {
+    status: number;
+    url: string;
+    body: string;
+
+    constructor(message: string, status: number, url: string, body = "") {
+        super(message);
+        this.name = "ApiError";
+        this.status = status;
+        this.url = url;
+        this.body = body;
+    }
+}
 
 async function serverApiFetch<T>(path: string): Promise<T> {
     if (!API_BASE) {
-        throw new Error("API base URL is not configured.");
+        throw new Error(
+            "API_BASE_URL/API_BASE is not configured on the server."
+        );
     }
 
     const cookieStore = await cookies();
@@ -29,26 +41,55 @@ async function serverApiFetch<T>(path: string): Promise<T> {
         .join("; ");
 
     const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+    const url = `${API_BASE}${normalizedPath}`;
 
-    const res = await fetch(`${API_BASE}${normalizedPath}`, {
-        method: "GET",
-        headers: {
-            Accept: "application/json",
-            ...(cookieHeader ? { Cookie: cookieHeader } : {}),
-        },
-        cache: "no-store",
-    });
+    let res: Response;
+
+    try {
+        res = await fetch(url, {
+            method: "GET",
+            headers: {
+                Accept: "application/json",
+                ...(cookieHeader ? { Cookie: cookieHeader } : {}),
+            },
+            cache: "no-store",
+        });
+    } catch (error) {
+        console.error("Server API fetch network error:", {
+            url,
+            message: error instanceof Error ? error.message : String(error),
+        });
+        throw new Error(`Network error while fetching ${url}`);
+    }
+
+    if (res.status === 404) {
+        notFound();
+    }
 
     if (!res.ok) {
         const text = await res.text().catch(() => "");
-        throw new Error(text || `Request failed with ${res.status}`);
+        throw new ApiError(
+            `Request failed: ${res.status} ${res.statusText}`,
+            res.status,
+            url,
+            text
+        );
     }
 
     if (res.status === 204) {
         return undefined as T;
     }
 
-    return res.json() as Promise<T>;
+    try {
+        return (await res.json()) as T;
+    } catch (error) {
+        console.error("Failed to parse JSON response:", {
+            url,
+            status: res.status,
+            message: error instanceof Error ? error.message : String(error),
+        });
+        throw new Error(`Invalid JSON returned from ${url}`);
+    }
 }
 
 export default async function MeldungPrintPage({ params }: PageProps) {
@@ -61,24 +102,12 @@ export default async function MeldungPrintPage({ params }: PageProps) {
         notFound();
     }
 
-    let fall: FalleroeffnungResponse | null = null;
-    let meldung: MeldungResponse | null = null;
-
-    try {
-        [fall, meldung] = await Promise.all([
-            serverApiFetch<FalleroeffnungResponse>(`/falloeffnungen/${fallIdNum}`),
-            serverApiFetch<MeldungResponse>(
-                `/falloeffnungen/${fallIdNum}/meldungen/${meldungIdNum}`
-            ),
-        ]);
-    } catch (error) {
-        console.error("Print page load failed:", error);
-        notFound();
-    }
-
-    if (!meldung) {
-        notFound();
-    }
+    const [fall, meldung] = await Promise.all([
+        serverApiFetch<FalleroeffnungResponse>(`/falloeffnungen/${fallIdNum}`),
+        serverApiFetch<MeldungResponse>(
+            `/falloeffnungen/${fallIdNum}/meldungen/${meldungIdNum}`
+        ),
+    ]);
 
     return (
         <main className="min-h-screen bg-white text-slate-900">
