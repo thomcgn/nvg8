@@ -11,12 +11,12 @@ Das System wurde als moderne Full-Stack Webanwendung entwickelt und folgt einer 
 # Live Demo
 
 Live Demo  
-https://deine-demo-url.de
+https://kidoc8a.de
 
 Demo Zugang
 
-User: demo  
-Password: demo123  
+User: demo@kidoc.local
+Password: demo
 
 Die Demo enthält ausschließlich synthetische Testdaten.
 
