@@ -15,6 +15,7 @@ import {
     type MeldungDraftRequest,
     type MeldungResponse,
 } from "@/lib/api/meldung";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 
 type ParamValue = string | string[] | undefined;
 
@@ -90,6 +91,8 @@ export default function ErstmeldungPage() {
     const [loading, setLoading] = React.useState(true);
     const [err, setErr] = React.useState<string | null>(null);
     const [meldung, setMeldung] = React.useState<MeldungResponse | null>(null);
+    const [confirmOpen, setConfirmOpen] = React.useState(false);
+    const [creating, setCreating] = React.useState(false);
 
     React.useEffect(() => {
         if (fallId == null) return;
@@ -123,13 +126,8 @@ export default function ErstmeldungPage() {
                 const status = getStatus(e);
 
                 if (status === 404) {
-                    // 2️⃣ Keine Meldung vorhanden → automatisch Draft
-                    try {
-                        const created = await meldungApi.ensureCurrent(id);
-                        if (!cancelled) setMeldung(created);
-                    } catch {
-                        if (!cancelled) setErr("Erstmeldung konnte nicht gestartet werden.");
-                    }
+                    // 2️⃣ Keine Meldung vorhanden → Bestätigung einholen
+                    if (!cancelled) setConfirmOpen(true);
                 } else {
                     if (!cancelled) setErr("Konnte Erstmeldung nicht laden.");
                 }
@@ -144,6 +142,26 @@ export default function ErstmeldungPage() {
             cancelled = true;
         };
     }, [fallId, meldungIdFromQuery]);
+
+    const onConfirmCreate = React.useCallback(async () => {
+        if (fallId == null) return;
+        setCreating(true);
+        try {
+            const created = await meldungApi.ensureCurrent(fallId);
+            setMeldung(created);
+            setConfirmOpen(false);
+        } catch {
+            setErr("Erstmeldung konnte nicht gestartet werden.");
+            setConfirmOpen(false);
+        } finally {
+            setCreating(false);
+        }
+    }, [fallId]);
+
+    const onCancelCreate = React.useCallback(() => {
+        setConfirmOpen(false);
+        router.back();
+    }, [router]);
 
     const onSaveDraft = React.useCallback(
         async (req: MeldungDraftRequest) => {
@@ -241,6 +259,26 @@ export default function ErstmeldungPage() {
                         />
                     ) : null}
                 </div>
+
+                <Dialog open={confirmOpen} onOpenChange={(v) => { if (!v) onCancelCreate(); }}>
+                    <DialogContent className="max-w-md">
+                        <DialogHeader>
+                            <DialogTitle>Erstmeldung eröffnen?</DialogTitle>
+                            <DialogDescription className="pt-2 text-sm">
+                                Hiermit wird eine Erstmeldung für Fall #{fallId} eröffnet.
+                                Eine einmal erstellte Meldung kann <strong>nicht gelöscht</strong> werden.
+                            </DialogDescription>
+                        </DialogHeader>
+                        <DialogFooter className="mt-4 flex gap-2">
+                            <Button variant="secondary" onClick={onCancelCreate} disabled={creating}>
+                                Abbrechen
+                            </Button>
+                            <Button onClick={onConfirmCreate} disabled={creating}>
+                                {creating ? "Wird erstellt…" : "Meldung eröffnen"}
+                            </Button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
             </div>
         </AuthGate>
     );

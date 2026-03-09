@@ -57,7 +57,6 @@ const navSections: NavSection[] = [
         title: "System",
         items: [
             { href: "/dashboard/risk/config", label: "Risikobewertung", icon: AlertTriangle, description: "Bewertung & Monitoring" },
-            { href: "/dashboard/tickets", label: "Support", icon: LifeBuoy, description: "Tickets & Anfragen" },
         ],
     },
 ];

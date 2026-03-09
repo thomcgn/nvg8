@@ -5,5 +5,11 @@ public record TraegerResponse(
         String name,
         String kurzcode,
         String aktenPrefix,
-        boolean enabled
+        boolean enabled,
+        String strasse,
+        String hausnummer,
+        String plz,
+        String ort,
+        String leitung,
+        String ansprechpartner
 ) {}

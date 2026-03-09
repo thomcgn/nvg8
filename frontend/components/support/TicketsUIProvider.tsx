@@ -2,12 +2,15 @@
 
 import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { TicketsModal } from "@/components/support/TicketsModal";
+import { MessengerModal } from "@/components/messenger/MessengerModal";
 import { apiFetch, ApiError } from "@/lib/api";
 import { useAuth } from "@/lib/useAuth";
 
 type TicketsUIContextValue = {
   openTickets: () => void;
   closeTickets: () => void;
+  openMessenger: () => void;
+  closeMessenger: () => void;
   refreshCounts: () => void;
   notificationsCount: number;
   ticketsCount: number;
@@ -19,6 +22,7 @@ export function TicketsUIProvider({ children }: { children: React.ReactNode }) {
   const { me, loading } = useAuth();
 
   const [ticketsModalOpen, setTicketsModalOpen] = useState(false);
+  const [messengerOpen, setMessengerOpen] = useState(false);
   const [notificationsCount, setNotificationsCount] = useState(0);
   const [ticketsCount, setTicketsCount] = useState(0);
 
@@ -64,6 +68,11 @@ export function TicketsUIProvider({ children }: { children: React.ReactNode }) {
         setTicketsModalOpen(false);
         refreshCounts();
       },
+      openMessenger: () => setMessengerOpen(true),
+      closeMessenger: () => {
+        setMessengerOpen(false);
+        refreshCounts();
+      },
       refreshCounts,
       notificationsCount,
       ticketsCount,
@@ -74,6 +83,11 @@ export function TicketsUIProvider({ children }: { children: React.ReactNode }) {
       <TicketsUIContext.Provider value={value}>
         {children}
         <TicketsModal open={ticketsModalOpen} onClose={value.closeTickets} />
+        <MessengerModal
+          open={messengerOpen}
+          onClose={value.closeMessenger}
+          onUnreadChange={refreshCounts}
+        />
       </TicketsUIContext.Provider>
   );
 }
