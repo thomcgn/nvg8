@@ -19,7 +19,6 @@ public class UserAdminController {
         this.userAdminService = userAdminService;
     }
 
-    // Nur Admins (Träger oder Einrichtung) – ctx ist ohnehin global erzwungen
     @PreAuthorize("hasRole('TRAEGER_ADMIN') or hasRole('EINRICHTUNG_ADMIN')")
     @PostMapping
     public ResponseEntity<UserResponse> create(@Valid @RequestBody CreateUserRequest req) {
@@ -35,11 +34,21 @@ public class UserAdminController {
     ) {
         UserOrgRole uor = userAdminService.assignRole(userId, req);
         return ResponseEntity.ok(new UserOrgRoleResponse(
-                uor.getId(),
-                uor.getUser().getId(),
-                uor.getOrgUnit().getId(),
-                uor.getRole().name(),
-                uor.isEnabled()
+                uor.getId(), uor.getUser().getId(), uor.getOrgUnit().getId(), uor.getRole().name(), uor.isEnabled()
+        ));
+    }
+
+    /** Rolle ändern (promote / demote) — niemand kann über seine eigene Rolle hinaus */
+    @PreAuthorize("hasRole('TRAEGER_ADMIN') or hasRole('EINRICHTUNG_ADMIN')")
+    @PutMapping("/{userId}/roles/{userOrgRoleId}")
+    public ResponseEntity<UserOrgRoleResponse> changeRole(
+            @PathVariable Long userId,
+            @PathVariable Long userOrgRoleId,
+            @Valid @RequestBody ChangeRoleRequest req
+    ) {
+        UserOrgRole uor = userAdminService.changeRole(userId, userOrgRoleId, req);
+        return ResponseEntity.ok(new UserOrgRoleResponse(
+                uor.getId(), uor.getUser().getId(), uor.getOrgUnit().getId(), uor.getRole().name(), uor.isEnabled()
         ));
     }
 
