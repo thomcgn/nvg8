@@ -88,8 +88,22 @@ public class SupportTicketService {
         var t = opt.get();
 
         // auf ERLEDIGT setzen
-        t.setStatus(SupportTicketStatus.OPEN);
+        t.setStatus(SupportTicketStatus.CLOSED);
         supportTicketRepository.save(t);
+    }
+
+    @Transactional
+    public void deleteTicket(Long ticketId, Long userId) {
+        var t = supportTicketRepository.findById(ticketId)
+                .orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(
+                        org.springframework.http.HttpStatus.NOT_FOUND, "Ticket nicht gefunden"));
+
+        if (!t.getCreatedByUserId().equals(userId)) {
+            throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.FORBIDDEN, "Kein Zugriff");
+        }
+
+        supportTicketRepository.delete(t);
     }
 
     @Transactional
@@ -100,7 +114,7 @@ public class SupportTicketService {
         var t = opt.get();
 
         // auf OFFEN setzen
-        t.setStatus(SupportTicketStatus.CLOSED);
+        t.setStatus(SupportTicketStatus.OPEN);
         supportTicketRepository.save(t);
     }
 }
