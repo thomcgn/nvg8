@@ -7,5 +7,11 @@ public record OrgUnitNodeDto(
         String type,
         String name,
         boolean enabled,
-        List<OrgUnitNodeDto> children
+        List<OrgUnitNodeDto> children,
+        String strasse,
+        String hausnummer,
+        String plz,
+        String ort,
+        String leitung,
+        String ansprechpartner
 ) {}

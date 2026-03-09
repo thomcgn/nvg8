@@ -8,6 +8,7 @@ import org.thomcgn.backend.common.errors.ErrorCode;
 import org.thomcgn.backend.common.security.SecurityUtils;
 import org.thomcgn.backend.orgunits.dto.CreateOrgUnitRequest;
 import org.thomcgn.backend.orgunits.dto.OrgUnitNodeDto;
+import org.thomcgn.backend.orgunits.dto.UpdateOrgUnitRequest;
 import org.thomcgn.backend.orgunits.model.OrgUnit;
 import org.thomcgn.backend.orgunits.model.OrgUnitType;
 import org.thomcgn.backend.orgunits.repo.OrgUnitRepository;
@@ -32,18 +33,15 @@ public class OrgUnitService {
         List<OrgUnit> all = orgUnitRepository.findAllEnabledByTraegerId(traegerId);
         if (all.isEmpty()) throw DomainException.notFound(ErrorCode.ORG_UNIT_NOT_FOUND, "No org units found.");
 
-        // build map
         Map<Long, OrgUnitNodeDtoBuilder> map = new HashMap<>();
         for (OrgUnit ou : all) {
             map.put(ou.getId(), new OrgUnitNodeDtoBuilder(ou));
         }
 
         OrgUnitNodeDtoBuilder root = null;
-
         for (OrgUnit ou : all) {
             OrgUnitNodeDtoBuilder node = map.get(ou.getId());
             if (ou.getParent() == null) {
-                // should be TRAEGER root
                 root = node;
             } else {
                 OrgUnitNodeDtoBuilder parent = map.get(ou.getParent().getId());
@@ -64,47 +62,95 @@ public class OrgUnitService {
 
         OrgUnitType type;
         try { type = OrgUnitType.valueOf(req.type()); }
-        catch (Exception e) { throw DomainException.badRequest(ErrorCode.VALIDATION_FAILED, "Unknown org unit type: " + req.type()); }
+        catch (Exception e) {
+            throw DomainException.badRequest(ErrorCode.VALIDATION_FAILED, "Unknown org unit type: " + req.type());
+        }
 
-        // parent must exist and be manageable
+        // Berechtigung prüfen über Parent-ID (Bug-Fix: früher wurde #orgUnitId geprüft, das nicht existierte)
         OrgUnit parent = adminGuard.requireCanManageOrgUnit(req.parentId());
 
         if (!parent.getTraeger().getId().equals(traegerId)) {
             throw DomainException.forbidden(ErrorCode.ACCESS_DENIED, "Parent is not in current traeger.");
         }
 
-        // simple rule: child must be same traeger
         OrgUnit ou = new OrgUnit();
         ou.setTraeger(parent.getTraeger());
         ou.setParent(parent);
         ou.setType(type);
         ou.setName(req.name().trim());
         ou.setEnabled(true);
+        applyAddress(ou, req.strasse(), req.hausnummer(), req.plz(), req.ort(), req.leitung(), req.ansprechpartner());
 
         OrgUnit saved = orgUnitRepository.save(ou);
+        return toDto(saved, List.of());
+    }
 
-        return new OrgUnitNodeDto(saved.getId(), saved.getType().name(), saved.getName(), saved.isEnabled(), List.of());
+    @Transactional
+    public OrgUnitNodeDto update(Long id, UpdateOrgUnitRequest req) {
+        Long traegerId = SecurityUtils.currentTraegerIdRequired();
+
+        OrgUnit ou = adminGuard.requireCanManageOrgUnit(id);
+        if (!ou.getTraeger().getId().equals(traegerId)) {
+            throw DomainException.forbidden(ErrorCode.ACCESS_DENIED, "OrgUnit not in current traeger.");
+        }
+
+        ou.setName(req.name().trim());
+        applyAddress(ou, req.strasse(), req.hausnummer(), req.plz(), req.ort(), req.leitung(), req.ansprechpartner());
+
+        return toDto(orgUnitRepository.save(ou), List.of());
+    }
+
+    @Transactional
+    public void disable(Long id) {
+        Long traegerId = SecurityUtils.currentTraegerIdRequired();
+
+        OrgUnit ou = adminGuard.requireCanManageOrgUnit(id);
+        if (!ou.getTraeger().getId().equals(traegerId)) {
+            throw DomainException.forbidden(ErrorCode.ACCESS_DENIED, "OrgUnit not in current traeger.");
+        }
+        if (ou.getType() == OrgUnitType.TRAEGER) {
+            throw DomainException.badRequest(ErrorCode.VALIDATION_FAILED, "Träger-Root-Einheit kann nicht deaktiviert werden.");
+        }
+
+        ou.setEnabled(false);
+        orgUnitRepository.save(ou);
+    }
+
+    // -------------------------------------------------------------------------
+
+    private static void applyAddress(OrgUnit ou, String strasse, String hausnummer,
+                                     String plz, String ort, String leitung, String ansprechpartner) {
+        ou.setStrasse(trim(strasse));
+        ou.setHausnummer(trim(hausnummer));
+        ou.setPlz(trim(plz));
+        ou.setOrt(trim(ort));
+        ou.setLeitung(trim(leitung));
+        ou.setAnsprechpartner(trim(ansprechpartner));
+    }
+
+    private static String trim(String s) {
+        if (s == null || s.isBlank()) return null;
+        return s.trim();
+    }
+
+    private static OrgUnitNodeDto toDto(OrgUnit ou, List<OrgUnitNodeDto> children) {
+        return new OrgUnitNodeDto(
+                ou.getId(), ou.getType().name(), ou.getName(), ou.isEnabled(), children,
+                ou.getStrasse(), ou.getHausnummer(), ou.getPlz(), ou.getOrt(),
+                ou.getLeitung(), ou.getAnsprechpartner()
+        );
     }
 
     private static class OrgUnitNodeDtoBuilder {
-        final Long id;
-        final String type;
-        final String name;
-        final boolean enabled;
+        final OrgUnit ou;
         final List<OrgUnitNodeDtoBuilder> children = new ArrayList<>();
 
-        OrgUnitNodeDtoBuilder(OrgUnit ou) {
-            this.id = ou.getId();
-            this.type = ou.getType().name();
-            this.name = ou.getName();
-            this.enabled = ou.isEnabled();
-        }
+        OrgUnitNodeDtoBuilder(OrgUnit ou) { this.ou = ou; }
 
         OrgUnitNodeDto build() {
-            // optional: sort children
-            children.sort(Comparator.comparing(a -> a.type + "|" + a.name));
+            children.sort(Comparator.comparing(a -> a.ou.getType().name() + "|" + a.ou.getName()));
             List<OrgUnitNodeDto> built = children.stream().map(OrgUnitNodeDtoBuilder::build).toList();
-            return new OrgUnitNodeDto(id, type, name, enabled, built);
+            return toDto(ou, built);
         }
     }
 }

@@ -39,16 +39,35 @@ public class OrgUnit extends AuditableEntity {
     @Column(nullable = false)
     private boolean enabled = true;
 
-    public Long getId() { return id; }
-    public Traeger getTraeger() { return traeger; }
-    public OrgUnitType getType() { return type; }
-    public String getName() { return name; }
-    public OrgUnit getParent() { return parent; }
-    public boolean isEnabled() { return enabled; }
+    @Column(length = 200) private String strasse;
+    @Column(length = 20)  private String hausnummer;
+    @Column(length = 10)  private String plz;
+    @Column(length = 100) private String ort;
+    @Column(length = 200) private String leitung;
+    @Column(length = 200) private String ansprechpartner;
 
-    public void setTraeger(Traeger traeger) { this.traeger = traeger; }
-    public void setType(OrgUnitType type) { this.type = type; }
-    public void setName(String name) { this.name = name; }
-    public void setParent(OrgUnit parent) { this.parent = parent; }
-    public void setEnabled(boolean enabled) { this.enabled = enabled; }
+    public Long getId()              { return id; }
+    public Traeger getTraeger()      { return traeger; }
+    public OrgUnitType getType()     { return type; }
+    public String getName()          { return name; }
+    public OrgUnit getParent()       { return parent; }
+    public boolean isEnabled()       { return enabled; }
+    public String getStrasse()       { return strasse; }
+    public String getHausnummer()    { return hausnummer; }
+    public String getPlz()           { return plz; }
+    public String getOrt()           { return ort; }
+    public String getLeitung()       { return leitung; }
+    public String getAnsprechpartner(){ return ansprechpartner; }
+
+    public void setTraeger(Traeger v)      { this.traeger = v; }
+    public void setType(OrgUnitType v)     { this.type = v; }
+    public void setName(String v)          { this.name = v; }
+    public void setParent(OrgUnit v)       { this.parent = v; }
+    public void setEnabled(boolean v)      { this.enabled = v; }
+    public void setStrasse(String v)       { this.strasse = v; }
+    public void setHausnummer(String v)    { this.hausnummer = v; }
+    public void setPlz(String v)           { this.plz = v; }
+    public void setOrt(String v)           { this.ort = v; }
+    public void setLeitung(String v)       { this.leitung = v; }
+    public void setAnsprechpartner(String v){ this.ansprechpartner = v; }
 }

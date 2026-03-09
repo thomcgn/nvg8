@@ -2,9 +2,13 @@ package org.thomcgn.backend.messenger.service;
 
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
 import org.thomcgn.backend.messenger.dto.InboxItemDto;
+import org.thomcgn.backend.messenger.dto.MessageDetailDto;
 import org.thomcgn.backend.messenger.dto.MessageDto;
+import org.thomcgn.backend.messenger.dto.SentItemDto;
 import org.thomcgn.backend.messenger.dto.UserOptionDto;
 import org.thomcgn.backend.messenger.model.Message;
 import org.thomcgn.backend.messenger.model.MessageRecipient;
@@ -47,11 +51,13 @@ public class MessageService {
                     String bodyPreview = body == null ? "" :
                             (body.length() > 160 ? body.substring(0, 160) : body);
 
+                    String senderName = (String) r.get("senderName");
+
                     return new InboxItemDto(
                             recipientRowId,
                             isRead,
                             null,
-                            new MessageDto(messageId, subject, bodyPreview, createdAt, senderId, null)
+                            new MessageDto(messageId, subject, bodyPreview, createdAt, senderId, senderName)
                     );
                 })
                 .toList();
@@ -96,6 +102,46 @@ public class MessageService {
                             .build()
             );
         }
+    }
+
+    public List<SentItemDto> getSent(Long senderId, int limit) {
+        List<Map<String, Object>> rows = messageRepository.findSent(senderId, limit);
+        return rows.stream()
+                .filter(Objects::nonNull)
+                .map(r -> {
+                    long messageId = ((Number) r.get("messageId")).longValue();
+                    String subject = (String) r.get("subject");
+                    String body = (String) r.get("body");
+                    String createdAt = String.valueOf(r.get("createdAt"));
+                    int recipientCount = ((Number) r.get("recipientCount")).intValue();
+                    String recipientNames = (String) r.get("recipientNames");
+                    String bodyPreview = body == null ? "" : (body.length() > 160 ? body.substring(0, 160) : body);
+                    return new SentItemDto(messageId, subject, bodyPreview, createdAt, recipientCount, recipientNames);
+                })
+                .toList();
+    }
+
+    public MessageDetailDto getDetail(Long messageId, Long userId) {
+        Map<String, Object> row = messageRepository.findDetailForUser(messageId, userId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
+
+        long msgId = ((Number) row.get("messageId")).longValue();
+        String subject = (String) row.get("subject");
+        String body = (String) row.get("body");
+        String createdAt = String.valueOf(row.get("createdAt"));
+        long senderId = ((Number) row.get("senderId")).longValue();
+        String senderName = (String) row.get("senderName");
+        Long recipientRowId = row.get("recipientRowId") != null ? ((Number) row.get("recipientRowId")).longValue() : null;
+        Boolean isRead = (Boolean) row.get("isRead");
+
+        List<String> recipientNames = recipientRepository.findRecipientNames(messageId);
+
+        return new MessageDetailDto(msgId, subject, body, createdAt, senderId, senderName, recipientRowId, isRead, recipientNames);
+    }
+
+    @Transactional
+    public void deleteFromInbox(Long recipientRowId, Long userId) {
+        recipientRepository.softDelete(recipientRowId, userId, OffsetDateTime.now());
     }
 
     @Transactional

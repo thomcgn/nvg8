@@ -3,6 +3,7 @@ package org.thomcgn.backend.users.controller;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+import org.thomcgn.backend.users.dto.OrgUnitUserResponse;
 import org.thomcgn.backend.users.dto.UserListItemResponse;
 import org.thomcgn.backend.users.service.UserQueryService;
 
@@ -20,7 +21,13 @@ public class UserQueryAdminController {
 
     @PreAuthorize("hasRole('TRAEGER_ADMIN') or hasRole('EINRICHTUNG_ADMIN')")
     @GetMapping("/{orgUnitId}/users")
-    public ResponseEntity<List<UserListItemResponse>> list(@PathVariable Long orgUnitId) {
+    public ResponseEntity<List<OrgUnitUserResponse>> list(@PathVariable Long orgUnitId) {
         return ResponseEntity.ok(userQueryService.listUsersForOrgUnit(orgUnitId));
+    }
+
+    @PreAuthorize("hasRole('TRAEGER_ADMIN') or hasRole('EINRICHTUNG_ADMIN')")
+    @GetMapping("/users")
+    public ResponseEntity<List<UserListItemResponse>> listForTraeger() {
+        return ResponseEntity.ok(userQueryService.listUsersForCurrentTraeger());
     }
 }

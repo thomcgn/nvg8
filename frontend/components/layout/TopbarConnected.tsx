@@ -18,7 +18,7 @@ export function TopbarConnected({
         <Topbar
             title={title}
             onSearch={onSearch}
-            onNotifications={onNotifications}
+            onNotifications={onNotifications ?? ctx?.openMessenger}
             onTickets={ctx?.openTickets}
             notificationsCount={ctx?.notificationsCount ?? 0}
             ticketsCount={ctx?.ticketsCount ?? 0}

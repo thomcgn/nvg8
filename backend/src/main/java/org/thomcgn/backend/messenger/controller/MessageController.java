@@ -6,7 +6,9 @@ import org.springframework.web.bind.annotation.*;
 import org.thomcgn.backend.common.security.SecurityUtils;
 import org.thomcgn.backend.messenger.dto.InboxItemDto;
 import org.thomcgn.backend.messenger.dto.MarkReadRequest;
+import org.thomcgn.backend.messenger.dto.MessageDetailDto;
 import org.thomcgn.backend.messenger.dto.SendMessageRequest;
+import org.thomcgn.backend.messenger.dto.SentItemDto;
 import org.thomcgn.backend.messenger.dto.UserOptionDto;
 import org.thomcgn.backend.messenger.service.MessageService;
 
@@ -56,6 +58,22 @@ public class MessageController {
                 SecurityUtils.currentUserId(),
                 request.isRead()
         );
+        return ResponseEntity.ok().build();
+    }
+
+    @GetMapping("/sent")
+    public List<SentItemDto> sent(@RequestParam(defaultValue = "50") int limit) {
+        return messageService.getSent(SecurityUtils.currentUserId(), limit);
+    }
+
+    @GetMapping("/detail/{messageId}")
+    public MessageDetailDto detail(@PathVariable Long messageId) {
+        return messageService.getDetail(messageId, SecurityUtils.currentUserId());
+    }
+
+    @DeleteMapping("/recipient/{recipientRowId}")
+    public ResponseEntity<?> deleteFromInbox(@PathVariable Long recipientRowId) {
+        messageService.deleteFromInbox(recipientRowId, SecurityUtils.currentUserId());
         return ResponseEntity.ok().build();
     }
 }
