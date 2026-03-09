@@ -31,7 +31,6 @@ public class User extends Person {
     @Column(name = "last_login")
     private LocalDateTime lastLogin;
 
-    // Defaults nur für UX (nicht als Berechtigungsquelle!)
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "default_traeger_id")
     private Traeger defaultTraeger;
@@ -43,36 +42,85 @@ public class User extends Person {
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
     private Set<UserOrgRole> orgRoles = new HashSet<>();
 
-    public Long getId() { return id; }
+    @Embedded
+    private MitarbeiterFaehigkeiten mitarbeiterFaehigkeiten = new MitarbeiterFaehigkeiten();
 
-    public String getEmail() { return email; }
-    public void setEmail(String email) { this.email = email; }
+    public Long getId() {
+        return id;
+    }
 
-    public String getPasswordHash() { return passwordHash; }
-    public void setPasswordHash(String passwordHash) { this.passwordHash = passwordHash; }
+    public String getEmail() {
+        return email;
+    }
 
-    public boolean isEnabled() { return enabled; }
-    public void setEnabled(boolean enabled) { this.enabled = enabled; }
+    public void setEmail(String email) {
+        this.email = email;
+    }
 
-    public LocalDateTime getLastLogin() { return lastLogin; }
-    public void setLastLogin(LocalDateTime lastLogin) { this.lastLogin = lastLogin; }
+    public String getPasswordHash() {
+        return passwordHash;
+    }
 
-    public Traeger getDefaultTraeger() { return defaultTraeger; }
-    public void setDefaultTraeger(Traeger defaultTraeger) { this.defaultTraeger = defaultTraeger; }
+    public void setPasswordHash(String passwordHash) {
+        this.passwordHash = passwordHash;
+    }
 
-    public OrgUnit getDefaultOrgUnit() { return defaultOrgUnit; }
-    public void setDefaultOrgUnit(OrgUnit defaultOrgUnit) { this.defaultOrgUnit = defaultOrgUnit; }
+    public boolean isEnabled() {
+        return enabled;
+    }
 
-    public Set<UserOrgRole> getOrgRoles() { return orgRoles; }
-    public void setOrgRoles(Set<UserOrgRole> orgRoles) { this.orgRoles = orgRoles; }
+    public void setEnabled(boolean enabled) {
+        this.enabled = enabled;
+    }
 
-    // Convenience
+    public LocalDateTime getLastLogin() {
+        return lastLogin;
+    }
+
+    public void setLastLogin(LocalDateTime lastLogin) {
+        this.lastLogin = lastLogin;
+    }
+
+    public Traeger getDefaultTraeger() {
+        return defaultTraeger;
+    }
+
+    public void setDefaultTraeger(Traeger defaultTraeger) {
+        this.defaultTraeger = defaultTraeger;
+    }
+
+    public OrgUnit getDefaultOrgUnit() {
+        return defaultOrgUnit;
+    }
+
+    public void setDefaultOrgUnit(OrgUnit defaultOrgUnit) {
+        this.defaultOrgUnit = defaultOrgUnit;
+    }
+
+    public Set<UserOrgRole> getOrgRoles() {
+        return orgRoles;
+    }
+
+    public void setOrgRoles(Set<UserOrgRole> orgRoles) {
+        this.orgRoles = orgRoles;
+    }
+
+    public MitarbeiterFaehigkeiten getMitarbeiterFaehigkeiten() {
+        return mitarbeiterFaehigkeiten;
+    }
+
+    public void setMitarbeiterFaehigkeiten(MitarbeiterFaehigkeiten mitarbeiterFaehigkeiten) {
+        this.mitarbeiterFaehigkeiten = mitarbeiterFaehigkeiten;
+    }
+
     public String getDisplayName() {
         String first = getVorname() != null ? getVorname().trim() : "";
-        String last  = getNachname() != null ? getNachname().trim() : "";
-        String full  = (first + " " + last).trim();
+        String last = getNachname() != null ? getNachname().trim() : "";
+        String full = (first + " " + last).trim();
         return full.isEmpty() ? email : full;
     }
 
-    public String getUsername() { return email; }
+    public String getUsername() {
+        return email;
+    }
 }

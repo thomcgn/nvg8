@@ -391,10 +391,6 @@ function BezugspersonCardBody({
                 </div>
 
                 <div className="flex gap-2 sm:pt-1">
-                    <Button variant="secondary" size="sm" onClick={onTemplate} title="Als Vorlage übernehmen">
-                        <Plus className="h-4 w-4" />
-                    </Button>
-
                     <Button
                         variant="destructive"
                         size="sm"

@@ -16,8 +16,9 @@ public abstract class Person extends AuditableEntity {
     // -----------------------------
     // Staatsangehörigkeit
     // -----------------------------
+
     @Column(length = 2)
-    private String staatsangehoerigkeitIso2; // "DE", "AT", "CH", "TR" ...
+    private String staatsangehoerigkeitIso2;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 50)
@@ -30,8 +31,9 @@ public abstract class Person extends AuditableEntity {
             StaatsangehoerigkeitGruppe.UNBEKANNT;
 
     // -----------------------------
-    // Aufenthaltsrecht / Titel
+    // Aufenthaltsstatus
     // -----------------------------
+
     @Enumerated(EnumType.STRING)
     @Column(length = 50)
     private AufenthaltstitelTyp aufenthaltstitelTyp;
@@ -40,8 +42,9 @@ public abstract class Person extends AuditableEntity {
     private String aufenthaltstitelDetails;
 
     // -----------------------------
-    // Sprache / Dolmetsch / CODA
+    // Kommunikation / Sprache
     // -----------------------------
+
     @Embedded
     @AttributeOverrides({
             @AttributeOverride(name = "mutterspracheCode",
@@ -66,6 +69,7 @@ public abstract class Person extends AuditableEntity {
     // -----------------------------
     // Adresse
     // -----------------------------
+
     private String strasse;
     private String hausnummer;
     private String plz;
@@ -74,11 +78,9 @@ public abstract class Person extends AuditableEntity {
     // -----------------------------
     // Kontakt
     // -----------------------------
+
     private String telefon;
 
-    /**
-     * Optional: Kontakt-Email (nicht Login). Für User bleibt Login-Email im User.
-     */
     @Column(name = "kontakt_email")
     private String kontaktEmail;
 }
