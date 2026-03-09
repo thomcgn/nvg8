@@ -1,27 +1,23 @@
 "use client";
 
-import { Topbar } from "@/components/layout/Topbar";
+import { Topbar, type TopbarProps } from "@/components/layout/Topbar";
 import { useTicketsUIOptional } from "@/components/support/TicketsUIProvider";
 
-export function TopbarConnected({
-                                    title,
-                                    onSearch,
-                                    onNotifications,
-                                }: {
-    title: string;
-    onSearch?: (q: string) => void;
-    onNotifications?: () => void;
-}) {
-    const ctx = useTicketsUIOptional();
+type TopbarConnectedProps = Omit<
+  TopbarProps,
+  "onTickets" | "ticketsCount" | "notificationsCount"
+>;
 
-    return (
-        <Topbar
-            title={title}
-            onSearch={onSearch}
-            onNotifications={onNotifications ?? ctx?.openMessenger}
-            onTickets={ctx?.openTickets}
-            notificationsCount={ctx?.notificationsCount ?? 0}
-            ticketsCount={ctx?.ticketsCount ?? 0}
-        />
-    );
+export function TopbarConnected(props: TopbarConnectedProps) {
+  const ctx = useTicketsUIOptional();
+
+  return (
+    <Topbar
+      {...props}
+      onNotifications={props.onNotifications ?? ctx?.openMessenger}
+      onTickets={ctx?.openTickets}
+      notificationsCount={ctx?.notificationsCount ?? 0}
+      ticketsCount={ctx?.ticketsCount ?? 0}
+    />
+  );
 }
