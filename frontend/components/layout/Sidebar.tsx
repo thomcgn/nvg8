@@ -4,8 +4,6 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
     ClipboardList,
-    Users,
-    Briefcase,
     UserCog,
     UsersRound,
     UserRoundIcon,
@@ -17,6 +15,12 @@ import {
     Settings,
     Clock,
     LayoutDashboard,
+    Baby,
+    Users,
+    FolderOpen,
+    AlertTriangle,
+    LifeBuoy,
+    Briefcase,
 } from "lucide-react";
 import { BrandMark } from "@/components/BrandMark";
 import { useAuth } from "@/lib/useAuth";
@@ -30,13 +34,15 @@ type NavSection = { title: string; items: NavItemDef[] };
 
 const navSections: NavSection[] = [
     {
-        title: "Akten",
-        items: [{ href: "/dashboard/akten", label: "Akten", icon: ClipboardList, description: "Übersicht & Suche" }],
+        title: "Fallführung",
+        items: [
+            { href: "/dashboard/akten", label: "Akten", icon: ClipboardList, description: "Übersicht & Suche" },
+        ],
     },
     {
-        title: "Kinder & Bezugspersonen",
+        title: "Personen",
         items: [
-            { href: "/dashboard/kinder", label: "Kinder", icon: Users, description: "Stammdaten & Verlauf" },
+            { href: "/dashboard/kinder", label: "Kinder", icon: Baby, description: "Stammdaten & Verlauf" },
             { href: "/dashboard/bezugspersonen", label: "Bezugspersonen", icon: Users, description: "Stamm- und Kontaktdaten" },
         ],
     },
@@ -47,15 +53,24 @@ const navSections: NavSection[] = [
             { href: "/dashboard/teams", label: "Teams", icon: UsersRound, description: "Struktur & Zuständigkeit" },
         ],
     },
+    {
+        title: "System",
+        items: [
+            { href: "/dashboard/risk/config", label: "Risikobewertung", icon: AlertTriangle, description: "Bewertung & Monitoring" },
+            { href: "/dashboard/tickets", label: "Support", icon: LifeBuoy, description: "Tickets & Anfragen" },
+        ],
+    },
 ];
 
+/* ── Nav Item ──────────────────────────────────────────────── */
+
 function NavItem({
-                     href,
-                     label,
-                     description,
-                     icon: Icon,
-                     onNavigate,
-                 }: {
+    href,
+    label,
+    description,
+    icon: Icon,
+    onNavigate,
+}: {
     href: string;
     label: string;
     description?: string;
@@ -63,41 +78,46 @@ function NavItem({
     onNavigate?: () => void;
 }) {
     const pathname = usePathname();
-    const active = pathname === href;
+    const active = pathname === href || pathname.startsWith(href + "/");
 
     return (
         <Link
             href={href}
             onClick={onNavigate}
             className={
-                "group relative flex items-start gap-3 rounded-2xl px-3 py-2.5 transition-all duration-150 " +
+                "group relative flex items-center gap-3 rounded-xl px-3 py-2.5 transition-all duration-150 " +
                 (active
-                    ? "bg-brand-teal/15 text-brand-blue border border-brand-teal/30 shadow-sm"
-                    : "text-brand-text2 border border-transparent hover:bg-white/80 hover:shadow-sm hover:border-brand-border hover:text-brand-blue")
+                    ? "bg-brand-blue/5 text-brand-blue border-l-2 border-brand-blue pl-[10px]"
+                    : "text-brand-text2 border-l-2 border-transparent hover:bg-white hover:text-brand-text hover:border-brand-border")
             }
         >
             <div
                 className={
-                    "mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-xl transition " +
-                    (active ? "bg-brand-teal/15 text-brand-teal" : "bg-white/70 text-brand-text2 group-hover:bg-white group-hover:text-brand-blue")
+                    "grid h-7 w-7 shrink-0 place-items-center rounded-lg transition " +
+                    (active
+                        ? "bg-brand-blue/10 text-brand-blue"
+                        : "text-brand-text2 group-hover:text-brand-text")
                 }
             >
                 <Icon className="h-4 w-4" />
             </div>
 
-            <div className="min-w-0">
-                <div className="text-sm font-semibold whitespace-normal break-words">{label}</div>
+            <div className="min-w-0 flex-1">
+                <div className={
+                    "text-sm font-medium truncate " +
+                    (active ? "text-brand-blue font-semibold" : "")
+                }>
+                    {label}
+                </div>
                 {description ? (
-                    <div className={"mt-0.5 text-xs whitespace-normal break-words " + (active ? "text-brand-blue/80" : "text-brand-text2")}>
-                        {description}
-                    </div>
+                    <div className="mt-0.5 text-xs text-brand-text2 truncate">{description}</div>
                 ) : null}
             </div>
-
-            <div className="pointer-events-none absolute right-2 top-1/2 h-8 w-1 -translate-y-1/2 rounded-full bg-brand-teal/0 transition group-hover:bg-brand-teal/20" />
         </Link>
     );
 }
+
+/* ── Session timer ─────────────────────────────────────────── */
 
 function formatMmSs(totalSeconds: number) {
     const s = Math.max(0, Math.floor(totalSeconds));
@@ -106,9 +126,11 @@ function formatMmSs(totalSeconds: number) {
     return `${mm}:${ss}`;
 }
 
-type AuthContextsResponse = {
-    contexts: AvailableContextDto[];
-};
+/* ── Auth contexts type ────────────────────────────────────── */
+
+type AuthContextsResponse = { contexts: AvailableContextDto[] };
+
+/* ── Sidebar content ───────────────────────────────────────── */
 
 function SidebarContent({ onClose, className = "" }: { onClose?: () => void; className?: string }) {
     const router = useRouter();
@@ -116,15 +138,12 @@ function SidebarContent({ onClose, className = "" }: { onClose?: () => void; cla
 
     const [traegerName, setTraegerName] = useState<string | null>(null);
     const [einrichtungName, setEinrichtungName] = useState<string | null>(null);
-
     const [collapsed, setCollapsed] = useState(true);
 
     const displayName = useMemo(() => me?.displayName || me?.email || "—", [me?.displayName, me?.email]);
     const roleText = useMemo(() => (me?.roles?.length ? me.roles.join(", ") : "Keine Rolle"), [me?.roles]);
 
-    const idleMinutes = Number(process.env.NEXT_PUBLIC_IDLE_TIMEOUT_MINUTES || "60");
-    const idleSeconds = Math.max(5, idleMinutes) * 60;
-
+    const idleSeconds = Math.max(5, Number(process.env.NEXT_PUBLIC_IDLE_TIMEOUT_MINUTES || "60")) * 60;
     const [lastActivity, setLastActivity] = useState(() => Date.now());
     const [nowTs, setNowTs] = useState(() => Date.now());
 
@@ -138,12 +157,10 @@ function SidebarContent({ onClose, className = "" }: { onClose?: () => void; cla
     useEffect(() => {
         const tick = window.setInterval(() => setNowTs(Date.now()), 1000);
         const bump = () => setLastActivity(Date.now());
-
         window.addEventListener("mousemove", bump, { passive: true });
         window.addEventListener("keydown", bump);
         window.addEventListener("scroll", bump, { passive: true });
         window.addEventListener("touchstart", bump, { passive: true });
-
         return () => {
             window.clearInterval(tick);
             window.removeEventListener("mousemove", bump);
@@ -154,13 +171,9 @@ function SidebarContent({ onClose, className = "" }: { onClose?: () => void; cla
     }, []);
 
     useEffect(() => {
-        if (!me) return;
-        if (remainingSeconds > 0) return;
-
+        if (!me || remainingSeconds > 0) return;
         (async () => {
-            try {
-                await signOut();
-            } finally {
+            try { await signOut(); } finally {
                 onClose?.();
                 router.replace("/login");
             }
@@ -170,151 +183,122 @@ function SidebarContent({ onClose, className = "" }: { onClose?: () => void; cla
 
     useEffect(() => {
         let mounted = true;
-
         async function loadContextLabels() {
             setTraegerName(null);
             setEinrichtungName(null);
-
             if (!me?.contextActive || !me.orgUnitId) return;
-
             try {
                 const res = await apiFetch<AuthContextsResponse>("/auth/contexts", { method: "GET" });
                 if (!mounted) return;
-
                 const found = res.contexts.find((c) => c.orgUnitId === me.orgUnitId);
                 if (found) {
                     setTraegerName(found.traegerName);
                     setEinrichtungName(found.orgUnitName);
                 }
-            } catch {
-                // ignore
-            }
+            } catch { /* ignore */ }
         }
-
         loadContextLabels();
-
-        return () => {
-            mounted = false;
-        };
+        return () => { mounted = false; };
     }, [me?.contextActive, me?.orgUnitId]);
 
     return (
-        <div className={"flex h-full flex-col border-r border-brand-border bg-brand-bg/80 backdrop-blur p-4 " + className}>
-            <div className="mb-4 flex items-center justify-between">
+        <div className={"flex h-full flex-col border-r border-brand-border/60 bg-white " + className}>
+
+            {/* Logo bar */}
+            <div className="flex items-center justify-between px-4 py-4 border-b border-brand-border/40">
                 <BrandMark />
                 {onClose ? (
                     <button
                         onClick={onClose}
-                        className="
-              rounded-xl p-2 text-brand-text2
-              transition
-              hover:bg-white/80 hover:text-brand-blue
-              focus:outline-none focus:ring-2 focus:ring-brand-teal/25
-              active:scale-[0.98]
-            "
+                        className="rounded-lg p-1.5 text-brand-text2 transition hover:bg-brand-bg hover:text-brand-text focus:outline-none"
                         aria-label="Menü schließen"
                     >
-                        <X className="h-5 w-5" />
+                        <X className="h-4 w-4" />
                     </button>
                 ) : null}
             </div>
 
-            <div className="mb-3 overflow-hidden rounded-2xl border border-brand-border bg-white/80 backdrop-blur shadow-sm">
-                <button type="button" onClick={() => setCollapsed((c) => !c)} className="w-full p-4 text-left transition hover:bg-white">
+            {/* User card */}
+            <div className="border-b border-brand-border/40">
+                <button
+                    type="button"
+                    onClick={() => setCollapsed((c) => !c)}
+                    className="w-full px-4 py-3 text-left transition hover:bg-brand-bg/50"
+                >
                     <div className="flex items-center gap-3">
-                        <div className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-brand-teal/15 text-brand-teal">
-                            <UserRoundIcon className="h-5 w-5" />
+                        <div className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-brand-blue/10 text-brand-blue">
+                            <UserRoundIcon className="h-4 w-4" />
                         </div>
-
                         <div className="min-w-0 flex-1">
                             <div className="text-sm font-semibold text-brand-text truncate">{loading ? "…" : displayName}</div>
-                            <div className="mt-0.5 text-xs text-brand-text2 truncate">{loading ? "…" : traegerName ?? "—"}</div>
+                            <div className="mt-0.5 text-xs text-brand-text2 truncate">{loading ? "…" : (einrichtungName ?? traegerName ?? "—")}</div>
                         </div>
-
                         <ChevronDown className={"h-4 w-4 shrink-0 text-brand-text2 transition-transform duration-200 " + (collapsed ? "" : "rotate-180")} />
                     </div>
                 </button>
 
+                {/* Expandable user detail */}
                 <div className={"grid transition-[grid-template-rows] duration-200 ease-out " + (collapsed ? "grid-rows-[0fr]" : "grid-rows-[1fr]")}>
-                    <div className="min-h-0">
-                        <div
-                            className={"px-4 pb-4 border-t border-brand-border pt-3 text-xs space-y-3 " + (collapsed ? "opacity-0" : "opacity-100")}
-                            style={{ transition: "opacity 160ms ease-out" }}
-                            aria-hidden={collapsed}
-                        >
-                            <div className="flex items-start gap-2 text-brand-text2">
-                                <ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                                <span className="whitespace-normal break-words leading-snug">{loading ? "…" : roleText}</span>
+                    <div className="min-h-0 overflow-hidden">
+                        <div className="px-4 pb-3 space-y-2.5 text-xs">
+                            <div className="flex items-center gap-2 text-brand-text2">
+                                <ShieldCheck className="h-3.5 w-3.5 shrink-0" />
+                                <span className="truncate">{loading ? "…" : roleText}</span>
+                            </div>
+                            <div className="flex items-center gap-2 text-brand-text2">
+                                <Briefcase className="h-3.5 w-3.5 shrink-0" />
+                                <span className="truncate">{loading ? "…" : (traegerName ?? "—")}</span>
                             </div>
 
-                            <div className="flex items-start gap-2 text-brand-text2">
-                                <Briefcase className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                                <span className="whitespace-normal break-words leading-snug">{loading ? "…" : einrichtungName ?? "—"}</span>
+                            {/* Session timer */}
+                            <div className={
+                                "flex items-center gap-2 rounded-lg border px-3 py-2 " +
+                                (isExpiringSoon
+                                    ? "border-amber-200 bg-amber-50 text-amber-700"
+                                    : "border-brand-border/40 bg-brand-bg text-brand-text2")
+                            }>
+                                <Clock className="h-3.5 w-3.5 shrink-0" />
+                                <span>Sitzung läuft ab in <strong>{formatMmSs(remainingSeconds)}</strong></span>
                             </div>
 
-                            <div
-                                className={
-                                    "rounded-xl border px-3 py-2 " +
-                                    (isExpiringSoon ? "border-brand-warning/30 bg-brand-warning/10 text-brand-text" : "border-brand-border bg-brand-bg/60 text-brand-text2")
-                                }
-                            >
-                                <div className="flex items-center gap-2">
-                                    <Clock className="h-3.5 w-3.5 shrink-0" />
-                                    <div className="min-w-0">
-                                        <div className="text-[11px] font-extrabold uppercase tracking-wide">Sitzung (Inaktivität)</div>
-                                        <div className="mt-1 text-xs">
-                                            Läuft ab in <span className="font-semibold">{formatMmSs(remainingSeconds)}</span>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className="grid grid-cols-1 gap-2 pt-1">
+                            <div className="flex gap-2 pt-0.5">
                                 <Link
                                     href="/dashboard/account"
                                     onClick={onClose}
-                                    className="
-                    inline-flex items-center justify-center gap-2 rounded-xl
-                    border border-brand-border bg-white
-                    px-3 py-2 text-xs font-semibold text-brand-text2
-                    shadow-sm
-                    transition
-                    hover:bg-brand-teal/10 hover:border-brand-teal/30 hover:text-brand-blue
-                    focus:outline-none focus:ring-2 focus:ring-brand-teal/25
-                    active:scale-[0.98]
-                  "
+                                    className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-lg border border-brand-border/60 bg-white px-3 py-2 text-xs font-medium text-brand-text2 transition hover:bg-brand-bg hover:text-brand-text"
                                 >
-                                    <Settings className="h-4 w-4" />
-                                    Account Einstellungen
+                                    <Settings className="h-3.5 w-3.5" />
+                                    Einstellungen
                                 </Link>
-
-                                <Button
-                                    variant="ghost"
-                                    className="w-full justify-center gap-2 rounded-xl border border-transparent hover:border-brand-border hover:bg-white"
+                                <button
                                     onClick={async () => {
                                         await signOut();
                                         onClose?.();
                                         router.push("/login");
                                     }}
+                                    className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-lg border border-brand-border/60 bg-white px-3 py-2 text-xs font-medium text-brand-text2 transition hover:bg-red-50 hover:border-red-200 hover:text-red-600"
                                 >
-                                    <LogOut className="h-4 w-4" />
+                                    <LogOut className="h-3.5 w-3.5" />
                                     Abmelden
-                                </Button>
+                                </button>
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
 
-            <div className="mb-4">
+            {/* Navigation */}
+            <nav className="flex flex-1 flex-col gap-5 overflow-y-auto px-3 py-4">
+                {/* Dashboard */}
                 <NavItem href="/dashboard" label="Übersicht" icon={LayoutDashboard} description="Start & Kennzahlen" onNavigate={onClose} />
-            </div>
 
-            <nav className="flex flex-1 flex-col gap-4 overflow-y-auto pr-1">
+                {/* Sections */}
                 {navSections.map((sec) => (
                     <div key={sec.title}>
-                        <div className="px-1 text-[11px] font-extrabold uppercase tracking-wide text-brand-text2/80">{sec.title}</div>
-                        <div className="mt-2 flex flex-col gap-2">
+                        <div className="mb-1.5 px-1 text-[10px] font-bold uppercase tracking-widest text-brand-text2/60">
+                            {sec.title}
+                        </div>
+                        <div className="flex flex-col gap-0.5">
                             {sec.items.map((i) => (
                                 <NavItem key={i.href} {...i} onNavigate={onClose} />
                             ))}
@@ -325,6 +309,8 @@ function SidebarContent({ onClose, className = "" }: { onClose?: () => void; cla
         </div>
     );
 }
+
+/* ── Sidebar shell (mobile drawer + desktop) ───────────────── */
 
 export function Sidebar() {
     const [open, setOpen] = useState(false);
@@ -351,30 +337,17 @@ export function Sidebar() {
     };
 
     const onTouchMove = (e: React.TouchEvent) => {
-        if (!dragging) return;
-        const t = e.touches[0];
-        if (startX.current == null || startY.current == null) return;
-
-        const dx = t.clientX - startX.current;
-        const dy = t.clientY - startY.current;
-
+        if (!dragging || startX.current == null || startY.current == null) return;
+        const dx = e.touches[0].clientX - startX.current;
+        const dy = e.touches[0].clientY - startY.current;
         if (Math.abs(dx) < 6 && Math.abs(dy) < 6) return;
         if (Math.abs(dy) > Math.abs(dx)) return;
-
-        if (dx < 0) {
-            e.preventDefault();
-            setDragX(dx);
-        }
+        if (dx < 0) { e.preventDefault(); setDragX(dx); }
     };
 
     const onTouchEnd = () => {
         if (!dragging) return;
-
-        if (dragX < -80) {
-            close();
-            return;
-        }
-
+        if (dragX < -80) { close(); return; }
         setDragX(0);
         setDragging(false);
         startX.current = null;
@@ -384,18 +357,12 @@ export function Sidebar() {
     return (
         <>
             {/* Mobile topbar */}
-            <div className="lg:hidden sticky top-0 z-40 border-b border-brand-border bg-brand-bg/80 backdrop-blur print:hidden">
+            <div className="lg:hidden sticky top-0 z-40 border-b border-brand-border/60 bg-white print:hidden">
                 <div className="flex items-center justify-between px-4 py-3">
                     <BrandMark compact />
                     <button
                         onClick={() => setOpen(true)}
-                        className="
-              rounded-xl p-2 text-brand-text2
-              transition
-              hover:bg-white/80 hover:text-brand-blue
-              focus:outline-none focus:ring-2 focus:ring-brand-teal/25
-              active:scale-[0.98]
-            "
+                        className="rounded-lg p-2 text-brand-text2 transition hover:bg-brand-bg hover:text-brand-text focus:outline-none"
                         aria-label="Menü öffnen"
                     >
                         <Menu className="h-5 w-5" />
@@ -404,22 +371,20 @@ export function Sidebar() {
             </div>
 
             {/* Desktop sidebar */}
-            <aside className="hidden lg:flex h-screen w-72 print:hidden">
-                <SidebarContent className="w-72" />
+            <aside className="hidden lg:flex h-screen w-64 shrink-0 print:hidden">
+                <SidebarContent className="w-64" />
             </aside>
 
-            {/* Drawer on mobile */}
+            {/* Mobile drawer */}
             {open ? (
                 <div className="lg:hidden fixed inset-0 z-50 print:hidden">
-                    <button className="absolute inset-0 bg-black/40" aria-label="Overlay schließen" onClick={close} />
-
+                    <button
+                        className="absolute inset-0 bg-black/30 backdrop-blur-sm"
+                        aria-label="Overlay schließen"
+                        onClick={close}
+                    />
                     <div
-                        className="
-              absolute left-0 top-0 h-full shadow-2xl
-              w-[min(320px,85vw)]
-              md:w-[min(360px,55vw)]
-              overscroll-contain touch-pan-y
-            "
+                        className="absolute left-0 top-0 h-full shadow-xl w-[min(300px,85vw)]"
                         style={{
                             transform: `translateX(${Math.min(0, dragX)}px)`,
                             transition: dragging ? "none" : "transform 180ms ease-out",
