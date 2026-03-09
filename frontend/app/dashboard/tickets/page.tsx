@@ -5,6 +5,7 @@ import { TopbarConnected as Topbar } from "@/components/layout/TopbarConnected";
 import {
     fetchMyTickets,
     fetchMyOpenTicketsCount,
+    deleteTicket,
     type SupportTicket,
 } from "@/lib/supportTickets";
 import { ApiError } from "@/lib/api";
@@ -16,6 +17,20 @@ export default function TicketsPage() {
     const [openCount, setOpenCount] = useState<number>(0);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [deletingId, setDeletingId] = useState<number | null>(null);
+
+    async function handleDelete(id: number) {
+        if (!confirm("Ticket wirklich löschen?")) return;
+        setDeletingId(id);
+        try {
+            await deleteTicket(id);
+            await load();
+        } catch (e: unknown) {
+            if (e instanceof Error) setError(e.message);
+        } finally {
+            setDeletingId(null);
+        }
+    }
 
     async function load() {
         setLoading(true);
@@ -99,8 +114,19 @@ export default function TicketsPage() {
                                             <div className="text-sm font-medium text-brand-text">
                                                 {t.title}
                                             </div>
-                                            <div className="text-xs text-brand-text2">
-                                                {t.status} • {t.priority} • {t.category}
+                                            <div className="flex items-center gap-2">
+                                                <div className="text-xs text-brand-text2">
+                                                    {t.status} • {t.priority} • {t.category}
+                                                </div>
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    className="h-6 px-2 text-xs text-red-500 hover:text-red-700"
+                                                    onClick={() => handleDelete(t.id)}
+                                                    disabled={deletingId === t.id}
+                                                >
+                                                    {deletingId === t.id ? "..." : "Löschen"}
+                                                </Button>
                                             </div>
                                         </div>
 

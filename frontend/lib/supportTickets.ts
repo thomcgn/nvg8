@@ -52,6 +52,10 @@ export async function fetchMyTickets(): Promise<SupportTicket[]> {
  * Count deiner offenen Tickets
  * Backend: GET /support/tickets/my/count?status=OPEN
  */
+export async function deleteTicket(id: number): Promise<void> {
+    await apiFetch<void>(`/support/tickets/${id}`, { method: "DELETE" });
+}
+
 export async function fetchMyOpenTicketsCount(): Promise<number> {
     const r = await apiFetch<{ count: number }>("/support/tickets/my/count?status=OPEN", {
         method: "GET",

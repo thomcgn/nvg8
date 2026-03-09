@@ -10,6 +10,8 @@ import org.thomcgn.backend.support.tickets.model.SupportTicketStatus;
 import org.thomcgn.backend.support.tickets.repo.SupportTicketRepository;
 import org.thomcgn.backend.support.tickets.service.SupportTicketService;
 
+import org.springframework.http.ResponseEntity;
+
 import java.util.List;
 
 @RestController
@@ -54,5 +56,14 @@ public class SupportTicketController {
 
         long c = supportTicketRepository.countByCreatedByUserIdAndStatus(user.getUserId(), status);
         return new CountResponse(c);
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> delete(
+            @org.springframework.security.core.annotation.AuthenticationPrincipal JwtPrincipal user,
+            @PathVariable Long id
+    ) {
+        supportTicketService.deleteTicket(id, user.getUserId());
+        return ResponseEntity.noContent().build();
     }
 }
