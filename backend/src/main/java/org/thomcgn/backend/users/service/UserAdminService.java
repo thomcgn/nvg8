@@ -1,5 +1,6 @@
 package org.thomcgn.backend.users.service;
 
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -9,6 +10,7 @@ import org.thomcgn.backend.common.errors.DomainException;
 import org.thomcgn.backend.common.errors.ErrorCode;
 import org.thomcgn.backend.orgunits.model.OrgUnit;
 import org.thomcgn.backend.users.dto.AssignRoleRequest;
+import org.thomcgn.backend.users.dto.ChangeRoleRequest;
 import org.thomcgn.backend.users.dto.CreateUserRequest;
 import org.thomcgn.backend.users.dto.KommunikationsProfilDto;
 import org.thomcgn.backend.users.dto.MitarbeiterFaehigkeitenDto;
@@ -94,7 +96,81 @@ public class UserAdminService {
         }
 
         adminGuard.requireCanManageOrgUnit(uor.getOrgUnit().getId());
+        // Caller darf keine Rolle entfernen, die über seiner eigenen liegt
+        checkCanAssignRole(uor.getRole());
         uor.setEnabled(false);
+    }
+
+    /**
+     * Ändert eine bestehende Rollenzuweisung (disable alt, assign neu).
+     * Niemand kann eine Rolle vergeben, die über seiner eigenen liegt.
+     */
+    @Transactional
+    public UserOrgRole changeRole(Long userId, Long userOrgRoleId, ChangeRoleRequest req) {
+        UserOrgRole uor = userOrgRoleRepository.findById(userOrgRoleId)
+                .orElseThrow(() -> DomainException.notFound(ErrorCode.NOT_FOUND, "Role assignment not found"));
+
+        if (!uor.getUser().getId().equals(userId)) {
+            throw DomainException.forbidden(ErrorCode.ACCESS_DENIED, "Role assignment does not belong to user.");
+        }
+
+        adminGuard.requireCanManageOrgUnit(uor.getOrgUnit().getId());
+
+        Role newRole;
+        try { newRole = Role.valueOf(req.newRole()); }
+        catch (IllegalArgumentException e) {
+            throw DomainException.badRequest(ErrorCode.VALIDATION_FAILED, "Unknown role: " + req.newRole());
+        }
+
+        // Weder die alte noch die neue Rolle darf über der eigenen liegen
+        checkCanAssignRole(uor.getRole());
+        checkCanAssignRole(newRole);
+
+        // Alte Zuweisung deaktivieren
+        uor.setEnabled(false);
+
+        // Neue Zuweisung erstellen (oder reaktivieren falls schon vorhanden)
+        User user = uor.getUser();
+        return assignRoleInternal(user, new AssignRoleRequest(uor.getOrgUnit().getId(), newRole.name()));
+    }
+
+    // ── Rollenhierarchie ────────────────────────────────────────────────────────
+    // Niemand kann eine Rolle vergeben, die mächtiger ist als seine eigene.
+    // TRAEGER_ADMIN > EINRICHTUNG_ADMIN > alle anderen (gleichrangig)
+
+    private static int rolePower(Role role) {
+        return switch (role) {
+            case TRAEGER_ADMIN    -> 100;
+            case EINRICHTUNG_ADMIN -> 90;
+            default               -> 50;
+        };
+    }
+
+    private int callerMaxPower() {
+        var auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null) return 0;
+        int max = 0;
+        for (var authority : auth.getAuthorities()) {
+            String name = authority.getAuthority();
+            if (name.startsWith("ROLE_")) {
+                try {
+                    Role r = Role.valueOf(name.substring(5));
+                    max = Math.max(max, rolePower(r));
+                } catch (IllegalArgumentException ignored) { /* unbekannte Rolle */ }
+            }
+        }
+        return max;
+    }
+
+    private void checkCanAssignRole(Role targetRole) {
+        int callerPower = callerMaxPower();
+        int targetPower = rolePower(targetRole);
+        if (callerPower < targetPower) {
+            throw DomainException.forbidden(
+                    ErrorCode.ACCESS_DENIED,
+                    "Du kannst keine Rolle vergeben, die über deiner eigenen Berechtigung liegt (" + targetRole.name() + ")."
+            );
+        }
     }
 
     private void applyPersonFields(User u, CreateUserRequest req) {
@@ -190,6 +266,9 @@ public class UserAdminService {
         } catch (IllegalArgumentException ex) {
             throw DomainException.badRequest(ErrorCode.VALIDATION_FAILED, "Unknown role: " + req.role());
         }
+
+        // Niemand kann über seine eigene Rolle hinaus promoten
+        checkCanAssignRole(role);
 
         return userOrgRoleRepository.findByUserIdAndOrgUnitIdAndRole(user.getId(), targetOrg.getId(), role)
                 .map(existing -> {
