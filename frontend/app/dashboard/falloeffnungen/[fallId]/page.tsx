@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { apiFetch } from "@/lib/api";
 import type { FalleroeffnungResponse } from "@/lib/types";
+import { anlassLabel } from "@/lib/anlass/catalog";
 import {
     meldungApi,
     type MeldungListItemResponse,
@@ -33,8 +34,8 @@ import {
    - Liste ohne Accordion
    - Modal-Lesemodus
    - Druckansicht ohne Tabs
-   - Korrektur-Markierung aus Audit old/new
-   - Behörden-modern, iPad-tauglich
+   - Korrektur-Markierung nur bei echter Korrektur
+   - Anlass-Codes als Labels
 ========================================================= */
 
 /* ---------------- Status Helpers ---------------- */
@@ -115,9 +116,102 @@ function cacheBust() {
     return `cb=${Date.now()}`;
 }
 
-function normalizeAuditValue(value: unknown) {
+function normalizeAuditValue(value: unknown): string {
     if (value === null || value === undefined || value === "") return "—";
+
+    if (Array.isArray(value)) {
+        return value.map((v: unknown) => normalizeAuditValue(v)).join(", ");
+    }
+
     return String(value);
+}
+
+function formatAnlassList(values: unknown): string {
+    if (!Array.isArray(values)) return "—";
+
+    const mapped = values
+        .map((v: unknown) => (typeof v === "string" ? anlassLabel(v) : String(v ?? "")))
+        .filter((v): v is string => Boolean(v));
+
+    return mapped.length ? mapped.join(", ") : "—";
+}
+
+function formatBooleanJaNein(value: unknown) {
+    if (value === null || value === undefined) return "—";
+    if (typeof value === "boolean") return value ? "Ja" : "Nein";
+    if (value === "true") return "Ja";
+    if (value === "false") return "Nein";
+    return String(value);
+}
+
+function displayMeldeweg(value: string | null | undefined, sonstiges?: string | null) {
+    if (!value) return "—";
+    const labels: Record<string, string> = {
+        TELEFON: "Telefon",
+        EMAIL: "E-Mail",
+        PERSOENLICH: "Persönlich",
+        BRIEF: "Brief",
+        SONSTIGES: "Sonstiges",
+    };
+    const base = labels[value] ?? value;
+    return sonstiges ? `${base} (${sonstiges})` : base;
+}
+
+function displayDringlichkeit(value: string | null | undefined) {
+    const labels: Record<string, string> = {
+        AKUT_HEUTE: "Akut (heute)",
+        ZEITNAH_24_48H: "Zeitnah (24–48h)",
+        BEOBACHTEN: "Beobachten",
+        UNKLAR: "Unklar",
+    };
+    return value ? labels[value] ?? value : "—";
+}
+
+function displayDatenbasis(value: string | null | undefined) {
+    const labels: Record<string, string> = {
+        BEOBACHTUNG: "Beobachtung",
+        ERZAEHLUNG: "Erzählung",
+        DOKUMENT: "Dokument",
+        UNKLAR: "Unklar",
+    };
+    return value ? labels[value] ?? value : "—";
+}
+
+function displayAmpel(value: string | null | undefined) {
+    const labels: Record<string, string> = {
+        GRUEN: "Grün",
+        GELB: "Gelb",
+        ROT: "Rot",
+    };
+    return value ? labels[value] ?? value : "—";
+}
+
+function displayAbweichungZurAuto(value: string | null | undefined) {
+    const labels: Record<string, string> = {
+        GLEICH: "Keine Abweichung",
+        NIEDRIGER: "Niedriger als Auto-Bewertung",
+        HOEHER: "Höher als Auto-Bewertung",
+    };
+    return value ? labels[value] ?? value : "—";
+}
+
+function displayJaNeinUnklar(value: string | null | undefined) {
+    const labels: Record<string, string> = {
+        JA: "Ja",
+        NEIN: "Nein",
+        UNKLAR: "Unklar",
+    };
+    return value ? labels[value] ?? value : "—";
+}
+
+function displayKontaktStatus(value: string | null | undefined) {
+    const labels: Record<string, string> = {
+        GEPLANT: "Geplant",
+        ERREICHT: "Erreicht",
+        NICHT_ERREICHT: "Nicht erreicht",
+        ABGEBROCHEN: "Abgebrochen",
+    };
+    return value ? labels[value] ?? value : "—";
 }
 
 /* ---------------- Generic UI ---------------- */
@@ -247,12 +341,12 @@ function KeyFactsBar({ d }: { d: MeldungResponse }) {
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
                 <div className="min-w-0">
                     <div className="text-xs font-semibold text-brand-text2">Dringlichkeit</div>
-                    <div className="text-sm text-brand-text">{d.dringlichkeit ?? "—"}</div>
+                    <div className="text-sm text-brand-text">{displayDringlichkeit(d.dringlichkeit)}</div>
                 </div>
 
                 <div className="min-w-0">
                     <div className="text-xs font-semibold text-brand-text2">Fach-Ampel</div>
-                    <div className="text-sm text-brand-text">{d.fachAmpel ?? "—"}</div>
+                    <div className="text-sm text-brand-text">{displayAmpel(d.fachAmpel)}</div>
                 </div>
 
                 <div className="min-w-0">
@@ -266,9 +360,9 @@ function KeyFactsBar({ d }: { d: MeldungResponse }) {
                 </div>
 
                 <div className="min-w-0">
-                    <div className="text-xs font-semibold text-brand-text2">Anlass-Codes</div>
+                    <div className="text-xs font-semibold text-brand-text2">Anlässe</div>
                     <div className="text-sm text-brand-text break-words">
-                        {(d.anlassCodes ?? []).length ? d.anlassCodes.join(", ") : "—"}
+                        {(d.anlassCodes ?? []).length ? (d.anlassCodes ?? []).map(anlassLabel).join(", ") : "—"}
                     </div>
                 </div>
             </div>
@@ -278,17 +372,16 @@ function KeyFactsBar({ d }: { d: MeldungResponse }) {
 
 /* ---------------- Audit / Changes ---------------- */
 
+type ChangeInfo = {
+    oldValue: string | null;
+    newValue: string | null;
+    reason: string | null;
+    changedAt: string | null;
+    changedByDisplayName: string | null;
+};
+
 function getChangedMap(changes: MeldungResponse["changes"] | undefined) {
-    const map = new Map<
-        string,
-        {
-            oldValue: string | null;
-            newValue: string | null;
-            reason: string | null;
-            changedAt: string | null;
-            changedByDisplayName: string | null;
-        }
-    >();
+    const map = new Map<string, ChangeInfo>();
 
     for (const c of changes ?? []) {
         const key = String(c.fieldPath ?? "").trim();
@@ -306,23 +399,47 @@ function getChangedMap(changes: MeldungResponse["changes"] | undefined) {
     return map;
 }
 
+function formatDisplayValue(label: string, value: unknown): React.ReactNode {
+    switch (label) {
+        case "Anlass-Codes":
+        case "Anlässe":
+            return formatAnlassList(value);
+        case "Meldeweg":
+            return normalizeAuditValue(value);
+        case "Dringlichkeit":
+            return displayDringlichkeit(typeof value === "string" ? value : null);
+        case "Datenbasis":
+            return displayDatenbasis(typeof value === "string" ? value : null);
+        case "Ampel":
+            return displayAmpel(typeof value === "string" ? value : null);
+        case "Abweichung zur Auto":
+            return displayAbweichungZurAuto(typeof value === "string" ? value : null);
+        case "Einwilligung vorhanden":
+        case "Schweigepflichtentbindung vorhanden":
+        case "Gefahr im Verzug":
+        case "Notruf erforderlich":
+            return formatBooleanJaNein(value);
+        case "Kind sicher untergebracht":
+            return displayJaNeinUnklar(typeof value === "string" ? value : null);
+        default:
+            return normalizeAuditValue(value);
+    }
+}
+
 function ChangedField({
                           label,
                           fallbackValue,
                           change,
+                          enableChangeHighlight = true,
                       }: {
     label: string;
     fallbackValue: React.ReactNode;
-    change?: {
-        oldValue: string | null;
-        newValue: string | null;
-        reason: string | null;
-        changedAt: string | null;
-        changedByDisplayName: string | null;
-    };
+    change?: ChangeInfo;
+    enableChangeHighlight?: boolean;
 }) {
-    const changed = !!change;
-    const currentValue = changed ? normalizeAuditValue(change?.newValue) : fallbackValue ?? "—";
+    const changed = enableChangeHighlight && !!change;
+    const currentValue = changed ? formatDisplayValue(label, change?.newValue) : fallbackValue ?? "—";
+    const previousValue = changed ? formatDisplayValue(label, change?.oldValue) : null;
 
     return (
         <div
@@ -339,14 +456,20 @@ function ChangedField({
                 {changed ? <Badge tone="danger">geändert</Badge> : null}
             </div>
 
-            <div className={changed ? "mt-1 text-sm text-red-900 whitespace-pre-wrap break-words" : "mt-1 text-sm text-brand-text whitespace-pre-wrap break-words"}>
+            <div
+                className={
+                    changed
+                        ? "mt-1 text-sm text-red-900 whitespace-pre-wrap break-words"
+                        : "mt-1 text-sm text-brand-text whitespace-pre-wrap break-words"
+                }
+            >
                 {currentValue}
             </div>
 
             {changed ? (
                 <div className="mt-2 space-y-1 text-xs">
                     <div className="text-red-700">
-                        <span className="font-semibold">Vorher:</span> {normalizeAuditValue(change?.oldValue)}
+                        <span className="font-semibold">Vorher:</span> {previousValue}
                     </div>
                     {change?.reason ? (
                         <div className="text-red-700/90">
@@ -368,12 +491,16 @@ function ChangedField({
 
 /* ---------------- Blocks ---------------- */
 
+type ChangeLookup = (fieldPath: string) => ChangeInfo | undefined;
+
 function MeldungBlockInhalt({
                                 d,
                                 ch,
+                                isCorrection,
                             }: {
     d: MeldungResponse;
-    ch: (fieldPath: string) => ReturnType<typeof getChangedMap> extends Map<any, infer V> ? V | undefined : never;
+    ch: ChangeLookup;
+    isCorrection: boolean;
 }) {
     return (
         <Section title="Inhalt">
@@ -383,13 +510,15 @@ function MeldungBlockInhalt({
                         label="Kurzbeschreibung (Sachlage)"
                         fallbackValue={d.kurzbeschreibung ?? "—"}
                         change={ch("kurzbeschreibung")}
+                        enableChangeHighlight={isCorrection}
                     />
                 </div>
 
                 <ChangedField
                     label="Anlass-Codes"
-                    fallbackValue={(d.anlassCodes ?? []).length ? d.anlassCodes.join(", ") : "—"}
+                    fallbackValue={(d.anlassCodes ?? []).length ? (d.anlassCodes ?? []).map(anlassLabel).join(", ") : "—"}
                     change={ch("anlassCodes")}
+                    enableChangeHighlight={isCorrection}
                 />
 
                 <div className="sm:col-span-2">
@@ -397,6 +526,7 @@ function MeldungBlockInhalt({
                         label="Zusammenfassung"
                         fallbackValue={d.zusammenfassung ?? "—"}
                         change={ch("zusammenfassung")}
+                        enableChangeHighlight={isCorrection}
                     />
                 </div>
             </div>
@@ -407,9 +537,11 @@ function MeldungBlockInhalt({
 function MeldungBlockMeta({
                               d,
                               ch,
+                              isCorrection,
                           }: {
     d: MeldungResponse;
-    ch: (fieldPath: string) => ReturnType<typeof getChangedMap> extends Map<any, infer V> ? V | undefined : never;
+    ch: ChangeLookup;
+    isCorrection: boolean;
 }) {
     return (
         <Section title="Meta">
@@ -418,54 +550,49 @@ function MeldungBlockMeta({
                     label="Erfasst von Rolle"
                     fallbackValue={d.erfasstVonRolle ?? "—"}
                     change={ch("erfasstVonRolle")}
+                    enableChangeHighlight={isCorrection}
                 />
 
                 <ChangedField
                     label="Meldeweg"
-                    fallbackValue={
-                        d.meldeweg
-                            ? d.meldewegSonstiges
-                                ? `${d.meldeweg} (${d.meldewegSonstiges})`
-                                : d.meldeweg
-                            : "—"
-                    }
+                    fallbackValue={displayMeldeweg(d.meldeweg, d.meldewegSonstiges)}
                     change={ch("meldeweg")}
+                    enableChangeHighlight={isCorrection}
                 />
 
                 <ChangedField
                     label="Meldende Stelle Kontakt"
                     fallbackValue={d.meldendeStelleKontakt ?? "—"}
                     change={ch("meldendeStelleKontakt")}
+                    enableChangeHighlight={isCorrection}
                 />
 
                 <ChangedField
                     label="Dringlichkeit"
-                    fallbackValue={d.dringlichkeit ?? "—"}
+                    fallbackValue={displayDringlichkeit(d.dringlichkeit)}
                     change={ch("dringlichkeit")}
+                    enableChangeHighlight={isCorrection}
                 />
 
                 <ChangedField
                     label="Datenbasis"
-                    fallbackValue={d.datenbasis ?? "—"}
+                    fallbackValue={displayDatenbasis(d.datenbasis)}
                     change={ch("datenbasis")}
+                    enableChangeHighlight={isCorrection}
                 />
 
                 <ChangedField
                     label="Einwilligung vorhanden"
-                    fallbackValue={d.einwilligungVorhanden == null ? "—" : d.einwilligungVorhanden ? "Ja" : "Nein"}
+                    fallbackValue={formatBooleanJaNein(d.einwilligungVorhanden)}
                     change={ch("einwilligungVorhanden")}
+                    enableChangeHighlight={isCorrection}
                 />
 
                 <ChangedField
                     label="Schweigepflichtentbindung vorhanden"
-                    fallbackValue={
-                        d.schweigepflichtentbindungVorhanden == null
-                            ? "—"
-                            : d.schweigepflichtentbindungVorhanden
-                                ? "Ja"
-                                : "Nein"
-                    }
+                    fallbackValue={formatBooleanJaNein(d.schweigepflichtentbindungVorhanden)}
                     change={ch("schweigepflichtentbindungVorhanden")}
+                    enableChangeHighlight={isCorrection}
                 />
             </div>
         </Section>
@@ -475,17 +602,20 @@ function MeldungBlockMeta({
 function MeldungBlockFach({
                               d,
                               ch,
+                              isCorrection,
                           }: {
     d: MeldungResponse;
-    ch: (fieldPath: string) => ReturnType<typeof getChangedMap> extends Map<any, infer V> ? V | undefined : never;
+    ch: ChangeLookup;
+    isCorrection: boolean;
 }) {
     return (
         <Section title="Fach">
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <ChangedField
                     label="Ampel"
-                    fallbackValue={d.fachAmpel ?? "—"}
+                    fallbackValue={displayAmpel(d.fachAmpel)}
                     change={ch("fachAmpel")}
+                    enableChangeHighlight={isCorrection}
                 />
 
                 <div className="sm:col-span-2">
@@ -493,13 +623,15 @@ function MeldungBlockFach({
                         label="Fachtext"
                         fallbackValue={d.fachText ?? "—"}
                         change={ch("fachText")}
+                        enableChangeHighlight={isCorrection}
                     />
                 </div>
 
                 <ChangedField
                     label="Abweichung zur Auto"
-                    fallbackValue={d.abweichungZurAuto ?? "—"}
+                    fallbackValue={displayAbweichungZurAuto(d.abweichungZurAuto)}
                     change={ch("abweichungZurAuto")}
+                    enableChangeHighlight={isCorrection}
                 />
 
                 <div className="sm:col-span-2">
@@ -507,6 +639,7 @@ function MeldungBlockFach({
                         label="Abweichungs-Begründung"
                         fallbackValue={d.abweichungsBegruendung ?? "—"}
                         change={ch("abweichungsBegruendung")}
+                        enableChangeHighlight={isCorrection}
                     />
                 </div>
             </div>
@@ -517,9 +650,11 @@ function MeldungBlockFach({
 function MeldungBlockAkut({
                               d,
                               ch,
+                              isCorrection,
                           }: {
     d: MeldungResponse;
-    ch: (fieldPath: string) => ReturnType<typeof getChangedMap> extends Map<any, infer V> ? V | undefined : never;
+    ch: ChangeLookup;
+    isCorrection: boolean;
 }) {
     return (
         <Section title="Akut">
@@ -528,18 +663,21 @@ function MeldungBlockAkut({
                     label="Gefahr im Verzug"
                     fallbackValue={d.akutGefahrImVerzug ? "Ja" : "Nein"}
                     change={ch("akutGefahrImVerzug")}
+                    enableChangeHighlight={isCorrection}
                 />
 
                 <ChangedField
                     label="Notruf erforderlich"
-                    fallbackValue={d.akutNotrufErforderlich == null ? "—" : d.akutNotrufErforderlich ? "Ja" : "Nein"}
+                    fallbackValue={formatBooleanJaNein(d.akutNotrufErforderlich)}
                     change={ch("akutNotrufErforderlich")}
+                    enableChangeHighlight={isCorrection}
                 />
 
                 <ChangedField
                     label="Kind sicher untergebracht"
-                    fallbackValue={d.akutKindSicherUntergebracht ?? "—"}
+                    fallbackValue={displayJaNeinUnklar(d.akutKindSicherUntergebracht)}
                     change={ch("akutKindSicherUntergebracht")}
+                    enableChangeHighlight={isCorrection}
                 />
 
                 <div className="sm:col-span-2">
@@ -547,6 +685,7 @@ function MeldungBlockAkut({
                         label="Begründung"
                         fallbackValue={d.akutBegruendung ?? "—"}
                         change={ch("akutBegruendung")}
+                        enableChangeHighlight={isCorrection}
                     />
                 </div>
             </div>
@@ -559,29 +698,34 @@ function MeldungBlockAkut({
                     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                         <ChangedField
                             label="Informiert"
-                            fallbackValue={d.jugendamt.informiert ?? "—"}
+                            fallbackValue={displayJaNeinUnklar(d.jugendamt.informiert)}
                             change={ch("jugendamt.informiert")}
+                            enableChangeHighlight={isCorrection}
                         />
                         <ChangedField
                             label="Kontakt am"
                             fallbackValue={formatDateTimeDE(d.jugendamt.kontaktAm)}
                             change={ch("jugendamt.kontaktAm")}
+                            enableChangeHighlight={isCorrection}
                         />
                         <ChangedField
                             label="Kontaktart"
                             fallbackValue={d.jugendamt.kontaktart ?? "—"}
                             change={ch("jugendamt.kontaktart")}
+                            enableChangeHighlight={isCorrection}
                         />
                         <ChangedField
                             label="Aktenzeichen"
                             fallbackValue={d.jugendamt.aktenzeichen ?? "—"}
                             change={ch("jugendamt.aktenzeichen")}
+                            enableChangeHighlight={isCorrection}
                         />
                         <div className="sm:col-span-2">
                             <ChangedField
                                 label="Begründung"
                                 fallbackValue={d.jugendamt.begruendung ?? "—"}
                                 change={ch("jugendamt.begruendung")}
+                                enableChangeHighlight={isCorrection}
                             />
                         </div>
                     </div>
@@ -596,9 +740,11 @@ function MeldungBlockAkut({
 function MeldungBlockPlanung({
                                  d,
                                  ch,
+                                 isCorrection,
                              }: {
     d: MeldungResponse;
-    ch: (fieldPath: string) => ReturnType<typeof getChangedMap> extends Map<any, infer V> ? V | undefined : never;
+    ch: ChangeLookup;
+    isCorrection: boolean;
 }) {
     return (
         <Section title="Planung">
@@ -607,12 +753,14 @@ function MeldungBlockPlanung({
                     label="Verantwortliche Fachkraft (UserId)"
                     fallbackValue={d.verantwortlicheFachkraftUserId ?? "—"}
                     change={ch("verantwortlicheFachkraftUserId")}
+                    enableChangeHighlight={isCorrection}
                 />
 
                 <ChangedField
                     label="Nächste Überprüfung am"
                     fallbackValue={formatDateDE(d.naechsteUeberpruefungAm)}
                     change={ch("naechsteUeberpruefungAm")}
+                    enableChangeHighlight={isCorrection}
                 />
 
                 <div className="sm:col-span-2">
@@ -620,6 +768,7 @@ function MeldungBlockPlanung({
                         label="Zusammenfassung"
                         fallbackValue={d.zusammenfassung ?? "—"}
                         change={ch("zusammenfassung")}
+                        enableChangeHighlight={isCorrection}
                     />
                 </div>
             </div>
@@ -659,7 +808,12 @@ function MeldungBlockListen({ d }: { d: MeldungResponse }) {
                         tags: (o.tags ?? []).length
                             ? o.tags
                                 .map((t) =>
-                                    [t.anlassCode, t.indicatorId, t.severity != null ? `S${t.severity}` : null, t.comment]
+                                    [
+                                        anlassLabel(t.anlassCode),
+                                        t.indicatorId,
+                                        t.severity != null ? `S${t.severity}` : null,
+                                        t.comment,
+                                    ]
                                         .filter(Boolean)
                                         .join(" · ")
                                 )
@@ -681,7 +835,7 @@ function MeldungBlockListen({ d }: { d: MeldungResponse }) {
                     rows={(d.contacts ?? []).map((c) => ({
                         mit: c.kontaktMit ?? "—",
                         am: formatDateTimeDE(c.kontaktAm),
-                        status: c.status ?? "—",
+                        status: displayKontaktStatus(c.status),
                         ergebnis: c.ergebnis ?? "—",
                         notiz: c.notiz ?? "—",
                     }))}
@@ -760,8 +914,14 @@ function MeldungBlockAudit({ d }: { d: MeldungResponse }) {
                         section: c.section ?? "—",
                         field: c.fieldPath ?? "—",
                         at: formatDateTimeDE(c.changedAt),
-                        old: c.oldValue ?? "—",
-                        neu: c.newValue ?? "—",
+                        old:
+                            c.fieldPath === "anlassCodes"
+                                ? formatAnlassList(c.oldValue ? JSON.parseSafe?.(c.oldValue) : c.oldValue)
+                                : c.oldValue ?? "—",
+                        neu:
+                            c.fieldPath === "anlassCodes"
+                                ? formatAnlassList(c.newValue ? JSON.parseSafe?.(c.newValue) : c.newValue)
+                                : c.newValue ?? "—",
                         reason: c.reason ?? "—",
                         by: c.changedByDisplayName ?? "—",
                     }))}
@@ -778,7 +938,7 @@ function MeldungDetailsContent({ d }: { d: MeldungResponse }) {
     const isCorrection = String(d.type ?? "").toUpperCase() === "KORREKTUR" || !!d.correctsId;
 
     const changedMap = useMemo(() => getChangedMap(d.changes), [d.changes]);
-    const ch = (fieldPath: string) => changedMap.get(fieldPath);
+    const ch: ChangeLookup = (fieldPath: string) => changedMap.get(fieldPath);
 
     return (
         <div className="space-y-4">
@@ -798,11 +958,10 @@ function MeldungDetailsContent({ d }: { d: MeldungResponse }) {
 
             <KeyFactsBar d={d} />
 
-            {/* Bildschirm */}
             <div className="print:hidden space-y-4">
                 <Segmented
                     value={tab}
-                    onChange={(v) => setTab(v as any)}
+                    onChange={(v) => setTab(v as "inhalt" | "meta" | "fach" | "akut" | "planung" | "listen" | "audit")}
                     items={[
                         { value: "inhalt", label: "Inhalt" },
                         { value: "meta", label: "Meta" },
@@ -814,22 +973,21 @@ function MeldungDetailsContent({ d }: { d: MeldungResponse }) {
                     ]}
                 />
 
-                {tab === "inhalt" ? <MeldungBlockInhalt d={d} ch={ch} /> : null}
-                {tab === "meta" ? <MeldungBlockMeta d={d} ch={ch} /> : null}
-                {tab === "fach" ? <MeldungBlockFach d={d} ch={ch} /> : null}
-                {tab === "akut" ? <MeldungBlockAkut d={d} ch={ch} /> : null}
-                {tab === "planung" ? <MeldungBlockPlanung d={d} ch={ch} /> : null}
+                {tab === "inhalt" ? <MeldungBlockInhalt d={d} ch={ch} isCorrection={isCorrection} /> : null}
+                {tab === "meta" ? <MeldungBlockMeta d={d} ch={ch} isCorrection={isCorrection} /> : null}
+                {tab === "fach" ? <MeldungBlockFach d={d} ch={ch} isCorrection={isCorrection} /> : null}
+                {tab === "akut" ? <MeldungBlockAkut d={d} ch={ch} isCorrection={isCorrection} /> : null}
+                {tab === "planung" ? <MeldungBlockPlanung d={d} ch={ch} isCorrection={isCorrection} /> : null}
                 {tab === "listen" ? <MeldungBlockListen d={d} /> : null}
                 {tab === "audit" ? <MeldungBlockAudit d={d} /> : null}
             </div>
 
-            {/* Druck */}
             <div className="hidden print:block space-y-8">
-                <MeldungBlockInhalt d={d} ch={ch} />
-                <MeldungBlockMeta d={d} ch={ch} />
-                <MeldungBlockFach d={d} ch={ch} />
-                <MeldungBlockAkut d={d} ch={ch} />
-                <MeldungBlockPlanung d={d} ch={ch} />
+                <MeldungBlockInhalt d={d} ch={ch} isCorrection={isCorrection} />
+                <MeldungBlockMeta d={d} ch={ch} isCorrection={isCorrection} />
+                <MeldungBlockFach d={d} ch={ch} isCorrection={isCorrection} />
+                <MeldungBlockAkut d={d} ch={ch} isCorrection={isCorrection} />
+                <MeldungBlockPlanung d={d} ch={ch} isCorrection={isCorrection} />
                 <MeldungBlockListen d={d} />
                 <MeldungBlockAudit d={d} />
             </div>
@@ -844,11 +1002,13 @@ function MeldungViewModal({
                               onClose,
                               meldung,
                               title,
+                              printUrl,
                           }: {
     open: boolean;
     onClose: () => void;
     meldung: MeldungResponse | null;
     title: string;
+    printUrl: string | null;
 }) {
     useEffect(() => {
         function onKeyDown(e: KeyboardEvent) {
@@ -876,8 +1036,12 @@ function MeldungViewModal({
                             <Button
                                 variant="secondary"
                                 className="h-10 gap-2"
-                                onClick={() => window.print()}
+                                onClick={() => {
+                                    if (!printUrl) return;
+                                    window.open(printUrl, "_blank", "noopener,noreferrer");
+                                }}
                                 title="Drucken / Als PDF sichern"
+                                disabled={!printUrl}
                             >
                                 <Printer className="h-4 w-4" />
                                 Drucken
@@ -916,8 +1080,8 @@ export default function FallMeldungenPage() {
     const params = useParams();
 
     const fallId = useMemo(() => {
-        const p: any = params as any;
-        return safeNumber(p?.fallId) ?? safeNumber(p?.id) ?? safeNumber(p?.falloeffnungId) ?? null;
+        const p = params as Record<string, string | string[] | undefined>;
+        return safeNumber(p?.fallId) ?? null;
     }, [params]);
 
     const [data, setData] = useState<FalleroeffnungResponse | null>(null);
@@ -933,13 +1097,20 @@ export default function FallMeldungenPage() {
 
     const autostartMeldungen = searchParams?.get("autostart") === "meldungen";
 
-    function editorUrl(opts: { meldungId?: number; readonly?: boolean }) {
+    function meldungEditorUrl(meldungId?: number, readonly?: boolean) {
         if (!fallId) return "/dashboard";
+
         const qs = new URLSearchParams();
-        if (opts.readonly) qs.set("mode", "readonly");
-        if (typeof opts.meldungId === "number") qs.set("meldungId", String(opts.meldungId));
+        if (readonly) qs.set("mode", "readonly");
+        if (typeof meldungId === "number") qs.set("meldungId", String(meldungId));
+
         const q = qs.toString();
         return `/dashboard/falloeffnungen/${fallId}/meldung${q ? `?${q}` : ""}`;
+    }
+
+    function meldungPrintUrl(meldungId?: number | null) {
+        if (!fallId || typeof meldungId !== "number") return null;
+        return `/dashboard/falloeffnungen/${fallId}/meldungen/${meldungId}/print`;
     }
 
     const hasAnyDraft = useMemo(() => meldungen.some((m) => isDraftStatus(m.status)), [meldungen]);
@@ -1038,7 +1209,7 @@ export default function FallMeldungenPage() {
 
         try {
             const created = await meldungApi.startCorrection(fallId, { targetMeldungId: targetId });
-            router.push(editorUrl({ meldungId: created.id }));
+            router.push(meldungEditorUrl(created.id));
         } catch (e: unknown) {
             console.error(e);
             setMeldErr(errorMessage(e, "Korrigieren fehlgeschlagen."));
@@ -1062,7 +1233,7 @@ export default function FallMeldungenPage() {
 
         try {
             const created = await meldungApi.createNew(fallId, { supersedesId: currentId });
-            router.push(editorUrl({ meldungId: created.id }));
+            router.push(meldungEditorUrl(created.id));
         } catch (e: unknown) {
             console.error(e);
             setMeldErr(errorMessage(e, "Neue Meldung konnte nicht gestartet werden."));
@@ -1115,7 +1286,7 @@ export default function FallMeldungenPage() {
                                         <Button
                                             className="h-10 gap-2"
                                             onClick={() => {
-                                                if (draftItem) router.push(editorUrl({ meldungId: draftItem.id }));
+                                                if (draftItem) router.push(meldungEditorUrl(draftItem.id));
                                             }}
                                             disabled={!draftItem}
                                         >
@@ -1228,7 +1399,7 @@ export default function FallMeldungenPage() {
 
                                                     {draft ? (
                                                         <Button
-                                                            onClick={() => router.push(editorUrl({ meldungId: m.id }))}
+                                                            onClick={() => router.push(meldungEditorUrl(m.id))}
                                                             className="h-11 gap-2"
                                                             title="Entwurf weiterbearbeiten"
                                                         >
@@ -1304,6 +1475,7 @@ export default function FallMeldungenPage() {
                     open={viewId !== null}
                     onClose={() => setViewId(null)}
                     meldung={viewedDetail}
+                    printUrl={meldungPrintUrl(viewedItem?.id ?? null)}
                     title={
                         viewedItem
                             ? `Meldung #${viewedItem.id} · ${viewedItem.type || "Meldung"} · v${viewedItem.versionNo}`
@@ -1313,4 +1485,22 @@ export default function FallMeldungenPage() {
             </div>
         </AuthGate>
     );
+}
+
+/* ---------------- Safe JSON helper ---------------- */
+
+declare global {
+    interface JSON {
+        parseSafe?: (value: string) => unknown;
+    }
+}
+
+if (!JSON.parseSafe) {
+    JSON.parseSafe = (value: string) => {
+        try {
+            return JSON.parse(value);
+        } catch {
+            return value;
+        }
+    };
 }

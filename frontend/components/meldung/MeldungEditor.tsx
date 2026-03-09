@@ -22,6 +22,8 @@ import {
     Save,
     CheckCircle2,
     AlertTriangle,
+    Phone,
+    Building2,
 } from "lucide-react";
 
 /* ---------------- Helpers ---------------- */
@@ -147,6 +149,48 @@ const JNU_LABEL: Record<(typeof JANEINUNKLAR)[number], string> = {
     JA: "Ja",
     NEIN: "Nein",
     UNKLAR: "Unklar",
+};
+
+const KONTAKT_MIT = [
+    "KIND",
+    "SORGEBERECHTIGTE",
+    "MUTTER",
+    "VATER",
+    "BEZUGSPERSON",
+    "SCHULE",
+    "KITA",
+    "ARZT",
+    "JUGENDAMT",
+    "SONSTIGE",
+] as const;
+const KONTAKT_MIT_LABEL: Record<(typeof KONTAKT_MIT)[number], string> = {
+    KIND: "Kind",
+    SORGEBERECHTIGTE: "Sorgeberechtigte",
+    MUTTER: "Mutter",
+    VATER: "Vater",
+    BEZUGSPERSON: "Bezugsperson",
+    SCHULE: "Schule",
+    KITA: "Kita",
+    ARZT: "Arzt / Ärztin",
+    JUGENDAMT: "Jugendamt",
+    SONSTIGE: "Sonstige",
+};
+
+const KONTAKT_STATUS = ["GEPLANT", "ERFOLGT", "NICHT_ERREICHT", "ABGESAGT"] as const;
+const KONTAKT_STATUS_LABEL: Record<(typeof KONTAKT_STATUS)[number], string> = {
+    GEPLANT: "Geplant",
+    ERFOLGT: "Erfolgt",
+    NICHT_ERREICHT: "Nicht erreicht",
+    ABGESAGT: "Abgesagt",
+};
+
+const KONTAKTART = ["TELEFON", "EMAIL", "PERSOENLICH", "SCHRIFTLICH", "SONSTIGES"] as const;
+const KONTAKTART_LABEL: Record<(typeof KONTAKTART)[number], string> = {
+    TELEFON: "Telefon",
+    EMAIL: "E-Mail",
+    PERSOENLICH: "Persönlich",
+    SCHRIFTLICH: "Schriftlich",
+    SONSTIGES: "Sonstiges",
 };
 
 function isDoneStatus(status: string | null | undefined) {
@@ -419,6 +463,7 @@ export function MeldungEditor(props: {
                 ["obs", "Beobachtungen"],
                 ["fach", "Fachbewertung"],
                 ["akut", "Akut / Schutz"],
+                ["kontakte", "Kontakte"],
                 ["planung", "Planung"],
                 ["save", "Speichern"],
             ] as const,
@@ -538,6 +583,75 @@ export function MeldungEditor(props: {
         });
     };
 
+    /* ---------------- Contacts helpers ---------------- */
+
+    const addContact = () => {
+        setForm((prev) => {
+            const list = Array.isArray((prev as any).contacts) ? [...(prev as any).contacts] : [];
+            list.push({
+                kontaktMit: "SONSTIGE",
+                kontaktAm: nowIso(),
+                status: "GEPLANT",
+                notiz: null,
+                ergebnis: null,
+            });
+            return { ...(prev as any), contacts: list } as any;
+        });
+    };
+
+    const updateContact = (idx: number, patch: any) => {
+        setForm((prev) => {
+            const list = Array.isArray((prev as any).contacts) ? [...(prev as any).contacts] : [];
+            list[idx] = { ...(list[idx] ?? {}), ...patch };
+            return { ...(prev as any), contacts: list } as any;
+        });
+    };
+
+    const removeContact = (idx: number) => {
+        setForm((prev) => {
+            const list = Array.isArray((prev as any).contacts) ? [...(prev as any).contacts] : [];
+            list.splice(idx, 1);
+            return { ...(prev as any), contacts: list } as any;
+        });
+    };
+
+    /* ---------------- Jugendamt helpers ---------------- */
+
+    const ensureJugendamt = () => {
+        setForm((prev) => {
+            if ((prev as any).jugendamt) return prev;
+            return {
+                ...(prev as any),
+                jugendamt: {
+                    informiert: null,
+                    kontaktAm: null,
+                    kontaktart: null,
+                    aktenzeichen: null,
+                    begruendung: null,
+                },
+            } as any;
+        });
+    };
+
+    const clearJugendamt = () => {
+        setForm((prev) => ({ ...(prev as any), jugendamt: null } as any));
+    };
+
+    const setJugendamt = (patch: any) => {
+        setForm((prev) => ({
+            ...(prev as any),
+            jugendamt: {
+                informiert: null,
+                kontaktAm: null,
+                kontaktart: null,
+                aktenzeichen: null,
+                begruendung: null,
+                ...((prev as any).jugendamt ?? {}),
+                ...patch,
+            },
+        }) as any);
+    };
+
     /* ---------------- Validation ---------------- */
 
     function validateForSaveUI(): string | null {
@@ -637,6 +751,8 @@ export function MeldungEditor(props: {
     const submitDisabled =
         disabled || statusIsDone || saving || (isCorrection && !String(changeReason ?? "").trim());
 
+    const selectedAnlassLabels = normalizeAnlassCodes((form as any).anlassCodes).map(anlassLabel);
+
     return (
         <div className="space-y-4">
             <div className="rounded-2xl border border-brand-border/40 bg-white p-4">
@@ -657,9 +773,9 @@ export function MeldungEditor(props: {
                             <div className="mt-3 rounded-2xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 flex items-start gap-2">
                                 <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
                                 <span>
-                  Dies ist eine <span className="font-semibold">Korrektur</span>. Geänderte Felder sind rot markiert.
-                  Per <span className="font-semibold">Hover</span> siehst du den Wert der vorherigen Version.
-                </span>
+                                    Dies ist eine <span className="font-semibold">Korrektur</span>. Geänderte Felder sind rot markiert.
+                                    Per <span className="font-semibold">Hover</span> siehst du den Wert der vorherigen Version.
+                                </span>
                             </div>
                         ) : null}
                     </div>
@@ -796,6 +912,16 @@ export function MeldungEditor(props: {
                                         );
                                     })()}
 
+                                    {String((form as any).meldeweg) === "SONSTIGES" ? (
+                                        <FieldRow label="Meldeweg sonstiges">
+                                            <Input
+                                                value={String((form as any).meldewegSonstiges ?? "")}
+                                                onChange={(e) => set("meldewegSonstiges" as any, e.target.value || null)}
+                                                disabled={disabled || statusIsDone}
+                                            />
+                                        </FieldRow>
+                                    ) : null}
+
                                     {(() => {
                                         const changed = isChanged("meldendeStelleKontakt");
                                         const prev = previousValueOf("meldendeStelleKontakt");
@@ -876,6 +1002,34 @@ export function MeldungEditor(props: {
                                         );
                                     })()}
 
+                                    <FieldRow label="Einwilligung vorhanden">
+                                        <select
+                                            className="h-10 w-full rounded-2xl border border-brand-border/40 bg-white px-3 text-sm text-brand-text"
+                                            value={String((form as any).einwilligungVorhanden ?? "")}
+                                            onChange={(e) => set("einwilligungVorhanden" as any, e.target.value === "" ? null : e.target.value === "true")}
+                                            disabled={disabled || statusIsDone}
+                                        >
+                                            <option value="">—</option>
+                                            <option value="true">Ja</option>
+                                            <option value="false">Nein</option>
+                                        </select>
+                                    </FieldRow>
+
+                                    <FieldRow label="Schweigepflichtentbindung vorhanden">
+                                        <select
+                                            className="h-10 w-full rounded-2xl border border-brand-border/40 bg-white px-3 text-sm text-brand-text"
+                                            value={String((form as any).schweigepflichtentbindungVorhanden ?? "")}
+                                            onChange={(e) =>
+                                                set("schweigepflichtentbindungVorhanden" as any, e.target.value === "" ? null : e.target.value === "true")
+                                            }
+                                            disabled={disabled || statusIsDone}
+                                        >
+                                            <option value="">—</option>
+                                            <option value="true">Ja</option>
+                                            <option value="false">Nein</option>
+                                        </select>
+                                    </FieldRow>
+
                                     {(() => {
                                         const changed = isChanged("kurzbeschreibung");
                                         const prev = previousValueOf("kurzbeschreibung");
@@ -908,6 +1062,16 @@ export function MeldungEditor(props: {
                                     Auswahl steuert die automatische Tag-Erstellung in den Beobachtungen.
                                 </div>
 
+                                {selectedAnlassLabels.length ? (
+                                    <div className="flex flex-wrap gap-2">
+                                        {selectedAnlassLabels.map((label) => (
+                                            <Badge key={label} tone="info">
+                                                {label}
+                                            </Badge>
+                                        ))}
+                                    </div>
+                                ) : null}
+
                                 <div className="space-y-4">
                                     {ANLASS_CATALOG.map((cat) => (
                                         <div key={cat.key} className="rounded-2xl border border-brand-border/25 bg-white p-3">
@@ -935,10 +1099,11 @@ export function MeldungEditor(props: {
                                                             ].join(" ")}
                                                         >
                                                             <div className="flex items-start justify-between gap-2">
-                                                                <div className={`text-sm font-semibold ${allChanged ? "text-red-700" : "text-brand-text"}`}>{it.label}</div>
+                                                                <div className={`text-sm font-semibold ${allChanged ? "text-red-700" : "text-brand-text"}`}>
+                                                                    {it.label}
+                                                                </div>
                                                                 {selected ? <Badge tone="info">ausgewählt</Badge> : <Badge tone="neutral">—</Badge>}
                                                             </div>
-                                                            <div className={`mt-1 text-xs ${allChanged ? "text-red-700/80" : "text-brand-text2"}`}>Code: {it.code}</div>
                                                         </button>
                                                     );
                                                 })}
@@ -1033,6 +1198,16 @@ export function MeldungEditor(props: {
                                                         </select>
                                                     </FieldRow>
 
+                                                    {String(o.ort ?? "") === "SONSTIGES" ? (
+                                                        <FieldRow label="Ort sonstiges">
+                                                            <Input
+                                                                value={String(o.ortSonstiges ?? "")}
+                                                                onChange={(e) => updateObs(idx, { ortSonstiges: e.target.value || null })}
+                                                                disabled={disabled || statusIsDone}
+                                                            />
+                                                        </FieldRow>
+                                                    ) : null}
+
                                                     <FieldRow label="Quelle">
                                                         <select
                                                             className="h-10 w-full rounded-2xl border border-brand-border/40 bg-white px-3 text-sm text-brand-text"
@@ -1079,6 +1254,42 @@ export function MeldungEditor(props: {
                                                             title={changeTooltip(textChanged, textPrev)}
                                                         />
                                                     </FieldRow>
+
+                                                    <FieldRow label="Wörtliches Zitat">
+                                                        <Textarea
+                                                            rows={2}
+                                                            value={String(o.woertlichesZitat ?? "")}
+                                                            onChange={(e) => updateObs(idx, { woertlichesZitat: e.target.value || null })}
+                                                            disabled={disabled || statusIsDone}
+                                                        />
+                                                    </FieldRow>
+
+                                                    <FieldRow label="Körperbefund">
+                                                        <Textarea
+                                                            rows={2}
+                                                            value={String(o.koerperbefund ?? "")}
+                                                            onChange={(e) => updateObs(idx, { koerperbefund: e.target.value || null })}
+                                                            disabled={disabled || statusIsDone}
+                                                        />
+                                                    </FieldRow>
+
+                                                    <FieldRow label="Verhalten Kind">
+                                                        <Textarea
+                                                            rows={2}
+                                                            value={String(o.verhaltenKind ?? "")}
+                                                            onChange={(e) => updateObs(idx, { verhaltenKind: e.target.value || null })}
+                                                            disabled={disabled || statusIsDone}
+                                                        />
+                                                    </FieldRow>
+
+                                                    <FieldRow label="Verhalten Bezugsperson">
+                                                        <Textarea
+                                                            rows={2}
+                                                            value={String(o.verhaltenBezug ?? "")}
+                                                            onChange={(e) => updateObs(idx, { verhaltenBezug: e.target.value || null })}
+                                                            disabled={disabled || statusIsDone}
+                                                        />
+                                                    </FieldRow>
                                                 </div>
 
                                                 <Separator />
@@ -1106,7 +1317,6 @@ export function MeldungEditor(props: {
                                                                     <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
                                                                         <div className="min-w-0">
                                                                             <div className="text-sm font-semibold text-brand-text">{anlassLabel(code)}</div>
-                                                                            <div className="text-xs text-brand-text2">Code: {code}</div>
                                                                         </div>
 
                                                                         <div className="flex items-center gap-2">
@@ -1366,6 +1576,195 @@ export function MeldungEditor(props: {
                                         );
                                     })()}
                                 </div>
+
+                                <Separator />
+
+                                <div className="space-y-3">
+                                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                                        <div className="flex items-center gap-2 text-sm font-semibold text-brand-text">
+                                            <Building2 className="h-4 w-4 text-brand-text2" />
+                                            Jugendamt
+                                        </div>
+
+                                        {(form as any).jugendamt ? (
+                                            <Button variant="secondary" className="h-10" onClick={clearJugendamt} disabled={disabled || statusIsDone}>
+                                                Jugendamt-Block entfernen
+                                            </Button>
+                                        ) : (
+                                            <Button variant="secondary" className="h-10" onClick={ensureJugendamt} disabled={disabled || statusIsDone}>
+                                                Jugendamt erfassen
+                                            </Button>
+                                        )}
+                                    </div>
+
+                                    {(form as any).jugendamt ? (
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 rounded-2xl border border-brand-border/25 bg-white p-3">
+                                            <FieldRow label="Jugendamt informiert">
+                                                <select
+                                                    className="h-10 w-full rounded-2xl border border-brand-border/40 bg-white px-3 text-sm text-brand-text"
+                                                    value={pick(
+                                                        String((form as any).jugendamt?.informiert ?? "UNKLAR"),
+                                                        JANEINUNKLAR,
+                                                        "UNKLAR"
+                                                    )}
+                                                    onChange={(e) => setJugendamt({ informiert: e.target.value })}
+                                                    disabled={disabled || statusIsDone}
+                                                >
+                                                    {JANEINUNKLAR.map((x) => (
+                                                        <option key={x} value={x}>
+                                                            {JNU_LABEL[x]}
+                                                        </option>
+                                                    ))}
+                                                </select>
+                                            </FieldRow>
+
+                                            <FieldRow label="Kontakt am">
+                                                <Input
+                                                    value={String((form as any).jugendamt?.kontaktAm ?? "")}
+                                                    onChange={(e) => setJugendamt({ kontaktAm: e.target.value || null })}
+                                                    disabled={disabled || statusIsDone}
+                                                    placeholder={nowIso()}
+                                                />
+                                            </FieldRow>
+
+                                            <FieldRow label="Kontaktart">
+                                                <select
+                                                    className="h-10 w-full rounded-2xl border border-brand-border/40 bg-white px-3 text-sm text-brand-text"
+                                                    value={String((form as any).jugendamt?.kontaktart ?? "")}
+                                                    onChange={(e) => setJugendamt({ kontaktart: e.target.value || null })}
+                                                    disabled={disabled || statusIsDone}
+                                                >
+                                                    <option value="">—</option>
+                                                    {KONTAKTART.map((x) => (
+                                                        <option key={x} value={x}>
+                                                            {KONTAKTART_LABEL[x]}
+                                                        </option>
+                                                    ))}
+                                                </select>
+                                            </FieldRow>
+
+                                            <FieldRow label="Aktenzeichen">
+                                                <Input
+                                                    value={String((form as any).jugendamt?.aktenzeichen ?? "")}
+                                                    onChange={(e) => setJugendamt({ aktenzeichen: e.target.value || null })}
+                                                    disabled={disabled || statusIsDone}
+                                                />
+                                            </FieldRow>
+
+                                            <FieldRow label="Begründung" hint="Warum wurde das Jugendamt informiert oder bewusst nicht informiert?">
+                                                <Textarea
+                                                    rows={4}
+                                                    value={String((form as any).jugendamt?.begruendung ?? "")}
+                                                    onChange={(e) => setJugendamt({ begruendung: e.target.value || null })}
+                                                    disabled={disabled || statusIsDone}
+                                                />
+                                            </FieldRow>
+                                        </div>
+                                    ) : null}
+                                </div>
+                            </PageCard>
+                        </TabsContent>
+
+                        <TabsContent value="kontakte" className="m-0">
+                            <PageCard title="Kontakte" icon={<Phone className="h-4 w-4 text-brand-text2" />}>
+                                <div className="flex flex-col sm:flex-row gap-2 sm:items-center sm:justify-between">
+                                    <div className="text-sm text-brand-text2">
+                                        Gesprächs-, Kontakt- und Erreichbarkeitsverlauf dokumentieren.
+                                    </div>
+
+                                    <Button
+                                        variant="secondary"
+                                        className="h-11"
+                                        onClick={addContact}
+                                        disabled={disabled || statusIsDone}
+                                    >
+                                        Kontakt hinzufügen
+                                    </Button>
+                                </div>
+
+                                <div className="space-y-3">
+                                    {(((form as any).contacts || []) as any[]).length === 0 ? (
+                                        <div className="rounded-2xl border border-brand-border/40 bg-white p-4 text-sm text-brand-text2">
+                                            Noch keine Kontakte erfasst.
+                                        </div>
+                                    ) : null}
+
+                                    {(((form as any).contacts || []) as any[]).map((c: any, idx: number) => (
+                                        <div key={idx} className="rounded-2xl border border-brand-border/25 bg-white p-3 space-y-3">
+                                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                                                <div className="text-sm font-semibold text-brand-text">Kontakt {idx + 1}</div>
+
+                                                <Button
+                                                    variant="secondary"
+                                                    className="h-10"
+                                                    onClick={() => removeContact(idx)}
+                                                    disabled={disabled || statusIsDone}
+                                                >
+                                                    Entfernen
+                                                </Button>
+                                            </div>
+
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                                <FieldRow label="Kontakt mit">
+                                                    <select
+                                                        className="h-10 w-full rounded-2xl border border-brand-border/40 bg-white px-3 text-sm text-brand-text"
+                                                        value={pick(String(c.kontaktMit ?? "SONSTIGE"), KONTAKT_MIT, "SONSTIGE")}
+                                                        onChange={(e) => updateContact(idx, { kontaktMit: e.target.value })}
+                                                        disabled={disabled || statusIsDone}
+                                                    >
+                                                        {KONTAKT_MIT.map((x) => (
+                                                            <option key={x} value={x}>
+                                                                {KONTAKT_MIT_LABEL[x]}
+                                                            </option>
+                                                        ))}
+                                                    </select>
+                                                </FieldRow>
+
+                                                <FieldRow label="Kontakt am">
+                                                    <Input
+                                                        value={String(c.kontaktAm ?? "")}
+                                                        onChange={(e) => updateContact(idx, { kontaktAm: e.target.value || null })}
+                                                        disabled={disabled || statusIsDone}
+                                                        placeholder={nowIso()}
+                                                    />
+                                                </FieldRow>
+
+                                                <FieldRow label="Status">
+                                                    <select
+                                                        className="h-10 w-full rounded-2xl border border-brand-border/40 bg-white px-3 text-sm text-brand-text"
+                                                        value={pick(String(c.status ?? "GEPLANT"), KONTAKT_STATUS, "GEPLANT")}
+                                                        onChange={(e) => updateContact(idx, { status: e.target.value })}
+                                                        disabled={disabled || statusIsDone}
+                                                    >
+                                                        {KONTAKT_STATUS.map((x) => (
+                                                            <option key={x} value={x}>
+                                                                {KONTAKT_STATUS_LABEL[x]}
+                                                            </option>
+                                                        ))}
+                                                    </select>
+                                                </FieldRow>
+
+                                                <FieldRow label="Ergebnis">
+                                                    <Input
+                                                        value={String(c.ergebnis ?? "")}
+                                                        onChange={(e) => updateContact(idx, { ergebnis: e.target.value || null })}
+                                                        disabled={disabled || statusIsDone}
+                                                        placeholder="z.B. Rückruf zugesagt / erreicht / Termin vereinbart"
+                                                    />
+                                                </FieldRow>
+
+                                                <FieldRow label="Notiz">
+                                                    <Textarea
+                                                        rows={3}
+                                                        value={String(c.notiz ?? "")}
+                                                        onChange={(e) => updateContact(idx, { notiz: e.target.value || null })}
+                                                        disabled={disabled || statusIsDone}
+                                                    />
+                                                </FieldRow>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
                             </PageCard>
                         </TabsContent>
 
@@ -1494,3 +1893,5 @@ export function MeldungEditor(props: {
         </div>
     );
 }
+
+export default MeldungEditor;
