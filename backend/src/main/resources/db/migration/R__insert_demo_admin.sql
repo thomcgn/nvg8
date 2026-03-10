@@ -1,30 +1,29 @@
--- =====================================================
--- 1. Demo Träger anlegen
--- =====================================================
+INSERT INTO traeger (name, slug, akten_prefix, enabled, kurzcode, created_at, updated_at)
+VALUES ('KIDOC', 'demo-traeger', 'KID', true, 'DEMO', now(), now());
 
-INSERT INTO traeger (id, name, slug, akten_prefix, enabled, kurzcode, created_at, updated_at)
-VALUES (1, 'KIDOC', 'demo-traeger', 'KID', true, 'DEMO', now(), now());
+INSERT INTO org_units (traeger_id, type, name, parent_id, enabled, created_at, updated_at)
+VALUES (
+    (SELECT id FROM traeger WHERE slug = 'demo-traeger'),
+    'TRAEGER',
+    'KIDOC',
+    NULL,
+    true,
+    now(),
+    now()
+);
 
-
--- =====================================================
--- 2. OrgUnits anlegen: Träger + EINRICHTUNG darunter
--- =====================================================
-
--- Träger-OrgUnit
-INSERT INTO org_units (id, traeger_id, type, name, parent_id, enabled, created_at, updated_at)
-VALUES (1, 1, 'TRAEGER', 'KIDOC', NULL, true, now(), now());
-
--- Einrichtung-OrgUnit (wichtig: type = EINRICHTUNG)
-INSERT INTO org_units (id, traeger_id, type, name, parent_id, enabled, created_at, updated_at)
-VALUES (2, 1, 'EINRICHTUNG', 'Villa Kunterbunt', 1, true, now(), now());
-
-
--- =====================================================
--- 3. User anlegen (Passwort: demo)
--- =====================================================
+INSERT INTO org_units (traeger_id, type, name, parent_id, enabled, created_at, updated_at)
+VALUES (
+    (SELECT id FROM traeger WHERE slug = 'demo-traeger'),
+    'EINRICHTUNG',
+    'Villa Kunterbunt',
+    (SELECT id FROM org_units WHERE name = 'KIDOC' AND type = 'TRAEGER'),
+    true,
+    now(),
+    now()
+);
 
 INSERT INTO users (
-    id,
     email,
     password_hash,
     enabled,
@@ -36,23 +35,23 @@ INSERT INTO users (
     nachname
 )
 VALUES (
-           1,
-           'demo@kidoc.local',
-           '$2b$10$ttZ/gNAS8sSgJ3NRk8rnv.WfTxcbyyRPER0.XGeSNv1wSSWDUG3Gq',
-           true,
-           1,
-           2,  -- ✅ Default OrgUnit auf EINRICHTUNG setzen
-           now(),
-           now(),
-           'D.',
-           'Emo'
-       );
-
-
--- =====================================================
--- 4. Nur Admin-Rolle vergeben (auf EINRICHTUNG!)
--- =====================================================
+    'demo@kidoc.local',
+    '$2b$10$ttZ/gNAS8sSgJ3NRk8rnv.WfTxcbyyRPER0.XGeSNv1wSSWDUG3Gq',
+    true,
+    (SELECT id FROM traeger WHERE slug = 'demo-traeger'),
+    (SELECT id FROM org_units WHERE name = 'Villa Kunterbunt' AND type = 'EINRICHTUNG'),
+    now(),
+    now(),
+    'D.',
+    'Emo'
+);
 
 INSERT INTO user_org_roles (user_id, org_unit_id, role, enabled, created_at, updated_at)
-VALUES
-    (1, 2, 'TRAEGER_ADMIN', true, now(), now());
+VALUES (
+    (SELECT id FROM users WHERE email = 'demo@kidoc.local'),
+    (SELECT id FROM org_units WHERE name = 'KIDOC' AND type = 'TRAEGER'),
+    'TRAEGER_ADMIN',
+    true,
+    now(),
+    now()
+);
