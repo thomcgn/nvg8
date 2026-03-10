@@ -64,32 +64,47 @@ export function sendMessage(data: {
     recipientUserIds: number[];
     threadId?: number | null;
 }): Promise<void> {
-    return apiFetch("/messages/send", { method: "POST", body: JSON.stringify(data) });
+    return apiFetch<void>("/messages/send", {
+        method: "POST",
+        body: data,
+    });
 }
 
 export function markRead(recipientRowId: number, isRead: boolean): Promise<void> {
-    return apiFetch("/messages/mark-read", {
+    return apiFetch<void>("/messages/mark-read", {
         method: "POST",
-        body: JSON.stringify({ recipientRowId, isRead }),
+        body: { recipientRowId, isRead },
     });
 }
 
 export function deleteFromInbox(recipientRowId: number): Promise<void> {
-    return apiFetch(`/messages/recipient/${recipientRowId}`, { method: "DELETE" });
+    return apiFetch<void>(`/messages/recipient/${recipientRowId}`, {
+        method: "DELETE",
+    });
 }
 
 export function formatMessageDate(createdAt: string): string {
     try {
         const d = new Date(createdAt);
         const now = new Date();
+
         const sameDay =
             d.getFullYear() === now.getFullYear() &&
             d.getMonth() === now.getMonth() &&
             d.getDate() === now.getDate();
+
         if (sameDay) {
-            return d.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
+            return d.toLocaleTimeString("de-DE", {
+                hour: "2-digit",
+                minute: "2-digit",
+            });
         }
-        return d.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "2-digit" });
+
+        return d.toLocaleDateString("de-DE", {
+            day: "2-digit",
+            month: "2-digit",
+            year: "2-digit",
+        });
     } catch {
         return "";
     }
