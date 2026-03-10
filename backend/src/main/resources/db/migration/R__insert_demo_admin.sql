@@ -16,7 +16,7 @@ VALUES (1, 1, 'TRAEGER', 'KIDOC', NULL, true, now(), now());
 
 -- Einrichtung-OrgUnit (wichtig: type = EINRICHTUNG)
 INSERT INTO org_units (id, traeger_id, type, name, parent_id, enabled, created_at, updated_at)
-VALUES (2, 1, 'EINRICHTUNG', 'Gesamtschule MS Mitte', 1, true, now(), now());
+VALUES (2, 1, 'EINRICHTUNG', 'Villa Kunterbunt', 1, true, now(), now());
 
 
 -- =====================================================
