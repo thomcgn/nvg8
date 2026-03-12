@@ -71,6 +71,10 @@ DELETE FROM bezugspersonen WHERE traeger_id = (SELECT id FROM traeger WHERE slug
 
 DELETE FROM user_org_roles WHERE user_id IN (SELECT id FROM users WHERE email IN ('demo@kidoc.local','admin@kidoc.io'));
 DELETE FROM users          WHERE email IN ('demo@kidoc.local','admin@kidoc.io');
+UPDATE users SET default_org_unit_id = NULL
+    WHERE default_org_unit_id IN (SELECT id FROM org_units WHERE traeger_id = (SELECT id FROM traeger WHERE slug = 'demo-traeger'));
+UPDATE users SET default_traeger_id = NULL
+    WHERE default_traeger_id = (SELECT id FROM traeger WHERE slug = 'demo-traeger');
 DELETE FROM org_units      WHERE traeger_id = (SELECT id FROM traeger WHERE slug = 'demo-traeger');
 DELETE FROM traeger        WHERE slug = 'demo-traeger';
 
@@ -117,45 +121,62 @@ INSERT INTO user_org_roles (user_id, org_unit_id, role, enabled, created_at, upd
 -- ═══════════════════════════════════════════════════════════════════════════
 
 INSERT INTO kinder (traeger_id, owner_einrichtung_org_unit_id, vorname, nachname, geburtsdatum, gender,
+                    strasse, hausnummer, plz, ort,
                     foerderbedarf, gesundheits_hinweise, created_at, updated_at)
 VALUES ((SELECT id FROM traeger WHERE slug = 'demo-traeger'),
         (SELECT id FROM org_units WHERE name = 'Villa Kunterbunt' AND type = 'EINRICHTUNG'),
-        'Lena', 'Müller', '2018-03-14', 'WEIBLICH', false,
+        'Lena', 'Müller', '2018-03-14', 'WEIBLICH',
+        'Rosenstraße', '12', '50667', 'Köln',
+        false,
         'Hämatome an Armen und Rücken dokumentiert (14.01.2025). Kinderärztin informiert.',
         now(), now());
 
 INSERT INTO kinder (traeger_id, owner_einrichtung_org_unit_id, vorname, nachname, geburtsdatum, gender,
+                    strasse, hausnummer, plz, ort,
                     foerderbedarf, foerderbedarf_details, gesundheits_hinweise, created_at, updated_at)
 VALUES ((SELECT id FROM traeger WHERE slug = 'demo-traeger'),
         (SELECT id FROM org_units WHERE name = 'Villa Kunterbunt' AND type = 'EINRICHTUNG'),
-        'Max', 'Schmidt', '2017-07-22', 'MAENNLICH', true,
+        'Max', 'Schmidt', '2017-07-22', 'MAENNLICH',
+        'Birkenallee', '33', '50679', 'Köln',
+        true,
         'Sprachentwicklungsverzögerung, Förderung durch Logopädie seit Sept. 2024.',
         'Untergewicht (KMI 14,1, Hausarzt Dr. Bergmann, 07.10.2024). Kind kommt häufig ohne Mahlzeit.',
         now(), now());
 
 INSERT INTO kinder (traeger_id, owner_einrichtung_org_unit_id, vorname, nachname, geburtsdatum, gender,
+                    strasse, hausnummer, plz, ort,
                     foerderbedarf, foerderbedarf_details, gesundheits_hinweise, created_at, updated_at)
 VALUES ((SELECT id FROM traeger WHERE slug = 'demo-traeger'),
         (SELECT id FROM org_units WHERE name = 'Villa Kunterbunt' AND type = 'EINRICHTUNG'),
-        'Sofia', 'Weber', '2019-11-05', 'WEIBLICH', true,
+        'Sofia', 'Weber', '2019-11-05', 'WEIBLICH',
+        'Industriestraße', '7', '51065', 'Köln',
+        true,
         'Motorische Entwicklungsverzögerung, heilpädagogische Frühförderung beantragt.',
-        'Schlafstörungen und Verhaltensauffälligkeiten nach Heimkehr vom Vater beobachtet.',
+        'Schlafstörungen und Verhaltensauffälligkeiten nach Heimkehr vom Vater beobachtet. Seit Feb. 2025 bei Großmutter Gerda Weber untergebracht.',
         now(), now());
 
 INSERT INTO kinder (traeger_id, owner_einrichtung_org_unit_id, vorname, nachname, geburtsdatum, gender,
-                    foerderbedarf, gesundheits_hinweise, created_at, updated_at)
+                    strasse, hausnummer, plz, ort,
+                    foerderbedarf, foerderbedarf_details, gesundheits_hinweise, created_at, updated_at)
 VALUES ((SELECT id FROM traeger WHERE slug = 'demo-traeger'),
         (SELECT id FROM org_units WHERE name = 'Villa Kunterbunt' AND type = 'EINRICHTUNG'),
-        'Noah', 'Fischer', '2016-01-30', 'MAENNLICH', false,
-        'Soziale Isolation. Kind berichtet, regelmäßig am Wochenende allein gelassen zu werden.',
+        'Noah', 'Fischer', '2016-01-30', 'MAENNLICH',
+        'Lindenplatz', '2A', '50823', 'Köln',
+        true,
+        'Erhöhter emotionaler Unterstützungsbedarf durch familiäre Belastungssituation.',
+        'Soziale Isolation. Kind berichtet, regelmäßig am Wochenende allein gelassen zu werden. Mutter Feb. 2025 stationär wegen Depression.',
         now(), now());
 
 INSERT INTO kinder (traeger_id, owner_einrichtung_org_unit_id, vorname, nachname, geburtsdatum, gender,
-                    foerderbedarf, gesundheits_hinweise, created_at, updated_at)
+                    strasse, hausnummer, plz, ort,
+                    foerderbedarf, foerderbedarf_details, gesundheits_hinweise, created_at, updated_at)
 VALUES ((SELECT id FROM traeger WHERE slug = 'demo-traeger'),
         (SELECT id FROM org_units WHERE name = 'Villa Kunterbunt' AND type = 'EINRICHTUNG'),
-        'Emilia', 'Bauer', '2020-06-18', 'WEIBLICH', false,
-        'Bindungsstörung beobachtet. Einnässen (neu seit Feb 2025), Daumenlutschen wieder aufgenommen. Stresssymptomatik.',
+        'Emilia', 'Bauer', '2020-06-18', 'WEIBLICH',
+        'Hauptstraße', '45', '50733', 'Köln',
+        true,
+        'Bindungsstörung und Regressionsverhalten, psychologische Fachberatung durch Kinderpsychologin Dr. Meißner empfohlen.',
+        'Einnässen (neu seit Feb 2025), Daumenlutschen wieder aufgenommen. Stresssymptomatik im Kontext Trennungskonflikt der Eltern. Häufige Klagen über Bauchschmerzen ohne organischen Befund.',
         now(), now());
 
 -- ═══════════════════════════════════════════════════════════════════════════
@@ -283,7 +304,7 @@ VALUES (
     (SELECT id FROM traeger WHERE slug='demo-traeger'),
     (SELECT id FROM org_units WHERE name='Villa Kunterbunt' AND type='EINRICHTUNG'),
     'ABGESCHLOSSEN', 'Verdacht körperliche Misshandlung – Lena M.',
-    'Erzieherin Kamps beobachtete am 14.01.2025 Hämatome an Oberarmen und Rücken. Kind reagierte ängstlich bei Berührungen. Vater Thomas M. bekannt wegen Alkohol und häuslicher Gewalt.',
+    'Körperverletzungszeichen – Erstdokumentation Jan. 2025',
     (SELECT id FROM users WHERE email='demo@kidoc.local'),
     'MST-2024-001', 1, '2025-01-15 09:00:00+01', '2025-02-28 16:30:00+01', now(), now());
 
@@ -295,7 +316,7 @@ VALUES (
     (SELECT id FROM traeger WHERE slug='demo-traeger'),
     (SELECT id FROM org_units WHERE name='Villa Kunterbunt' AND type='EINRICHTUNG'),
     'IN_PRUEFUNG', 'Verlaufskontrolle Familienhilfe – Lena M.',
-    'Ambulante Familienhilfe seit 01.03.2025 im Einsatz. Wöchentliche Hausbesuche. Vater hat Beratungsangebot angenommen.',
+    'Familienhilfe ab März 2025 – Stabilisierungsbegleitung',
     (SELECT id FROM users WHERE email='demo@kidoc.local'),
     'MST-2025-002', 2, '2025-03-01 10:00:00+01', now(), now());
 
@@ -307,7 +328,7 @@ VALUES (
     (SELECT id FROM traeger WHERE slug='demo-traeger'),
     (SELECT id FROM org_units WHERE name='Villa Kunterbunt' AND type='EINRICHTUNG'),
     'IN_PRUEFUNG', 'Verdacht Vernachlässigung – Max S.',
-    'Max erscheint seit Sept. 2024 regelmäßig ohne Frühstück, mit ungewaschener Kleidung. Mutter Petra S. auf Bewährung (Drogendelikt). Hausarzt bestätigte Untergewicht.',
+    'Chronische Vernachlässigung – Erstmeldung Okt. 2024',
     (SELECT id FROM users WHERE email='demo@kidoc.local'),
     'MST-2024-003', 1, '2024-10-07 11:30:00+02', now(), now());
 
@@ -319,7 +340,7 @@ VALUES (
     (SELECT id FROM traeger WHERE slug='demo-traeger'),
     (SELECT id FROM org_units WHERE name='Villa Kunterbunt' AND type='EINRICHTUNG'),
     'ABGESCHLOSSEN', 'Häusliche Gewalt / Inobhutnahme – Sofia W.',
-    'Polizeieinsatz 08.02.2025 wegen häuslicher Gewalt im Beisein des Kindes. Vater Klaus W. alkoholkrank (1,8 Promille). Sofortige Inobhutnahme durch ASD. Kind bei Großmutter Gerda W.',
+    'Häusliche Gewalt mit Polizeieinsatz – Inobhutnahme Feb. 2025',
     (SELECT id FROM users WHERE email='demo@kidoc.local'),
     'MST-2025-004', 1, '2025-02-08 20:00:00+01', '2025-03-05 14:00:00+01', now(), now());
 
@@ -331,7 +352,7 @@ VALUES (
     (SELECT id FROM traeger WHERE slug='demo-traeger'),
     (SELECT id FROM org_units WHERE name='Villa Kunterbunt' AND type='EINRICHTUNG'),
     'OFFEN', 'Mangelnde Aufsicht / psychisch belastete Familie – Noah F.',
-    'Noah berichtet, am Wochenende regelmäßig allein gelassen zu werden. Mutter stationär (Depression Feb. 2025). Stiefvater reagiert aggressiv auf Nachfragen.',
+    'Mangelnde Aufsicht – psychisch erkrankte Mutter, Meldung März 2025',
     (SELECT id FROM users WHERE email='demo@kidoc.local'),
     'MST-2025-005', 1, '2025-03-03 14:00:00+01', now(), now());
 
@@ -343,7 +364,7 @@ VALUES (
     (SELECT id FROM traeger WHERE slug='demo-traeger'),
     (SELECT id FROM org_units WHERE name='Villa Kunterbunt' AND type='EINRICHTUNG'),
     'OFFEN', 'Erstmeldung – Kindeswohlgefährdung im Sorgerechtsstreit – Emilia B.',
-    'Polizeimeldung 05.03.2025: Streit im Beisein des Kindes. Eltern im Trennungskonflikt. Emilia zeigt Regressions- und Bindungsstörungszeichen.',
+    'Trennungskonflikt mit Polizeieinsatz – Regressionszeichen März 2025',
     (SELECT id FROM users WHERE email='demo@kidoc.local'),
     'MST-2025-006', 1, '2025-03-05 16:00:00+01', now(), now());
 
@@ -359,7 +380,7 @@ INSERT INTO meldungen (falloeffnung_id, version_no, current, row_version, status
     kurzbeschreibung, fach_ampel, fach_text,
     abweichung_zur_auto,
     akut_gefahr_im_verzug, akut_begruendung, akut_notruf_erforderlich, akut_kind_sicher_untergebracht,
-    naechste_ueberpruefung_am, zusammenfassung,
+    verantwortliche_fachkraft_user_id, naechste_ueberpruefung_am, zusammenfassung,
     created_by_user_id, created_by_display_name,
     submitted_at, submitted_by_user_id, submitted_by_display_name,
     info_effective_at, created_at, updated_at)
@@ -369,12 +390,12 @@ VALUES (
     'EINRICHTUNGSLEITUNG', 'PERSOENLICH', 'Erzieherin Sabine Kamps, Villa Kunterbunt, Tel. 0221 4712345',
     'ZEITNAH_24_48H', 'BEOBACHTUNG',
     false, false,
-    'Erzieherin Frau Kamps beobachtete am 14.01.2025 beim Anziehen Hämatome an beiden Oberarmen (je ca. 4–5 cm, bläulich-grün) und am oberen Rücken (ca. 8 cm, gelblich-grün) von Lena Müller (6 J.). Das Kind zog sich bei Körperkontakt zurück und verweigerte Erklärungen. Mutter Anna M. holte das Kind schweigend ab. Vater Thomas M. ist wegen Alkoholmissbrauch und häuslicher Gewalt vorbekannt.',
+    'Hämatome bilateral – Verdacht körperliche Misshandlung',
     'ROT',
     'Die Verletzungen sind nicht mit einem Unfall vereinbar. Lokalisation und Muster (bilateral Oberarme, Rücken) deuten auf wiederholte körperliche Übergriffe hin. Das Verhalten des Kindes (Rückzug, Angst, Schonhaltung) verstärkt den Verdacht erheblich. Die Mutter erscheint überfordert und schützend gegenüber dem Vater. Eine unmittelbare Lebensgefahr liegt nicht vor, da das Kind tagsüber beaufsichtigt ist. Die Gefährdung im häuslichen Umfeld ist jedoch als hoch einzuschätzen. ASD-Einschaltung und kinderärztliche Begutachtung sind unverzüglich einzuleiten.',
     'GLEICH',
     false, 'Kind befindet sich tagsüber unter Aufsicht in der Einrichtung. Gefährdung besteht vornehmlich im häuslichen Umfeld. Eltern wurden informiert, aber noch nicht umfassend konfrontiert. ASD-Meldung unmittelbar eingeleitet.', false, 'JA',
-    '2025-02-01',
+    (SELECT id FROM users WHERE email='demo@kidoc.local'), '2025-02-01',
     'Hämatome dokumentiert und fotografiert. Mutter über Wahrnehmung informiert – Reaktion defensiv. ASD Herr Nowak telefonisch informiert, Hausbesuch 22.01. vereinbart. Kinderärztin Dr. Behrens zur Begutachtung einbezogen. Familienhilfe als Hilfe zur Erziehung empfohlen.',
     (SELECT id FROM users WHERE email='demo@kidoc.local'), 'D. Emo',
     '2025-01-16 11:00:00+01', (SELECT id FROM users WHERE email='demo@kidoc.local'), 'D. Emo',
@@ -398,7 +419,7 @@ VALUES (
     'SOZIALPAEDAGOGIN', 'TELEFON', 'ASD Herr Nowak, Jugendamt Köln-Innenstadt, Tel. 0221 2212345',
     'BEOBACHTEN', 'ERZAEHLUNG',
     true, true,
-    'Rückmeldung ASD nach Hausbesuch 22.01.2025: Vater hat Beratungsangebot angenommen (Fachstelle Sucht Köln). Keine weiteren Verletzungen feststellbar. Lena wirkt im Kita-Alltag entspannter. Familienhilfe ab 01.02.2025 bewilligt.',
+    'Verlaufsbericht nach ASD-Hausbesuch – Situation stabilisiert',
     'GELB',
     'Situation hat sich nach ASD-Intervention stabilisiert. Vater zeigt Kooperationsbereitschaft und hat Kontakt zur Suchtberatungsstelle aufgenommen. Mutter berichtet, häusliche Konflikte hätten nachgelassen. Lena wirkt im Kindergartenalltag weniger ängstlich. Familienhilfe als präventive Maßnahme sinnvoll. Lage weiter engmaschig begleiten. Abschluss in 6 Wochen angestrebt sofern keine Rückfälle.',
     'GLEICH', 'UPDATE',
@@ -426,7 +447,7 @@ VALUES (
     'EINRICHTUNGSLEITUNG', 'PERSOENLICH',
     'BEOBACHTEN', 'BEOBACHTUNG',
     true, true,
-    'Familienhilfe läuft seit 01.03.2025. Erzieherin beobachtet positive Entwicklung: Lena kommt regelmäßig, wirkt ausgeruht und gepflegt. Vater erscheint pünktlich zur Abholung. Großmutter Inge M. besucht Familie wöchentlich als unterstützende Ressource.',
+    'Verlaufskontrolle Familienhilfe – positive Entwicklung',
     'GRUEN',
     'Schutzmaßnahmen greifen. Kind zeigt keine neuen Auffälligkeiten. Zusammenarbeit mit der Familie ist konstruktiv. Familienhelferin Frau Berger berichtet von deutlicher Verbesserung der Haushaltsführung und des Erziehungsverhaltens. Weiterer Verlauf positiv – Abschluss in 8 Wochen angestrebt, sofern keine Rückfälle auftreten.',
     'GLEICH',
@@ -443,7 +464,7 @@ INSERT INTO meldungen (falloeffnung_id, version_no, current, row_version, status
     kurzbeschreibung, fach_ampel, fach_text,
     abweichung_zur_auto, abweichungs_begruendung,
     akut_gefahr_im_verzug, akut_notruf_erforderlich, akut_kind_sicher_untergebracht,
-    naechste_ueberpruefung_am, zusammenfassung,
+    verantwortliche_fachkraft_user_id, naechste_ueberpruefung_am, zusammenfassung,
     created_by_user_id, created_by_display_name,
     submitted_at, submitted_by_user_id, submitted_by_display_name,
     info_effective_at, created_at, updated_at)
@@ -453,12 +474,12 @@ VALUES (
     'ERZIEHERIN', 'PERSOENLICH', 'Erzieherin Renate Hölzel, Villa Kunterbunt Köln, Tel. 0221 4712345',
     'ZEITNAH_24_48H', 'BEOBACHTUNG',
     false, false,
-    'Max Schmidt (7 J.) erscheint seit mindestens 6 Wochen regelmäßig ohne Frühstück in der Einrichtung, Kleidung unrein und nicht witterungsgerecht. Hausarzt Dr. Bergmann bestätigt Untergewicht (KMI 14,1). Mutter Petra S. steht unter Bewährungsstrafe wegen Drogenbesitzes. Kind zeigt aggressive Ausbrüche und Konzentrationsprobleme.',
+    'Chronische Vernachlässigung – Ernährung, Hygiene, Kleidung',
     'GELB',
     'Klare Zeichen chronischer Vernachlässigung (Ernährung, Hygiene, Kleidung) über min. 6 Wochen. Situation ist nicht akut lebensbedrohlich, aber eine Kindeswohlgefährdung nach §8a SGB VIII liegt nahe. Mutter befindet sich in prekärer Lebenssituation (Sucht, Bewährung). Kooperationsbereitschaft fraglich. ASD-Meldung und Hausbesuch erforderlich.',
     'HOEHER', 'Das automatische System bewertet primär nach sichtbarem Körperbefund. Die chronische Vernachlässigung (Ernährung, Kleidung, Hygiene über >6 Wochen) kombiniert mit Suchtproblematik der Mutter erfordert nach fachlicher Einschätzung eine höhere Dringlichkeitsstufe als der Algorithmus ausweist.',
     false, false, 'UNKLAR',
-    '2024-12-01',
+    (SELECT id FROM users WHERE email='demo@kidoc.local'), '2024-12-01',
     'ASD informiert, Hausbesuch für 15.10.2024 terminiert. Einrichtung versorgt Kind mit Frühstück. Logopädie-Förderung läuft.',
     (SELECT id FROM users WHERE email='demo@kidoc.local'), 'D. Emo',
     '2024-10-08 10:00:00+02', (SELECT id FROM users WHERE email='demo@kidoc.local'), 'D. Emo',
@@ -481,7 +502,7 @@ VALUES (
     'SOZIALPAEDAGOGIN', 'TELEFON', 'ASD Frau Kleinert, Jugendamt Köln-Poll, Tel. 0221 9876543',
     'BEOBACHTEN', 'ERZAEHLUNG',
     false, false,
-    'ASD-Hausbesuch 15.10.2024: Wohnung verwahrlost, kaum Lebensmittel vorhanden. Mutter wechselnd kooperativ, Drogenscreening positiv (Cannabis, Amphetamine). Hilfeplan wird erstellt. Max erhält ab sofort tägliches Mittagessen in der Einrichtung über Bildungspaket.',
+    'Verlaufsbericht ASD-Hausbesuch – Hilfeplan eingeleitet',
     'GELB',
     'Lage bleibt kritisch. Mutter zeigt keine ausreichende Einsicht. Hilfeplan notwendig, Mitwirkungsbereitschaft gering. Max macht im Kita-Kontext Fortschritte (Sprache, soziale Integration). Situation muss engmaschig begleitet werden. Entzug der elterlichen Sorge nur als letztes Mittel – zunächst alle Hilfen ausschöpfen.',
     'GLEICH', 'UPDATE',
@@ -498,7 +519,7 @@ INSERT INTO meldungen (falloeffnung_id, version_no, current, row_version, status
     kurzbeschreibung, fach_ampel, fach_text,
     abweichung_zur_auto,
     akut_gefahr_im_verzug, akut_begruendung, akut_notruf_erforderlich, akut_kind_sicher_untergebracht,
-    zusammenfassung,
+    verantwortliche_fachkraft_user_id, zusammenfassung,
     created_by_user_id, created_by_display_name,
     submitted_at, submitted_by_user_id, submitted_by_display_name,
     info_effective_at, created_at, updated_at)
@@ -508,13 +529,14 @@ VALUES (
     'EINRICHTUNGSLEITUNG', 'TELEFON', 'Polizeibeamter KHK Meyer, Polizei Köln, Einsatzbericht Nr. 2025-KOE-0432, Tel. 0221 2290',
     'AKUT_HEUTE', 'BEOBACHTUNG',
     false, false,
-    'Polizei informiert Einrichtung am 08.02.2025 über Einsatz in der Wohnung von Klaus Weber. Sofia (5 J.) war direkt bei häuslicher Gewalt-Eskalation anwesend. Vater stark alkoholisiert (1,8 Promille laut Polizeibericht). Mutter Susanne W. seit 2023 unbekannten Aufenthalts. Kind wurde durch die Polizei zur Großmutter Gerda Weber (Köln-Buchheim) gebracht. Inobhutnahme durch ASD erfolgt.',
+    'Akute Kindeswohlgefährdung – häusliche Gewalt, Inobhutnahme §42 SGB VIII',
     'ROT',
     'Akute Kindeswohlgefährdung liegt vor. Das Kind war direkt Zeuge von Gewalt in einem Kontext, der keine sichere Rückkehr zur väterlichen Wohnung ermöglicht. Vater ist handlungsunfähig (Alkohol, laufendes Strafverfahren). Mutter nicht erreichbar. Großmutter Gerda W. bietet stabile Unterbringung und kooperiert vollständig. Gerichtlicher Beschluss zur vorläufigen Unterbringung bei der Großmutter wird angestrebt.',
     'GLEICH',
     true,
     'Kind war direkt anwesend bei tätlicher Auseinandersetzung in der Wohnung. Vater mit 1,8 Promille handlungsunfähig. Mutter nicht erreichbar. Keine andere sichere Bezugsperson am Tatort verfügbar. Inobhutnahme durch ASD nach §42 SGB VIII eingeleitet.',
     true, 'JA',
+    (SELECT id FROM users WHERE email='demo@kidoc.local'),
     'Kind bei Großmutter sicher untergebracht. ASD hat Inobhutnahme formal bestätigt. Strafanzeige gegen Vater erstattet. Gerichtsbeschluss zur vorläufigen Unterbringung beantragt.',
     (SELECT id FROM users WHERE email='demo@kidoc.local'), 'D. Emo',
     '2025-02-09 08:30:00+01', (SELECT id FROM users WHERE email='demo@kidoc.local'), 'D. Emo',
@@ -537,7 +559,7 @@ VALUES (
     'ERZIEHERIN', 'PERSOENLICH', 'Erzieherin Martina Schulz, Villa Kunterbunt Köln, Tel. 0221 4712345',
     'ZEITNAH_24_48H', 'ERZAEHLUNG',
     false, false,
-    'Noah Fischer (8 J.) berichtet der Erzieherin am 03.03.2025 spontan, dass er am Wochenende „oft alleine ist, weil Mama schläft und Jürgen weggeht". Mutter Maria F. war laut Entlassungsbericht im Februar 2025 stationär wegen schwerer depressiver Episode. Stiefvater Jürgen H. reagierte auf Nachfragen der Einrichtungsleitung laut und bedrohlich.',
+    'Mangelnde Aufsicht – Kindesschilderung, aggressiver Stiefvater',
     'GELB',
     'Betreuungssituation für Noah ist nicht gesichert. Psychische Erkrankung der Mutter beeinträchtigt die Erziehungsfähigkeit erheblich. Stiefvater zeigt aggressive Abwehr gegenüber Fachkräften – deutliches Warnsignal. Noah zeigt keine körperlichen Verletzungszeichen, aber sozio-emotionale Belastungsanzeichen (Müdigkeit, erhöhtes Bindungsbedürfnis). Priorität: verlässliche Betreuung sicherstellen, ASD einschalten.',
     'GLEICH',
@@ -548,7 +570,7 @@ VALUES (
 
 -- ── M8: Emilia / MST-2025-006 / v1 / ERSTMELDUNG / GELB / ENTWURF ────────────
 INSERT INTO meldungen (falloeffnung_id, version_no, current, row_version, status, type,
-    erfasst_von_rolle, meldeweg, meldende_stelle_kontakt,
+    erfasst_von_rolle, meldeweg, meldeweg_sonstiges, meldende_stelle_kontakt,
     dringlichkeit, datenbasis,
     einwilligung_vorhanden, schweigepflichtentbindung_vorhanden,
     kurzbeschreibung, fach_ampel, fach_text,
@@ -559,10 +581,10 @@ INSERT INTO meldungen (falloeffnung_id, version_no, current, row_version, status
 VALUES (
     (SELECT id FROM falloeffnungen WHERE aktenzeichen='MST-2025-006'),
     1, true, 0, 'ENTWURF', 'ERSTMELDUNG',
-    'EINRICHTUNGSLEITUNG', 'TELEFON', 'Sachbearbeiterin Frau Löwenthal, Polizei Köln, Tel. 0221 2290',
+    'EINRICHTUNGSLEITUNG', 'SONSTIGES', 'Weitergabe über schriftlichen Polizeibericht', 'Sachbearbeiterin Frau Löwenthal, Polizei Köln, Tel. 0221 2290',
     'ZEITNAH_24_48H', 'ERZAEHLUNG',
     false, false,
-    'Polizei übermittelt am 06.03.2025 Meldung über Vorfall vom 05.03.2025: Nachbarin rief Polizei wegen lautem Streit. Emilia Bauer (4 J.) anwesend. Eltern im Trennungskonflikt, Sorgerechtsverfahren läuft. Emilia zeigt seit Wochen Regressionsverhalten (Einnässen), Daumenlutschen und klagt über Bauchschmerzen.',
+    'Trennungskonflikt der Eltern – Regressionszeichen bei Kind',
     'GELB',
     'Situation noch nicht abschließend beurteilbar. Regressionsverhalten und Bindungsstörung sind als Stresssymptomatik im Kontext des Trennungskonflikts zu werten. Akute körperliche Gefährdung liegt nicht vor, aber psychische Belastung des Kindes ist erheblich. Beide Elternteile müssen befragt werden. Familiengerichtsverfahren abwarten, gleichzeitig eigene Einschätzung dokumentieren.',
     'NIEDRIGER', 'Automatisches System bewertet bei Elternkonflikt mit Polizeieinsatz höher. Fachliche Einschätzung: aktuell keine direkte körperliche Gefährdung. Psychische Belastung real, aber situativ. Lage noch nicht vollständig beurteilbar – bewusst konservative Einschätzung bis Elterngespräche geführt sind.',
@@ -589,6 +611,8 @@ INSERT INTO meldung_anlass_codes (meldung_id, code) VALUES
   -- M3: Lena Verlaufskontrolle GRÜN
   ((SELECT m.id FROM meldungen m JOIN falloeffnungen f ON f.id=m.falloeffnung_id WHERE f.aktenzeichen='MST-2025-002' AND m.version_no=1), 'FAMILY_DOMESTIC_VIOLENCE'),
   ((SELECT m.id FROM meldungen m JOIN falloeffnungen f ON f.id=m.falloeffnung_id WHERE f.aktenzeichen='MST-2025-002' AND m.version_no=1), 'FAMILY_PREVIOUS_PROTECTION_CASE'),
+  ((SELECT m.id FROM meldungen m JOIN falloeffnungen f ON f.id=m.falloeffnung_id WHERE f.aktenzeichen='MST-2025-002' AND m.version_no=1), 'PARENT_SUBSTANCE_IMPAIRED_CARE'),
+  ((SELECT m.id FROM meldungen m JOIN falloeffnungen f ON f.id=m.falloeffnung_id WHERE f.aktenzeichen='MST-2025-002' AND m.version_no=1), 'BODY_INJURY_VISIBLE'),
   -- M4: Max Erstmeldung GELB
   ((SELECT m.id FROM meldungen m JOIN falloeffnungen f ON f.id=m.falloeffnung_id WHERE f.aktenzeichen='MST-2024-003' AND m.version_no=1), 'NEGLECT_FOOD'),
   ((SELECT m.id FROM meldungen m JOIN falloeffnungen f ON f.id=m.falloeffnung_id WHERE f.aktenzeichen='MST-2024-003' AND m.version_no=1), 'NEGLECT_HYGIENE'),
@@ -599,9 +623,12 @@ INSERT INTO meldung_anlass_codes (meldung_id, code) VALUES
   ((SELECT m.id FROM meldungen m JOIN falloeffnungen f ON f.id=m.falloeffnung_id WHERE f.aktenzeichen='MST-2024-003' AND m.version_no=1), 'FAMILY_SUBSTANCE_ABUSE'),
   -- M5: Max Verlauf
   ((SELECT m.id FROM meldungen m JOIN falloeffnungen f ON f.id=m.falloeffnung_id WHERE f.aktenzeichen='MST-2024-003' AND m.version_no=2), 'NEGLECT_FOOD'),
+  ((SELECT m.id FROM meldungen m JOIN falloeffnungen f ON f.id=m.falloeffnung_id WHERE f.aktenzeichen='MST-2024-003' AND m.version_no=2), 'NEGLECT_CHRONIC'),
+  ((SELECT m.id FROM meldungen m JOIN falloeffnungen f ON f.id=m.falloeffnung_id WHERE f.aktenzeichen='MST-2024-003' AND m.version_no=2), 'LIVING_FILTH'),
   ((SELECT m.id FROM meldungen m JOIN falloeffnungen f ON f.id=m.falloeffnung_id WHERE f.aktenzeichen='MST-2024-003' AND m.version_no=2), 'PARENT_SUBSTANCE_IMPAIRED_CARE'),
   ((SELECT m.id FROM meldungen m JOIN falloeffnungen f ON f.id=m.falloeffnung_id WHERE f.aktenzeichen='MST-2024-003' AND m.version_no=2), 'PARENT_UNCOOPERATIVE'),
   ((SELECT m.id FROM meldungen m JOIN falloeffnungen f ON f.id=m.falloeffnung_id WHERE f.aktenzeichen='MST-2024-003' AND m.version_no=2), 'FAMILY_SUBSTANCE_ABUSE'),
+  ((SELECT m.id FROM meldungen m JOIN falloeffnungen f ON f.id=m.falloeffnung_id WHERE f.aktenzeichen='MST-2024-003' AND m.version_no=2), 'FAMILY_NO_SUPPORT_NETWORK'),
   -- M6: Sofia ROT
   ((SELECT m.id FROM meldungen m JOIN falloeffnungen f ON f.id=m.falloeffnung_id WHERE f.aktenzeichen='MST-2025-004' AND m.version_no=1), 'ACUTE_IMMEDIATE_DANGER'),
   ((SELECT m.id FROM meldungen m JOIN falloeffnungen f ON f.id=m.falloeffnung_id WHERE f.aktenzeichen='MST-2025-004' AND m.version_no=1), 'FAMILY_DOMESTIC_VIOLENCE'),
@@ -762,12 +789,12 @@ VALUES (
     (SELECT id FROM users WHERE email='demo@kidoc.local'), 'D. Emo', now());
 
 INSERT INTO meldung_observations
-    (meldung_id, zeitpunkt, zeitraum, ort, quelle, sichtbarkeit,
+    (meldung_id, zeitpunkt, zeitraum, ort, ort_sonstiges, quelle, sichtbarkeit,
      text, verhalten_bezug, woertliches_zitat,
      created_by_user_id, created_by_display_name, created_at)
 VALUES (
     (SELECT m.id FROM meldungen m JOIN falloeffnungen f ON f.id=m.falloeffnung_id WHERE f.aktenzeichen='MST-2025-005' AND m.version_no=1),
-    '2025-03-03 16:45:00+01', 'EINMALIG', 'SCHULE_KITA', 'DRITTE', 'INTERN',
+    '2025-03-03 16:45:00+01', 'EINMALIG', 'SONSTIGES', 'Eingangsbereich der Einrichtung (Abholzone)', 'DRITTE', 'INTERN',
     'Einrichtungsleitung versuchte Stiefvater Jürgen H. bei der Abholung anzusprechen, um die geschilderte Situation zu klären und über Unterstützungsangebote zu informieren.',
     'Jürgen H. reagierte sofort laut und einschüchternd. Körpersprache aggressiv (aufgerichtet, Finger zeigend). Nahm Noah unverzüglich und verließ die Einrichtung. Kooperation vollständig verweigert.',
     '"Das geht Sie gar nichts an. Wenn Sie meinen Stiefsohn weiter ausfragen, höre ich davon." (Jürgen H., 03.03.2025, 16:48 Uhr, auf Ansprache zur Versorgungssituation)',
@@ -898,19 +925,19 @@ WHERE f.aktenzeichen='MST-2025-006' AND m.version_no=1;
 INSERT INTO meldung_contacts (meldung_id, kontakt_mit, kontakt_am, status, ergebnis, notiz, created_at, updated_at)
 VALUES
   ((SELECT m.id FROM meldungen m JOIN falloeffnungen f ON f.id=m.falloeffnung_id WHERE f.aktenzeichen='MST-2024-001' AND m.version_no=1),
-   'KIND', '2025-01-14 09:00:00+01', 'ERFOLGT',
+   'KIND', '2025-01-14 09:00:00+01', 'ERREICHT',
    'Kind sprach nicht über Ursache. Nonverbale Schutzreaktion bei Berührungsannäherung. Kein Augenkontakt.',
    'Erzieherin Kamps führte einfühlsames Gespräch ohne Druck. Kind nickte auf Frage, ob es wehtut.',
    now(), now()),
 
   ((SELECT m.id FROM meldungen m JOIN falloeffnungen f ON f.id=m.falloeffnung_id WHERE f.aktenzeichen='MST-2024-001' AND m.version_no=1),
-   'MUTTER', '2025-01-14 16:30:00+01', 'ERFOLGT',
+   'MUTTER', '2025-01-14 16:30:00+01', 'ERREICHT',
    'Mutter verneinte Vorfälle, bezeichnete Verletzungen als Unfallfolge. Gespräch nach 4 Minuten beendet.',
    'Mutter über Beobachtung informiert. Empfehlung Kinderarztermin ausgesprochen. Mutter stimmte ausweichend zu.',
    now(), now()),
 
   ((SELECT m.id FROM meldungen m JOIN falloeffnungen f ON f.id=m.falloeffnung_id WHERE f.aktenzeichen='MST-2024-001' AND m.version_no=1),
-   'JUGENDAMT', '2025-01-15 10:30:00+01', 'ERFOLGT',
+   'JUGENDAMT', '2025-01-15 10:30:00+01', 'ERREICHT',
    'ASD Herr Nowak informiert. Hausbesuch für 22.01.2025 vereinbart.',
    'Telefonische Meldung mit detaillierter Schilderung der Beobachtungen und Verletzungsmuster.',
    now(), now());
@@ -919,13 +946,13 @@ VALUES
 INSERT INTO meldung_contacts (meldung_id, kontakt_mit, kontakt_am, status, ergebnis, notiz, created_at, updated_at)
 VALUES
   ((SELECT m.id FROM meldungen m JOIN falloeffnungen f ON f.id=m.falloeffnung_id WHERE f.aktenzeichen='MST-2024-001' AND m.version_no=2),
-   'VATER', '2025-01-22 16:00:00+01', 'ERFOLGT',
+   'VATER', '2025-01-22 16:00:00+01', 'ERREICHT',
    'Vater bestätigt Termin in Suchtberatungsstelle. Keine weiteren Vorfälle laut eigener Aussage.',
    'Kurze Rückmeldung per Telefon nach ASD-Hausbesuch. Ton kooperativ.',
    now(), now()),
 
   ((SELECT m.id FROM meldungen m JOIN falloeffnungen f ON f.id=m.falloeffnung_id WHERE f.aktenzeichen='MST-2024-001' AND m.version_no=2),
-   'ARZT', '2025-01-23 11:00:00+01', 'ERFOLGT',
+   'ARZT', '2025-01-23 11:00:00+01', 'ERREICHT',
    'Dr. Behrens: keine neuen Verletzungen, Kind in gutem Allgemeinzustand.',
    '',
    now(), now());
@@ -934,13 +961,13 @@ VALUES
 INSERT INTO meldung_contacts (meldung_id, kontakt_mit, kontakt_am, status, ergebnis, notiz, created_at, updated_at)
 VALUES
   ((SELECT m.id FROM meldungen m JOIN falloeffnungen f ON f.id=m.falloeffnung_id WHERE f.aktenzeichen='MST-2025-002' AND m.version_no=1),
-   'MUTTER', '2025-03-08 09:00:00+01', 'ERFOLGT',
+   'MUTTER', '2025-03-08 09:00:00+01', 'ERREICHT',
    'Positives Gespräch. Mutter: Vater hält Beratungstermine ein, Atmosphäre zuhause deutlich ruhiger.',
    '',
    now(), now()),
 
   ((SELECT m.id FROM meldungen m JOIN falloeffnungen f ON f.id=m.falloeffnung_id WHERE f.aktenzeichen='MST-2025-002' AND m.version_no=1),
-   'SONSTIGE', '2025-03-07 14:00:00+01', 'ERFOLGT',
+   'SONSTIGE', '2025-03-07 14:00:00+01', 'ERREICHT',
    'Familienhelferin Frau Berger: wöchentliche Hausbesuche konstruktiv. Haushalt geordnet, ausreichend Lebensmittel.',
    'Familienhelferin berichtete von deutlicher Verbesserung der Haushaltsführung.',
    now(), now());
@@ -955,13 +982,13 @@ VALUES
    now(), now()),
 
   ((SELECT m.id FROM meldungen m JOIN falloeffnungen f ON f.id=m.falloeffnung_id WHERE f.aktenzeichen='MST-2024-003' AND m.version_no=1),
-   'MUTTER', '2024-10-08 09:00:00+02', 'ERFOLGT',
+   'MUTTER', '2024-10-08 09:00:00+02', 'ERREICHT',
    'Mutter kurz ansprechbar, sehr unruhig. Stellte Termin in der Einrichtung in Aussicht, erschien dann nicht.',
    '',
    now(), now()),
 
   ((SELECT m.id FROM meldungen m JOIN falloeffnungen f ON f.id=m.falloeffnung_id WHERE f.aktenzeichen='MST-2024-003' AND m.version_no=1),
-   'JUGENDAMT', '2024-10-08 10:00:00+02', 'ERFOLGT',
+   'JUGENDAMT', '2024-10-08 10:00:00+02', 'ERREICHT',
    'ASD informiert. Hausbesuch für 15.10.2024 terminiert.',
    'Telefonische Meldung mit Schilderung der Vernachlässigungszeichen und Untergewichtsbefund.',
    now(), now());
@@ -970,13 +997,13 @@ VALUES
 INSERT INTO meldung_contacts (meldung_id, kontakt_mit, kontakt_am, status, ergebnis, notiz, created_at, updated_at)
 VALUES
   ((SELECT m.id FROM meldungen m JOIN falloeffnungen f ON f.id=m.falloeffnung_id WHERE f.aktenzeichen='MST-2024-003' AND m.version_no=2),
-   'MUTTER', '2024-10-15 15:00:00+02', 'ERFOLGT',
+   'MUTTER', '2024-10-15 15:00:00+02', 'ERREICHT',
    'Mutter erschien nach ASD-Aufforderung kurz in der Einrichtung. Gespräch sehr schwierig, Mutter unkooperativ.',
    'Hilfeplan-Gespräch für 05.11.2024 geplant.',
    now(), now()),
 
   ((SELECT m.id FROM meldungen m JOIN falloeffnungen f ON f.id=m.falloeffnung_id WHERE f.aktenzeichen='MST-2024-003' AND m.version_no=2),
-   'JUGENDAMT', '2024-10-16 09:00:00+02', 'ERFOLGT',
+   'JUGENDAMT', '2024-10-16 09:00:00+02', 'ERREICHT',
    'ASD Frau Kleinert: Hilfeplan wird erstellt, Mitwirkungsbereitschaft der Mutter gering.',
    '',
    now(), now());
@@ -985,19 +1012,19 @@ VALUES
 INSERT INTO meldung_contacts (meldung_id, kontakt_mit, kontakt_am, status, ergebnis, notiz, created_at, updated_at)
 VALUES
   ((SELECT m.id FROM meldungen m JOIN falloeffnungen f ON f.id=m.falloeffnung_id WHERE f.aktenzeichen='MST-2025-004' AND m.version_no=1),
-   'SONSTIGE', '2025-02-08 21:00:00+01', 'ERFOLGT',
+   'SONSTIGE', '2025-02-08 21:00:00+01', 'ERREICHT',
    'KHK Meyer übermittelte Einsatzbericht und bestätigte Inobhutnahme durch ASD.',
    'Polizei informierte Einrichtung telefonisch nach Abschluss des Einsatzes.',
    now(), now()),
 
   ((SELECT m.id FROM meldungen m JOIN falloeffnungen f ON f.id=m.falloeffnung_id WHERE f.aktenzeichen='MST-2025-004' AND m.version_no=1),
-   'JUGENDAMT', '2025-02-09 08:00:00+01', 'ERFOLGT',
+   'JUGENDAMT', '2025-02-09 08:00:00+01', 'ERREICHT',
    'ASD Frau Dr. Maurer: Inobhutnahme formal bestätigt. Gerichtsbeschluss zur vorläufigen Unterbringung beantragt.',
    '',
    now(), now()),
 
   ((SELECT m.id FROM meldungen m JOIN falloeffnungen f ON f.id=m.falloeffnung_id WHERE f.aktenzeichen='MST-2025-004' AND m.version_no=1),
-   'BEZUGSPERSON', '2025-02-09 09:00:00+01', 'ERFOLGT',
+   'BEZUGSPERSON', '2025-02-09 09:00:00+01', 'ERREICHT',
    'Großmutter Gerda W. kooperiert vollständig. Bereit zur dauerhaften Betreuung. Liebevolle Beziehung zu Sofia beobachtet.',
    '',
    now(), now());
@@ -1006,19 +1033,19 @@ VALUES
 INSERT INTO meldung_contacts (meldung_id, kontakt_mit, kontakt_am, status, ergebnis, notiz, created_at, updated_at)
 VALUES
   ((SELECT m.id FROM meldungen m JOIN falloeffnungen f ON f.id=m.falloeffnung_id WHERE f.aktenzeichen='MST-2025-005' AND m.version_no=1),
-   'KIND', '2025-03-03 10:30:00+01', 'ERFOLGT',
+   'KIND', '2025-03-03 10:30:00+01', 'ERREICHT',
    'Noah berichtete spontan über Versorgungssituation zuhause. Kein Anzeichen körperlicher Verletzung.',
    'Erzieherin Schulz hörte aktiv zu, keine Suggestivfragen.',
    now(), now()),
 
   ((SELECT m.id FROM meldungen m JOIN falloeffnungen f ON f.id=m.falloeffnung_id WHERE f.aktenzeichen='MST-2025-005' AND m.version_no=1),
-   'SONSTIGE', '2025-03-03 16:45:00+01', 'ERFOLGT',
+   'SONSTIGE', '2025-03-03 16:45:00+01', 'ERREICHT',
    'Stiefvater reagierte aggressiv und bedrohlich. Gespräch nicht möglich.',
    'Verhalten dokumentiert. Einrichtungsleitung anwesend als Zeugin.',
    now(), now()),
 
   ((SELECT m.id FROM meldungen m JOIN falloeffnungen f ON f.id=m.falloeffnung_id WHERE f.aktenzeichen='MST-2025-005' AND m.version_no=1),
-   'JUGENDAMT', '2025-03-04 09:30:00+01', 'ERFOLGT',
+   'JUGENDAMT', '2025-03-04 09:30:00+01', 'ERREICHT',
    'ASD Frau Wenzel informiert. Hausbesuch wird zeitnah eingeleitet.',
    '',
    now(), now());
