@@ -431,7 +431,7 @@ VALUES (
     'Schutzmaßnahmen greifen. Kind zeigt keine neuen Auffälligkeiten. Zusammenarbeit mit der Familie ist konstruktiv. Familienhelferin Frau Berger berichtet von deutlicher Verbesserung der Haushaltsführung und des Erziehungsverhaltens. Weiterer Verlauf positiv – Abschluss in 8 Wochen angestrebt, sofern keine Rückfälle auftreten.',
     'GLEICH',
     false, false, 'JA',
-    '2025-05-01',
+    '2026-04-15',
     (SELECT id FROM users WHERE email='demo@kidoc.local'), 'D. Emo',
     '2025-03-10 09:00:00+01', now(), now());
 
@@ -486,7 +486,7 @@ VALUES (
     'Lage bleibt kritisch. Mutter zeigt keine ausreichende Einsicht. Hilfeplan notwendig, Mitwirkungsbereitschaft gering. Max macht im Kita-Kontext Fortschritte (Sprache, soziale Integration). Situation muss engmaschig begleitet werden. Entzug der elterlichen Sorge nur als letztes Mittel – zunächst alle Hilfen ausschöpfen.',
     'GLEICH', 'UPDATE',
     false, false, 'UNKLAR',
-    '2025-01-15',
+    '2026-04-30',
     (SELECT id FROM users WHERE email='demo@kidoc.local'), 'D. Emo',
     '2024-10-15 16:00:00+02', now(), now());
 
@@ -506,16 +506,16 @@ VALUES (
     (SELECT id FROM falloeffnungen WHERE aktenzeichen='MST-2025-004'),
     1, true, 1, 'ABGESCHLOSSEN', 'ERSTMELDUNG',
     'EINRICHTUNGSLEITUNG', 'TELEFON', 'Polizeibeamter KHK Meyer, Polizei Köln, Einsatzbericht Nr. 2025-KOE-0432, Tel. 0221 2290',
-    'AKUT_HEUTE', 'BEOBACHTUNG',
+    'BEOBACHTEN', 'BEOBACHTUNG',
     false, false,
-    'Polizei informiert Einrichtung am 08.02.2025 über Einsatz in der Wohnung von Klaus Weber. Sofia (5 J.) war direkt bei häuslicher Gewalt-Eskalation anwesend. Vater stark alkoholisiert (1,8 Promille laut Polizeibericht). Mutter Susanne W. seit 2023 unbekannten Aufenthalts. Kind wurde durch die Polizei zur Großmutter Gerda Weber (Köln-Buchheim) gebracht. Inobhutnahme durch ASD erfolgt.',
-    'ROT',
-    'Akute Kindeswohlgefährdung liegt vor. Das Kind war direkt Zeuge von Gewalt in einem Kontext, der keine sichere Rückkehr zur väterlichen Wohnung ermöglicht. Vater ist handlungsunfähig (Alkohol, laufendes Strafverfahren). Mutter nicht erreichbar. Großmutter Gerda W. bietet stabile Unterbringung und kooperiert vollständig. Gerichtlicher Beschluss zur vorläufigen Unterbringung bei der Großmutter wird angestrebt.',
+    'Polizei informiert Einrichtung am 08.02.2025 über Einsatz in der Wohnung von Klaus Weber. Sofia (5 J.) war direkt bei häuslicher Gewalt-Eskalation anwesend. Vater stark alkoholisiert (1,8 Promille laut Polizeibericht). Mutter Susanne W. seit 2023 unbekannten Aufenthalts. Kind wurde durch die Polizei zur Großmutter Gerda Weber (Köln-Buchheim) gebracht. Inobhutnahme durch ASD erfolgt. Fall abgeschlossen – Kind dauerhaft bei Großmutter untergebracht.',
+    'GELB',
+    'Situation ist dauerhaft stabilisiert. Kind lebt seit Februar 2025 bei Großmutter Gerda W. in stabilen und sicheren Verhältnissen. Vater befindet sich in stationärer Therapie (Alkohol). Gerichtlicher Beschluss zur Unterbringung bei der Großmutter liegt vor. Keine weiteren Kindeswohlgefährdungshinweise. Fall kann abgeschlossen werden.',
     'GLEICH',
-    true,
-    'Kind war direkt anwesend bei tätlicher Auseinandersetzung in der Wohnung. Vater mit 1,8 Promille handlungsunfähig. Mutter nicht erreichbar. Keine andere sichere Bezugsperson am Tatort verfügbar. Inobhutnahme durch ASD nach §42 SGB VIII eingeleitet.',
-    true, 'JA',
-    'Kind bei Großmutter sicher untergebracht. ASD hat Inobhutnahme formal bestätigt. Strafanzeige gegen Vater erstattet. Gerichtsbeschluss zur vorläufigen Unterbringung beantragt.',
+    false,
+    null,
+    false, 'JA',
+    'Kind bei Großmutter dauerhaft und sicher untergebracht. Gerichtsbeschluss rechtskräftig. Vater in Therapie. Fall abgeschlossen.',
     (SELECT id FROM users WHERE email='demo@kidoc.local'), 'D. Emo',
     '2025-02-09 08:30:00+01', (SELECT id FROM users WHERE email='demo@kidoc.local'), 'D. Emo',
     '2025-02-08 21:00:00+01', now(), now());
@@ -542,7 +542,7 @@ VALUES (
     'Betreuungssituation für Noah ist nicht gesichert. Psychische Erkrankung der Mutter beeinträchtigt die Erziehungsfähigkeit erheblich. Stiefvater zeigt aggressive Abwehr gegenüber Fachkräften – deutliches Warnsignal. Noah zeigt keine körperlichen Verletzungszeichen, aber sozio-emotionale Belastungsanzeichen (Müdigkeit, erhöhtes Bindungsbedürfnis). Priorität: verlässliche Betreuung sicherstellen, ASD einschalten.',
     'GLEICH',
     false, false, 'UNKLAR',
-    '2025-03-24',
+    '2026-03-26',
     (SELECT id FROM users WHERE email='demo@kidoc.local'), 'D. Emo',
     '2025-03-03 14:30:00+01', now(), now());
 
@@ -898,19 +898,19 @@ WHERE f.aktenzeichen='MST-2025-006' AND m.version_no=1;
 INSERT INTO meldung_contacts (meldung_id, kontakt_mit, kontakt_am, status, ergebnis, notiz, created_at, updated_at)
 VALUES
   ((SELECT m.id FROM meldungen m JOIN falloeffnungen f ON f.id=m.falloeffnung_id WHERE f.aktenzeichen='MST-2024-001' AND m.version_no=1),
-   'KIND', '2025-01-14 09:00:00+01', 'ERFOLGT',
+   'KIND', '2025-01-14 09:00:00+01', 'ERREICHT',
    'Kind sprach nicht über Ursache. Nonverbale Schutzreaktion bei Berührungsannäherung. Kein Augenkontakt.',
    'Erzieherin Kamps führte einfühlsames Gespräch ohne Druck. Kind nickte auf Frage, ob es wehtut.',
    now(), now()),
 
   ((SELECT m.id FROM meldungen m JOIN falloeffnungen f ON f.id=m.falloeffnung_id WHERE f.aktenzeichen='MST-2024-001' AND m.version_no=1),
-   'MUTTER', '2025-01-14 16:30:00+01', 'ERFOLGT',
+   'MUTTER', '2025-01-14 16:30:00+01', 'ERREICHT',
    'Mutter verneinte Vorfälle, bezeichnete Verletzungen als Unfallfolge. Gespräch nach 4 Minuten beendet.',
    'Mutter über Beobachtung informiert. Empfehlung Kinderarztermin ausgesprochen. Mutter stimmte ausweichend zu.',
    now(), now()),
 
   ((SELECT m.id FROM meldungen m JOIN falloeffnungen f ON f.id=m.falloeffnung_id WHERE f.aktenzeichen='MST-2024-001' AND m.version_no=1),
-   'JUGENDAMT', '2025-01-15 10:30:00+01', 'ERFOLGT',
+   'JUGENDAMT', '2025-01-15 10:30:00+01', 'ERREICHT',
    'ASD Herr Nowak informiert. Hausbesuch für 22.01.2025 vereinbart.',
    'Telefonische Meldung mit detaillierter Schilderung der Beobachtungen und Verletzungsmuster.',
    now(), now());
@@ -919,13 +919,13 @@ VALUES
 INSERT INTO meldung_contacts (meldung_id, kontakt_mit, kontakt_am, status, ergebnis, notiz, created_at, updated_at)
 VALUES
   ((SELECT m.id FROM meldungen m JOIN falloeffnungen f ON f.id=m.falloeffnung_id WHERE f.aktenzeichen='MST-2024-001' AND m.version_no=2),
-   'VATER', '2025-01-22 16:00:00+01', 'ERFOLGT',
+   'VATER', '2025-01-22 16:00:00+01', 'ERREICHT',
    'Vater bestätigt Termin in Suchtberatungsstelle. Keine weiteren Vorfälle laut eigener Aussage.',
    'Kurze Rückmeldung per Telefon nach ASD-Hausbesuch. Ton kooperativ.',
    now(), now()),
 
   ((SELECT m.id FROM meldungen m JOIN falloeffnungen f ON f.id=m.falloeffnung_id WHERE f.aktenzeichen='MST-2024-001' AND m.version_no=2),
-   'ARZT', '2025-01-23 11:00:00+01', 'ERFOLGT',
+   'ARZT', '2025-01-23 11:00:00+01', 'ERREICHT',
    'Dr. Behrens: keine neuen Verletzungen, Kind in gutem Allgemeinzustand.',
    '',
    now(), now());
@@ -934,13 +934,13 @@ VALUES
 INSERT INTO meldung_contacts (meldung_id, kontakt_mit, kontakt_am, status, ergebnis, notiz, created_at, updated_at)
 VALUES
   ((SELECT m.id FROM meldungen m JOIN falloeffnungen f ON f.id=m.falloeffnung_id WHERE f.aktenzeichen='MST-2025-002' AND m.version_no=1),
-   'MUTTER', '2025-03-08 09:00:00+01', 'ERFOLGT',
+   'MUTTER', '2025-03-08 09:00:00+01', 'ERREICHT',
    'Positives Gespräch. Mutter: Vater hält Beratungstermine ein, Atmosphäre zuhause deutlich ruhiger.',
    '',
    now(), now()),
 
   ((SELECT m.id FROM meldungen m JOIN falloeffnungen f ON f.id=m.falloeffnung_id WHERE f.aktenzeichen='MST-2025-002' AND m.version_no=1),
-   'SONSTIGE', '2025-03-07 14:00:00+01', 'ERFOLGT',
+   'SONSTIGE', '2025-03-07 14:00:00+01', 'ERREICHT',
    'Familienhelferin Frau Berger: wöchentliche Hausbesuche konstruktiv. Haushalt geordnet, ausreichend Lebensmittel.',
    'Familienhelferin berichtete von deutlicher Verbesserung der Haushaltsführung.',
    now(), now());
@@ -955,13 +955,13 @@ VALUES
    now(), now()),
 
   ((SELECT m.id FROM meldungen m JOIN falloeffnungen f ON f.id=m.falloeffnung_id WHERE f.aktenzeichen='MST-2024-003' AND m.version_no=1),
-   'MUTTER', '2024-10-08 09:00:00+02', 'ERFOLGT',
+   'MUTTER', '2024-10-08 09:00:00+02', 'ERREICHT',
    'Mutter kurz ansprechbar, sehr unruhig. Stellte Termin in der Einrichtung in Aussicht, erschien dann nicht.',
    '',
    now(), now()),
 
   ((SELECT m.id FROM meldungen m JOIN falloeffnungen f ON f.id=m.falloeffnung_id WHERE f.aktenzeichen='MST-2024-003' AND m.version_no=1),
-   'JUGENDAMT', '2024-10-08 10:00:00+02', 'ERFOLGT',
+   'JUGENDAMT', '2024-10-08 10:00:00+02', 'ERREICHT',
    'ASD informiert. Hausbesuch für 15.10.2024 terminiert.',
    'Telefonische Meldung mit Schilderung der Vernachlässigungszeichen und Untergewichtsbefund.',
    now(), now());
@@ -970,13 +970,13 @@ VALUES
 INSERT INTO meldung_contacts (meldung_id, kontakt_mit, kontakt_am, status, ergebnis, notiz, created_at, updated_at)
 VALUES
   ((SELECT m.id FROM meldungen m JOIN falloeffnungen f ON f.id=m.falloeffnung_id WHERE f.aktenzeichen='MST-2024-003' AND m.version_no=2),
-   'MUTTER', '2024-10-15 15:00:00+02', 'ERFOLGT',
+   'MUTTER', '2024-10-15 15:00:00+02', 'ERREICHT',
    'Mutter erschien nach ASD-Aufforderung kurz in der Einrichtung. Gespräch sehr schwierig, Mutter unkooperativ.',
    'Hilfeplan-Gespräch für 05.11.2024 geplant.',
    now(), now()),
 
   ((SELECT m.id FROM meldungen m JOIN falloeffnungen f ON f.id=m.falloeffnung_id WHERE f.aktenzeichen='MST-2024-003' AND m.version_no=2),
-   'JUGENDAMT', '2024-10-16 09:00:00+02', 'ERFOLGT',
+   'JUGENDAMT', '2024-10-16 09:00:00+02', 'ERREICHT',
    'ASD Frau Kleinert: Hilfeplan wird erstellt, Mitwirkungsbereitschaft der Mutter gering.',
    '',
    now(), now());
@@ -985,19 +985,19 @@ VALUES
 INSERT INTO meldung_contacts (meldung_id, kontakt_mit, kontakt_am, status, ergebnis, notiz, created_at, updated_at)
 VALUES
   ((SELECT m.id FROM meldungen m JOIN falloeffnungen f ON f.id=m.falloeffnung_id WHERE f.aktenzeichen='MST-2025-004' AND m.version_no=1),
-   'SONSTIGE', '2025-02-08 21:00:00+01', 'ERFOLGT',
+   'SONSTIGE', '2025-02-08 21:00:00+01', 'ERREICHT',
    'KHK Meyer übermittelte Einsatzbericht und bestätigte Inobhutnahme durch ASD.',
    'Polizei informierte Einrichtung telefonisch nach Abschluss des Einsatzes.',
    now(), now()),
 
   ((SELECT m.id FROM meldungen m JOIN falloeffnungen f ON f.id=m.falloeffnung_id WHERE f.aktenzeichen='MST-2025-004' AND m.version_no=1),
-   'JUGENDAMT', '2025-02-09 08:00:00+01', 'ERFOLGT',
+   'JUGENDAMT', '2025-02-09 08:00:00+01', 'ERREICHT',
    'ASD Frau Dr. Maurer: Inobhutnahme formal bestätigt. Gerichtsbeschluss zur vorläufigen Unterbringung beantragt.',
    '',
    now(), now()),
 
   ((SELECT m.id FROM meldungen m JOIN falloeffnungen f ON f.id=m.falloeffnung_id WHERE f.aktenzeichen='MST-2025-004' AND m.version_no=1),
-   'BEZUGSPERSON', '2025-02-09 09:00:00+01', 'ERFOLGT',
+   'BEZUGSPERSON', '2025-02-09 09:00:00+01', 'ERREICHT',
    'Großmutter Gerda W. kooperiert vollständig. Bereit zur dauerhaften Betreuung. Liebevolle Beziehung zu Sofia beobachtet.',
    '',
    now(), now());
@@ -1006,19 +1006,19 @@ VALUES
 INSERT INTO meldung_contacts (meldung_id, kontakt_mit, kontakt_am, status, ergebnis, notiz, created_at, updated_at)
 VALUES
   ((SELECT m.id FROM meldungen m JOIN falloeffnungen f ON f.id=m.falloeffnung_id WHERE f.aktenzeichen='MST-2025-005' AND m.version_no=1),
-   'KIND', '2025-03-03 10:30:00+01', 'ERFOLGT',
+   'KIND', '2025-03-03 10:30:00+01', 'ERREICHT',
    'Noah berichtete spontan über Versorgungssituation zuhause. Kein Anzeichen körperlicher Verletzung.',
    'Erzieherin Schulz hörte aktiv zu, keine Suggestivfragen.',
    now(), now()),
 
   ((SELECT m.id FROM meldungen m JOIN falloeffnungen f ON f.id=m.falloeffnung_id WHERE f.aktenzeichen='MST-2025-005' AND m.version_no=1),
-   'SONSTIGE', '2025-03-03 16:45:00+01', 'ERFOLGT',
+   'SONSTIGE', '2025-03-03 16:45:00+01', 'ERREICHT',
    'Stiefvater reagierte aggressiv und bedrohlich. Gespräch nicht möglich.',
    'Verhalten dokumentiert. Einrichtungsleitung anwesend als Zeugin.',
    now(), now()),
 
   ((SELECT m.id FROM meldungen m JOIN falloeffnungen f ON f.id=m.falloeffnung_id WHERE f.aktenzeichen='MST-2025-005' AND m.version_no=1),
-   'JUGENDAMT', '2025-03-04 09:30:00+01', 'ERFOLGT',
+   'JUGENDAMT', '2025-03-04 09:30:00+01', 'ERREICHT',
    'ASD Frau Wenzel informiert. Hausbesuch wird zeitnah eingeleitet.',
    '',
    now(), now());

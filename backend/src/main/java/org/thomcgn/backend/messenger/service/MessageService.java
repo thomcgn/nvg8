@@ -5,6 +5,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
+import org.thomcgn.backend.messenger.dto.GroupOptionDto;
 import org.thomcgn.backend.messenger.dto.InboxItemDto;
 import org.thomcgn.backend.messenger.dto.MessageDetailDto;
 import org.thomcgn.backend.messenger.dto.MessageDto;
@@ -14,12 +15,19 @@ import org.thomcgn.backend.messenger.model.Message;
 import org.thomcgn.backend.messenger.model.MessageRecipient;
 import org.thomcgn.backend.messenger.repo.MessageRecipientRepository;
 import org.thomcgn.backend.messenger.repo.MessageRepository;
+import org.thomcgn.backend.orgunits.model.OrgUnitType;
+import org.thomcgn.backend.orgunits.repo.OrgUnitRepository;
+import org.thomcgn.backend.teams.repo.UserTeamMembershipRepository;
+import org.thomcgn.backend.users.repo.UserOrgRoleRepository;
 import org.thomcgn.backend.users.repo.UserRepository;
 
 import java.time.OffsetDateTime;
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
@@ -28,6 +36,9 @@ public class MessageService {
     private final MessageRepository messageRepository;
     private final MessageRecipientRepository recipientRepository;
     private final UserRepository userRepository;
+    private final OrgUnitRepository orgUnitRepository;
+    private final UserOrgRoleRepository userOrgRoleRepository;
+    private final UserTeamMembershipRepository userTeamMembershipRepository;
 
     public long getUnreadCount(Long userId) {
         return recipientRepository.countUnread(userId);
@@ -74,12 +85,35 @@ public class MessageService {
                 .toList();
     }
 
+    public List<GroupOptionDto> getGroupOptions(Long traegerId) {
+        var types = List.of(OrgUnitType.TEAM, OrgUnitType.ABTEILUNG, OrgUnitType.GRUPPE);
+        return orgUnitRepository.findAllEnabledByTraegerId(traegerId).stream()
+                .filter(ou -> types.contains(ou.getType()))
+                .map(ou -> new GroupOptionDto(ou.getId(), ou.getName(), ou.getType().name()))
+                .toList();
+    }
+
     @Transactional
     public void sendMessage(Long senderId,
                             String subject,
                             String body,
-                            List<Long> recipients,
+                            List<Long> recipientUserIds,
+                            List<Long> recipientOrgUnitIds,
                             Long threadId) {
+
+        Set<Long> resolved = new HashSet<>();
+        if (recipientUserIds != null) resolved.addAll(recipientUserIds);
+
+        if (recipientOrgUnitIds != null) {
+            for (Long ouId : recipientOrgUnitIds) {
+                // Users with roles in the org unit
+                userOrgRoleRepository.findAllEnabledByOrgUnitIdWithUser(ouId)
+                        .forEach(uor -> resolved.add(uor.getUser().getId()));
+                // Team members (for TEAM type org units)
+                userTeamMembershipRepository.findByTeamOrgUnitIdAndEnabledTrueOrderByCreatedAtAsc(ouId)
+                        .forEach(m -> resolved.add(m.getUser().getId()));
+            }
+        }
 
         Message message = messageRepository.save(
                 Message.builder()
@@ -91,7 +125,7 @@ public class MessageService {
                         .build()
         );
 
-        for (Long userId : recipients) {
+        for (Long userId : resolved) {
             recipientRepository.save(
                     MessageRecipient.builder()
                             .messageId(message.getId())

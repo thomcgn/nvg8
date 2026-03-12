@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.thomcgn.backend.common.security.SecurityUtils;
+import org.thomcgn.backend.messenger.dto.GroupOptionDto;
 import org.thomcgn.backend.messenger.dto.InboxItemDto;
 import org.thomcgn.backend.messenger.dto.MarkReadRequest;
 import org.thomcgn.backend.messenger.dto.MessageDetailDto;
@@ -35,8 +36,14 @@ public class MessageController {
 
     @GetMapping("/recipient-options")
     public List<UserOptionDto> recipientOptions() {
-        // falls du den User brauchst, kannst du hier SecurityUtils.currentUserIdRequired() nutzen
         return messageService.getRecipientOptions();
+    }
+
+    @GetMapping("/group-options")
+    public List<GroupOptionDto> groupOptions() {
+        Long traegerId = SecurityUtils.currentTraegerIdOptional();
+        if (traegerId == null) return List.of();
+        return messageService.getGroupOptions(traegerId);
     }
 
     @PostMapping("/send")
@@ -46,6 +53,7 @@ public class MessageController {
                 request.subject(),
                 request.body(),
                 request.recipientUserIds(),
+                request.recipientOrgUnitIds(),
                 request.threadId()
         );
         return ResponseEntity.ok().build();

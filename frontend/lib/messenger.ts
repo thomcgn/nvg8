@@ -42,6 +42,12 @@ export type UserOption = {
     label: string;
 };
 
+export type GroupOption = {
+    id: number;
+    label: string;
+    type: string; // TEAM | ABTEILUNG | GRUPPE
+};
+
 export function fetchInbox(limit = 50): Promise<InboxItem[]> {
     return apiFetch<InboxItem[]>(`/messages/inbox?limit=${limit}`);
 }
@@ -58,10 +64,15 @@ export function fetchRecipientOptions(): Promise<UserOption[]> {
     return apiFetch<UserOption[]>("/messages/recipient-options");
 }
 
+export function fetchGroupOptions(): Promise<GroupOption[]> {
+    return apiFetch<GroupOption[]>("/messages/group-options");
+}
+
 export function sendMessage(data: {
     subject: string;
     body: string;
     recipientUserIds: number[];
+    recipientOrgUnitIds?: number[];
     threadId?: number | null;
 }): Promise<void> {
     return apiFetch<void>("/messages/send", {

@@ -1,4 +1,3 @@
-// src/main/java/org/thomcgn/backend/dossiers/service/AkteService.java
 package org.thomcgn.backend.dossiers.service;
 
 import org.springframework.dao.DataIntegrityViolationException;
@@ -53,8 +52,6 @@ public class AkteService {
         this.access = access;
     }
 
-    // ---------------- Akte: resolve/create ----------------
-
     @Transactional
     public AkteResponse getOrCreateAkteByKind(Long kindId) {
         access.requireAny(Role.FACHKRAFT, Role.TEAMLEITUNG, Role.EINRICHTUNG_ADMIN, Role.TRAEGER_ADMIN);
@@ -68,39 +65,32 @@ public class AkteService {
         OrgUnit einrichtung = orgUnitRepo.findById(einrichtungOrgUnitId)
                 .orElseThrow(() -> DomainException.notFound(ErrorCode.ORG_UNIT_NOT_FOUND, "Einrichtung not found"));
 
-        // Defense-in-depth: Einrichtung muss zu aktuellem Träger gehören
         if (einrichtung.getTraeger() == null || einrichtung.getTraeger().getId() == null
                 || !einrichtung.getTraeger().getId().equals(traegerId)) {
             throw DomainException.forbidden(ErrorCode.ACCESS_DENIED, "Einrichtung not in current traeger scope");
         }
 
-        // 1) fast path: existiert?
         var existing = dossierRepo.findByEinrichtungOrgUnit_IdAndKind_Id(einrichtungOrgUnitId, kindId);
         if (existing.isPresent()) {
             return getAkte(existing.get().getId());
         }
 
-        // 2) create path (race-condition safe)
         try {
             KindDossier d = new KindDossier();
             d.setEinrichtungOrgUnit(einrichtung);
-            d.setTraeger(einrichtung.getTraeger()); // ✅ WICHTIG: NOT NULL traeger_id
+            d.setTraeger(einrichtung.getTraeger());
             d.setKind(kind);
             d.setEnabled(true);
 
-            d = dossierRepo.saveAndFlush(d); // ✅ flush => unique + notnull sofort sichtbar
+            d = dossierRepo.saveAndFlush(d);
             return getAkte(d.getId());
         } catch (DataIntegrityViolationException ex) {
-            // Parallel hat jemand schon angelegt → nochmal lesen
             KindDossier d2 = dossierRepo.findByEinrichtungOrgUnit_IdAndKind_Id(einrichtungOrgUnitId, kindId)
                     .orElseThrow(() -> ex);
             return getAkte(d2.getId());
         }
     }
 
-    /**
-     * exists-Variante: 200/404, KEIN autocreate.
-     */
     @Transactional(readOnly = true)
     public AkteResponse getAkteByKindIfExists(Long kindId) {
         access.requireAny(Role.FACHKRAFT, Role.TEAMLEITUNG, Role.EINRICHTUNG_ADMIN, Role.TRAEGER_ADMIN);
@@ -110,11 +100,8 @@ public class AkteService {
         KindDossier dossier = dossierRepo.findByEinrichtungOrgUnit_IdAndKind_Id(einrichtungOrgUnitId, kindId)
                 .orElseThrow(() -> DomainException.notFound(ErrorCode.NOT_FOUND, "Akte not found"));
 
-        // Scope/Traeger checks passieren in getAkte()
         return getAkte(dossier.getId());
     }
-
-    // ---------------- Akte: get detail ----------------
 
     @Transactional(readOnly = true)
     public AkteResponse getAkte(Long akteId) {
@@ -126,7 +113,6 @@ public class AkteService {
         KindDossier dossier = dossierRepo.findById(akteId)
                 .orElseThrow(() -> DomainException.notFound(ErrorCode.NOT_FOUND, "Akte not found"));
 
-        // ✅ Harte Einrichtungsschranke
         if (dossier.getEinrichtungOrgUnit() == null || dossier.getEinrichtungOrgUnit().getId() == null) {
             throw DomainException.conflict(ErrorCode.CONFLICT, "Akte missing einrichtung scope");
         }
@@ -137,14 +123,12 @@ public class AkteService {
             );
         }
 
-        // ✅ Zusätzlich Traeger-Konsistenz prüfen (defense-in-depth)
         if (dossier.getEinrichtungOrgUnit().getTraeger() == null
                 || dossier.getEinrichtungOrgUnit().getTraeger().getId() == null
                 || !dossier.getEinrichtungOrgUnit().getTraeger().getId().equals(traegerId)) {
             throw DomainException.forbidden(ErrorCode.ACCESS_DENIED, "Akte not in current traeger scope");
         }
 
-        // ✅ Scope: aktive OrgUnit im Kontext
         Set<Long> allowedEinrichtungen = Set.of(einrichtungOrgUnitId);
 
         List<Falleroeffnung> faelle = fallRepo.listByDossierScoped(traegerId, dossier.getId(), allowedEinrichtungen);
@@ -167,6 +151,7 @@ public class AkteService {
                         f.getCreatedBy() != null ? f.getCreatedBy().getDisplayName() : null,
                         f.getCreatedAt(),
                         null,
+                        null,
                         null
                 ))
                 .toList();
@@ -181,8 +166,6 @@ public class AkteService {
         );
     }
 
-    // ---------------- Fall in Akte ----------------
-
     @Transactional
     public FalleroeffnungResponse createFallInAkte(Long akteId, CreateFallInAkteRequest req) {
         access.requireAny(Role.FACHKRAFT, Role.TEAMLEITUNG, Role.EINRICHTUNG_ADMIN, Role.TRAEGER_ADMIN);
@@ -192,7 +175,6 @@ public class AkteService {
         KindDossier dossier = dossierRepo.findById(akteId)
                 .orElseThrow(() -> DomainException.notFound(ErrorCode.NOT_FOUND, "Akte not found"));
 
-        // ✅ Harte Einrichtungsschranke
         if (dossier.getEinrichtungOrgUnit() == null || dossier.getEinrichtungOrgUnit().getId() == null) {
             throw DomainException.conflict(ErrorCode.CONFLICT, "Akte missing einrichtung scope");
         }
@@ -210,7 +192,7 @@ public class AkteService {
 
         CreateFalleroeffnungRequest create = new CreateFalleroeffnungRequest(
                 dossier.getKind().getId(),
-                einrichtungOrgUnitId, // ✅ immer aus Kontext
+                einrichtungOrgUnitId,
                 req != null ? req.teamOrgUnitId() : null,
                 (req != null && req.titel() != null && !req.titel().isBlank())
                         ? req.titel()
