@@ -16,9 +16,8 @@ import org.thomcgn.backend.messenger.model.MessageRecipient;
 import org.thomcgn.backend.messenger.repo.MessageRecipientRepository;
 import org.thomcgn.backend.messenger.repo.MessageRepository;
 import org.thomcgn.backend.orgunits.model.OrgUnitType;
+import org.thomcgn.backend.orgunits.repo.OrgUnitMembershipRepository;
 import org.thomcgn.backend.orgunits.repo.OrgUnitRepository;
-import org.thomcgn.backend.teams.repo.UserTeamMembershipRepository;
-import org.thomcgn.backend.users.repo.UserOrgRoleRepository;
 import org.thomcgn.backend.users.repo.UserRepository;
 
 import java.time.OffsetDateTime;
@@ -37,8 +36,7 @@ public class MessageService {
     private final MessageRecipientRepository recipientRepository;
     private final UserRepository userRepository;
     private final OrgUnitRepository orgUnitRepository;
-    private final UserOrgRoleRepository userOrgRoleRepository;
-    private final UserTeamMembershipRepository userTeamMembershipRepository;
+    private final OrgUnitMembershipRepository orgUnitMembershipRepository;
 
     public long getUnreadCount(Long userId) {
         return recipientRepository.countUnread(userId);
@@ -106,11 +104,7 @@ public class MessageService {
 
         if (recipientOrgUnitIds != null) {
             for (Long ouId : recipientOrgUnitIds) {
-                // Users with roles in the org unit
-                userOrgRoleRepository.findAllEnabledByOrgUnitIdWithUser(ouId)
-                        .forEach(uor -> resolved.add(uor.getUser().getId()));
-                // Team members (for TEAM type org units)
-                userTeamMembershipRepository.findByTeamOrgUnitIdAndEnabledTrueOrderByCreatedAtAsc(ouId)
+                orgUnitMembershipRepository.findAllEnabledByOrgUnitId(ouId)
                         .forEach(m -> resolved.add(m.getUser().getId()));
             }
         }

@@ -11,7 +11,9 @@
       "Bash(find /home/tom/Schreibtisch/nvg8/backend -name \"OrgUnitType.java\" | xargs cat)",
       "Bash(cd /home/tom/Schreibtisch/nvg8/frontend && npx tsc --noEmit 2>&1 | head -40)",
       "Bash(find /home/tom/Schreibtisch/nvg8/backend -name \"*Test*.java\" -o -name \"*Spec*.java\" 2>/dev/null | head -10)",
-      "Bash(./mvnw test:*)"
+      "Bash(./mvnw test:*)",
+      "Bash(cd /home/tom/Schreibtisch/nvg8/frontend && npm run build 2>&1 | tail -20)",
+      "Bash(ls -1 /home/tom/Schreibtisch/nvg8/backend/src/main/resources/db/migration/*.sql | sort)"
     ]
   },
   "hooks": {

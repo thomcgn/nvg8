@@ -8,32 +8,30 @@ import org.thomcgn.backend.common.errors.ErrorCode;
 import org.thomcgn.backend.common.security.JwtService;
 import org.thomcgn.backend.common.security.SecurityUtils;
 import org.thomcgn.backend.orgunits.model.OrgUnit;
+import org.thomcgn.backend.orgunits.model.OrgUnitMembership;
 import org.thomcgn.backend.orgunits.model.OrgUnitType;
 import org.thomcgn.backend.orgunits.repo.OrgUnitRepository;
-import org.thomcgn.backend.users.model.User;
-import org.thomcgn.backend.users.model.UserOrgRole;
-import org.thomcgn.backend.users.repo.UserRepository;
+import org.thomcgn.backend.orgunits.repo.OrgUnitMembershipRepository;
 
 import java.util.*;
 
 @Service
 public class AuthContextService {
 
-    private final UserRepository userRepository;
+    private final OrgUnitMembershipRepository membershipRepository;
     private final OrgUnitRepository orgUnitRepository;
     private final JwtService jwtService;
 
-    public AuthContextService(UserRepository userRepository,
-                              OrgUnitRepository orgUnitRepository,
-                              JwtService jwtService) {
-        this.userRepository = userRepository;
+    public AuthContextService(
+            OrgUnitMembershipRepository membershipRepository,
+            OrgUnitRepository orgUnitRepository,
+            JwtService jwtService
+    ) {
+        this.membershipRepository = membershipRepository;
         this.orgUnitRepository = orgUnitRepository;
         this.jwtService = jwtService;
     }
 
-    /**
-     * NEW: Liefert aktiven Kontext (aus JWT) + alle auswählbaren Kontexte (Traeger + EINRICHTUNG) aus DB.
-     */
     @Transactional(readOnly = true)
     public AuthContextOverviewResponse getContextOverview() {
         ActiveAuthContextResponse active = new ActiveAuthContextResponse(
@@ -41,35 +39,24 @@ public class AuthContextService {
                 SecurityUtils.currentOrgUnitIdOptional(),
                 new HashSet<>(SecurityUtils.currentRolesOptional())
         );
-
         return new AuthContextOverviewResponse(active, listContexts());
     }
 
-    /**
-     * Liefert alle auswählbaren Kontexte (Traeger + EINRICHTUNG) für den eingeloggten User.
-     * Ein User kann Rollen in mehreren Teams/Ebenen haben -> wir aggregieren immer auf EINRICHTUNG.
-     */
     @Transactional(readOnly = true)
     public List<AuthContextResponse> listContexts() {
         Long userId = SecurityUtils.currentUserId();
 
-        User user = userRepository.findByIdWithOrgRoles(userId)
-                .orElseThrow(() -> DomainException.notFound(ErrorCode.USER_NOT_FOUND, "User not found"));
+        List<OrgUnitMembership> memberships = membershipRepository.findAllActiveRolesByUserId(userId);
 
-        // Aggregation: (traegerId, einrichtungId) -> roles + names
         Map<CtxKey, CtxAgg> agg = new LinkedHashMap<>();
 
-        for (UserOrgRole uor : user.getOrgRoles()) {
-            if (!uor.isEnabled()) continue;
-
-            OrgUnit ou = uor.getOrgUnit();
+        for (OrgUnitMembership m : memberships) {
+            OrgUnit ou = m.getOrgUnit();
             if (ou == null || !ou.isEnabled()) continue;
-
             if (ou.getTraeger() == null || !ou.getTraeger().isEnabled()) continue;
 
             OrgUnit einr = findEinrichtungAncestor(ou);
             if (einr == null) continue;
-
             if (!einr.isEnabled()) continue;
             if (einr.getTraeger() == null || !einr.getTraeger().isEnabled()) continue;
 
@@ -80,8 +67,7 @@ public class AuthContextService {
             CtxAgg a = agg.computeIfAbsent(key, k ->
                     new CtxAgg(traegerId, einr.getTraeger().getName(), einrichtungId, einr.getName())
             );
-
-            a.roles.add(uor.getRole().name());
+            a.roles.add(m.getRole());
         }
 
         List<AuthContextResponse> out = new ArrayList<>(agg.size());
@@ -97,20 +83,9 @@ public class AuthContextService {
         return out;
     }
 
-    /**
-     * Switch Context: validiert, dass User im gewünschten EINRICHTUNG-Kontext Rollen hat,
-     * und mintet ctx-JWT mit tid+oid+roles.
-     *
-     * Wichtig:
-     * - TraegerId wird serverseitig aus der EINRICHTUNG (OrgUnit) abgeleitet.
-     * - Rollen werden serverseitig aus UserOrgRole aggregiert.
-     */
     @Transactional(readOnly = true)
     public SwitchContextResponse switchContext(SwitchContextRequest req) {
         Long userId = SecurityUtils.currentUserId();
-
-        User user = userRepository.findByIdWithOrgRoles(userId)
-                .orElseThrow(() -> DomainException.notFound(ErrorCode.USER_NOT_FOUND, "User not found"));
 
         OrgUnit einr = orgUnitRepository.findById(req.einrichtungOrgUnitId())
                 .orElseThrow(() -> DomainException.notFound(ErrorCode.ORG_UNIT_NOT_FOUND, "Einrichtung not found"));
@@ -128,30 +103,24 @@ public class AuthContextService {
         Long targetTraegerId = einr.getTraeger().getId();
         Long targetEinrichtungId = einr.getId();
 
-        // Rollen aggregieren: alle Rollen des Users irgendwo unter dieser EINRICHTUNG zählen in den Kontext
+        List<OrgUnitMembership> memberships = membershipRepository.findAllActiveRolesByUserId(userId);
         Set<String> ctxRoles = new HashSet<>();
 
-        for (UserOrgRole uor : user.getOrgRoles()) {
-            if (!uor.isEnabled()) continue;
-
-            OrgUnit ou = uor.getOrgUnit();
+        for (OrgUnitMembership m : memberships) {
+            OrgUnit ou = m.getOrgUnit();
             if (ou == null || !ou.isEnabled()) continue;
             if (ou.getTraeger() == null || !ou.getTraeger().isEnabled()) continue;
-
-            // schneller Filter: gleicher Träger
             if (!ou.getTraeger().getId().equals(targetTraegerId)) continue;
 
-            // TRAEGER-Level Rollen gelten trägerübergreifend für alle Einrichtungen
             if (ou.getType() == OrgUnitType.TRAEGER) {
-                ctxRoles.add(uor.getRole().name());
+                ctxRoles.add(m.getRole());
                 continue;
             }
 
             OrgUnit ancestor = findEinrichtungAncestor(ou);
             if (ancestor == null) continue;
-
             if (ancestor.getId().equals(targetEinrichtungId)) {
-                ctxRoles.add(uor.getRole().name());
+                ctxRoles.add(m.getRole());
             }
         }
 
@@ -160,28 +129,19 @@ public class AuthContextService {
         }
 
         String token = jwtService.issueContextToken(
-                user.getId(),
+                userId,
                 targetTraegerId,
                 targetEinrichtungId,
                 ctxRoles.stream().sorted().toList(),
-                user.getEmail()
+                SecurityUtils.currentEmail()
         );
 
         return new SwitchContextResponse(token);
     }
 
-    // ---------------------------------------------------------------------
-    // Helpers
-    // ---------------------------------------------------------------------
-
-    /**
-     * Steigt im OrgUnit-Baum hoch bis EINRICHTUNG.
-     * Hinweis: parent ist LAZY; Zugriff kann zusätzliche Loads verursachen, ist aber ok für Context-Calls.
-     */
     private OrgUnit findEinrichtungAncestor(OrgUnit start) {
         OrgUnit current = start;
         int guard = 0;
-
         while (current != null && guard++ < 50) {
             if (current.getType() == OrgUnitType.EINRICHTUNG) return current;
             current = current.getParent();

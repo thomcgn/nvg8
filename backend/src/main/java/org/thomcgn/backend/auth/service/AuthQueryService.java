@@ -8,8 +8,8 @@ import org.thomcgn.backend.common.errors.ErrorCode;
 import org.thomcgn.backend.common.security.JwtService;
 import org.thomcgn.backend.common.security.SecurityUtils;
 import org.thomcgn.backend.orgunits.model.OrgUnit;
+import org.thomcgn.backend.orgunits.repo.OrgUnitMembershipRepository;
 import org.thomcgn.backend.users.model.User;
-import org.thomcgn.backend.users.repo.UserOrgRoleRepository;
 import org.thomcgn.backend.users.repo.UserRepository;
 
 import java.util.Collections;
@@ -19,11 +19,11 @@ import java.util.List;
 public class AuthQueryService {
 
     private final UserRepository userRepository;
-    private final UserOrgRoleRepository userOrgRoleRepository;
+    private final OrgUnitMembershipRepository membershipRepository;
 
-    public AuthQueryService(UserRepository userRepository, UserOrgRoleRepository userOrgRoleRepository) {
+    public AuthQueryService(UserRepository userRepository, OrgUnitMembershipRepository membershipRepository) {
         this.userRepository = userRepository;
-        this.userOrgRoleRepository = userOrgRoleRepository;
+        this.membershipRepository = membershipRepository;
     }
 
     public MeResponse me() {
@@ -64,7 +64,7 @@ public class AuthQueryService {
     public ContextsResponse contexts() {
         Long userId = SecurityUtils.currentUserId();
 
-        List<AvailableContextDto> contexts = userOrgRoleRepository.findDistinctActiveOrgUnitsForUser(userId)
+        List<AvailableContextDto> contexts = membershipRepository.findDistinctActiveRoleOrgUnitsForUser(userId)
                 .stream()
                 .map(this::toDto)
                 .toList();
