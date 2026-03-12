@@ -38,6 +38,7 @@ import org.thomcgn.backend.falloeffnungen.meldung.model.Meldung;
 import org.thomcgn.backend.falloeffnungen.meldung.repo.MeldungRepository;
 
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -478,6 +479,17 @@ public class FalleroeffnungService {
 
         if (newStatus == FalleroeffnungStatus.ABGESCHLOSSEN) {
             access.requireAny(Role.TEAMLEITUNG, Role.EINRICHTUNG_ADMIN, Role.TRAEGER_ADMIN);
+            meldungRepo.findCurrentByFallId(f.getId()).ifPresent(m -> {
+                LocalDate pruefung = m.getNaechsteUeberpruefungAm();
+                if (pruefung != null && pruefung.isAfter(LocalDate.now())) {
+                    throw DomainException.conflict(ErrorCode.CONFLICT,
+                            "Fall kann nicht abgeschlossen werden: Nächste Überprüfung am " + pruefung + " liegt noch in der Zukunft.");
+                }
+                if (m.isAkutGefahrImVerzug() && Dringlichkeit.AKUT_HEUTE.equals(m.getDringlichkeit())) {
+                    throw DomainException.conflict(ErrorCode.CONFLICT,
+                            "Fall kann nicht abgeschlossen werden: Dringlichkeit ist AKUT HEUTE mit Gefahr im Verzug.");
+                }
+            });
             f.setClosedAt(Instant.now());
         }
 

@@ -15,6 +15,7 @@ import {
     fetchSent,
     fetchDetail,
     fetchRecipientOptions,
+    fetchGroupOptions,
     sendMessage,
     markRead,
     deleteFromInbox,
@@ -23,6 +24,7 @@ import {
     type SentItem,
     type MessageDetail,
     type UserOption,
+    type GroupOption,
 } from "@/lib/messenger";
 
 type Tab = "inbox" | "sent" | "compose";
@@ -44,6 +46,7 @@ export function MessengerModal({
     const [sent, setSent] = useState<SentItem[]>([]);
     const [detail, setDetail] = useState<MessageDetail | null>(null);
     const [recipients, setRecipients] = useState<UserOption[]>([]);
+    const [groups, setGroups] = useState<GroupOption[]>([]);
 
     const [loading, setLoading] = useState(false);
     const [err, setErr] = useState("");
@@ -52,6 +55,7 @@ export function MessengerModal({
     const [subject, setSubject] = useState("");
     const [body, setBody] = useState("");
     const [selectedRecipients, setSelectedRecipients] = useState<number[]>([]);
+    const [selectedGroups, setSelectedGroups] = useState<number[]>([]);
     const [sending, setSending] = useState(false);
 
     async function loadInbox() {
@@ -82,8 +86,12 @@ export function MessengerModal({
 
     async function loadRecipients() {
         try {
-            const data = await fetchRecipientOptions();
-            setRecipients(data);
+            const [users, grps] = await Promise.all([
+                fetchRecipientOptions(),
+                fetchGroupOptions().catch(() => []),
+            ]);
+            setRecipients(users);
+            setGroups(grps);
         } catch {
             // ignore
         }
@@ -146,14 +154,20 @@ export function MessengerModal({
     }
 
     async function handleSend() {
-        if (!subject.trim() || !body.trim() || selectedRecipients.length === 0) return;
+        if (!subject.trim() || !body.trim() || (selectedRecipients.length === 0 && selectedGroups.length === 0)) return;
         setSending(true);
         setErr("");
         try {
-            await sendMessage({ subject: subject.trim(), body: body.trim(), recipientUserIds: selectedRecipients });
+            await sendMessage({
+                subject: subject.trim(),
+                body: body.trim(),
+                recipientUserIds: selectedRecipients,
+                recipientOrgUnitIds: selectedGroups.length > 0 ? selectedGroups : undefined,
+            });
             setSubject("");
             setBody("");
             setSelectedRecipients([]);
+            setSelectedGroups([]);
             setTab("sent");
         } catch {
             setErr("Senden fehlgeschlagen.");
@@ -168,9 +182,15 @@ export function MessengerModal({
         );
     }
 
+    function toggleGroup(id: number) {
+        setSelectedGroups((prev) =>
+            prev.includes(id) ? prev.filter((r) => r !== id) : [...prev, id]
+        );
+    }
+
     if (!open) return null;
 
-    const canSend = subject.trim().length >= 1 && body.trim().length >= 1 && selectedRecipients.length > 0;
+    const canSend = subject.trim().length >= 1 && body.trim().length >= 1 && (selectedRecipients.length > 0 || selectedGroups.length > 0);
 
     return (
         <div className="fixed inset-0 z-50">
@@ -233,6 +253,7 @@ export function MessengerModal({
                             }
                             onReply={() => {
                                 setSelectedRecipients([detail.senderId]);
+                                setSelectedGroups([]);
                                 setSubject(detail.subject.startsWith("Re:") ? detail.subject : `Re: ${detail.subject}`);
                                 setBody("");
                                 setTab("compose");
@@ -279,10 +300,36 @@ export function MessengerModal({
                     {/* Compose */}
                     {tab === "compose" && (
                         <div className="space-y-4">
-                            {/* Recipient selection */}
+                            {/* Group selection */}
+                            {groups.length > 0 && (
+                                <div>
+                                    <label className="text-xs font-semibold text-brand-text2 block mb-1">
+                                        Gruppen / Teams / Bereiche
+                                    </label>
+                                    <div className="rounded-xl border border-brand-border bg-white/80 max-h-32 overflow-y-auto divide-y divide-brand-border">
+                                        {groups.map((g) => (
+                                            <label
+                                                key={g.id}
+                                                className="flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-brand-teal/10 transition"
+                                            >
+                                                <input
+                                                    type="checkbox"
+                                                    checked={selectedGroups.includes(g.id)}
+                                                    onChange={() => toggleGroup(g.id)}
+                                                    className="accent-brand-teal"
+                                                />
+                                                <span className="text-sm text-brand-navy">{g.label}</span>
+                                                <span className="text-[10px] text-brand-text2 ml-auto">{g.type}</span>
+                                            </label>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Individual recipient selection */}
                             <div>
                                 <label className="text-xs font-semibold text-brand-text2 block mb-1">
-                                    Empfänger
+                                    Einzelne Empfänger
                                 </label>
                                 <div className="rounded-xl border border-brand-border bg-white/80 max-h-44 overflow-y-auto divide-y divide-brand-border">
                                     {recipients.length === 0 && (
@@ -303,9 +350,12 @@ export function MessengerModal({
                                         </label>
                                     ))}
                                 </div>
-                                {selectedRecipients.length > 0 && (
+                                {(selectedRecipients.length > 0 || selectedGroups.length > 0) && (
                                     <p className="mt-1 text-xs text-brand-text2">
-                                        {selectedRecipients.length} Empfänger ausgewählt
+                                        {selectedRecipients.length > 0 && `${selectedRecipients.length} Einzelperson(en)`}
+                                        {selectedRecipients.length > 0 && selectedGroups.length > 0 && " + "}
+                                        {selectedGroups.length > 0 && `${selectedGroups.length} Gruppe(n)`}
+                                        {" ausgewählt"}
                                     </p>
                                 )}
                             </div>

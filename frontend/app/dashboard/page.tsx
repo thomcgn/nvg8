@@ -155,9 +155,8 @@ export default function DashboardHome() {
 
         <div className="mx-auto w-full max-w-6xl px-4 pb-10 pt-5 sm:px-6">
 
-          {/* Error banner */}
           {error && (
-            <div className="mb-4 rounded-xl border border-brand-danger/20 bg-brand-danger/5 px-4 py-3 text-sm text-brand-danger">
+            <div className="mb-4 rounded border border-brand-border bg-brand-surface px-4 py-3 text-sm text-brand-text">
               {error}
             </div>
           )}
@@ -167,31 +166,27 @@ export default function DashboardHome() {
             <StatCard
               label="Fälle gesamt"
               value={stats.total}
-              sub={loading ? "lädt…" : "aktuelle Sicht"}
-              icon={<FileText className="h-5 w-5 text-brand-blue" />}
-              accent="blue"
+              icon={<FileText className="h-4 w-4" />}
+              onClick={() => router.push("/dashboard/falloeffnungen")}
             />
             <StatCard
-              label="Akute Gefährdung"
+              label="Gefahr im Verzug"
               value={stats.akut}
-              sub="Gefahr im Verzug"
-              icon={<Siren className="h-5 w-5 text-brand-danger" />}
-              accent="danger"
-              highlight={stats.akut > 0}
+              icon={<Siren className="h-4 w-4" />}
+              alert={stats.akut > 0}
+              onClick={() => router.push("/dashboard/falloeffnungen")}
             />
             <StatCard
-              label="Offene Fälle"
+              label="Offen"
               value={stats.offen}
-              sub="in Bearbeitung"
-              icon={<AlertTriangle className="h-5 w-5 text-brand-warning" />}
-              accent="warning"
+              icon={<AlertTriangle className="h-4 w-4" />}
+              onClick={() => router.push("/dashboard/falloeffnungen?status=OFFEN")}
             />
             <StatCard
               label="Abgeschlossen"
               value={stats.done}
-              sub="auditierbar"
-              icon={<CheckCircle2 className="h-5 w-5 text-brand-success" />}
-              accent="success"
+              icon={<CheckCircle2 className="h-4 w-4" />}
+              onClick={() => router.push("/dashboard/falloeffnungen?status=ABGESCHLOSSEN")}
             />
           </div>
 
@@ -202,7 +197,9 @@ export default function DashboardHome() {
             <Card className="min-w-0">
               <CardHeader className="flex items-center justify-between pb-2">
                 <span className="text-sm font-semibold text-brand-text">Aktuelle Fälle</span>
-                <span className="text-xs text-brand-text2">{loading ? "lädt…" : `${items.length} Einträge`}</span>
+                <span className="text-xs text-brand-text2">
+                  {loading ? "lädt…" : `${items.length} Einträge`}
+                </span>
               </CardHeader>
               <CardContent className="p-0">
                 <div className="divide-y divide-brand-border/60">
@@ -222,44 +219,35 @@ export default function DashboardHome() {
                         type="button"
                         onClick={() => router.push(`/dashboard/falloeffnungen/${i.id}`)}
                         className={[
-                          "flex w-full items-start gap-4 px-5 py-4 text-left transition-colors",
-                          "hover:bg-brand-teal/5 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-brand-teal/30",
-                          isAkut ? "border-l-[3px] border-brand-danger" : "border-l-[3px] border-transparent",
+                          "flex w-full items-start gap-4 px-5 py-3.5 text-left transition-colors",
+                          "hover:bg-brand-border/20 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-brand-border",
+                          isAkut ? "border-l-2 border-brand-danger" : "border-l-2 border-transparent",
                         ].join(" ")}
                         aria-label={`Fall öffnen: ${i.aktenzeichen || `#${i.id}`}`}
                       >
-                        {/* Akut dot */}
-                        <div className="mt-1 shrink-0">
-                          {isAkut ? (
-                            <span className="flex h-2.5 w-2.5 rounded-full bg-brand-danger" />
-                          ) : (
-                            <span className="flex h-2.5 w-2.5 rounded-full bg-brand-border" />
-                          )}
-                        </div>
-
-                        {/* Main info */}
                         <div className="min-w-0 flex-1">
-                          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                            <span className="text-sm font-bold text-brand-blue">
+                          <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5">
+                            <span className="text-sm font-semibold text-brand-text">
                               {i.aktenzeichen || `#${i.id}`}
                             </span>
-                            <span className="text-sm text-brand-text">{i.kindName || "—"}</span>
+                            <span className="text-sm text-brand-text2">{i.kindName || "—"}</span>
                           </div>
-                          <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                          <div className="mt-1 flex flex-wrap items-center gap-2">
                             <Badge tone={toneForStatus(i.status)} className="text-xs">{i.status}</Badge>
                             {dring && (
                               <Badge tone={dringTone(dring)} className="text-xs">{dringLabel(dring)}</Badge>
                             )}
                             {isAkut && (
-                              <Badge tone="danger" className="text-xs font-semibold">⚠ AKUT</Badge>
+                              <Badge tone="danger" className="text-xs">Gefahr im Verzug</Badge>
                             )}
                           </div>
                         </div>
 
-                        {/* Date */}
                         <div className="shrink-0 text-right">
                           <span className="text-xs text-brand-text2">
-                            {i.createdAt ? new Date(i.createdAt).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "2-digit" }) : "—"}
+                            {i.createdAt
+                              ? new Date(i.createdAt).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "2-digit" })
+                              : "—"}
                           </span>
                         </div>
                       </button>
@@ -276,20 +264,20 @@ export default function DashboardHome() {
               <Card>
                 <CardHeader className="flex items-center justify-between pb-2">
                   <div className="flex items-center gap-2">
-                    <CalendarDays className="h-4 w-4 text-brand-teal" />
+                    <CalendarDays className="h-4 w-4 text-brand-text2" />
                     <span className="text-sm font-semibold text-brand-text">{calLabel}</span>
                   </div>
                   <div className="flex gap-0.5">
                     <button
                       onClick={calPrev}
-                      className="rounded-lg p-1.5 text-brand-text2 transition-colors hover:bg-brand-border/40 hover:text-brand-text"
+                      className="rounded p-1 text-brand-text2 transition-colors hover:bg-brand-border/40 hover:text-brand-text"
                       aria-label="Vorheriger Monat"
                     >
                       <ChevronLeft className="h-4 w-4" />
                     </button>
                     <button
                       onClick={calNext}
-                      className="rounded-lg p-1.5 text-brand-text2 transition-colors hover:bg-brand-border/40 hover:text-brand-text"
+                      className="rounded p-1 text-brand-text2 transition-colors hover:bg-brand-border/40 hover:text-brand-text"
                       aria-label="Nächster Monat"
                     >
                       <ChevronRight className="h-4 w-4" />
@@ -297,13 +285,11 @@ export default function DashboardHome() {
                   </div>
                 </CardHeader>
                 <CardContent className="pt-0">
-                  {/* Weekday header */}
                   <div className="grid grid-cols-7 mb-1">
                     {["Mo","Di","Mi","Do","Fr","Sa","So"].map((d) => (
-                      <div key={d} className="text-center text-[10px] font-semibold text-brand-text2 py-1">{d}</div>
+                      <div key={d} className="text-center text-[10px] font-medium text-brand-text2 py-1">{d}</div>
                     ))}
                   </div>
-                  {/* Day grid */}
                   <div className="grid grid-cols-7 gap-y-0.5">
                     {Array.from({ length: calFirstOffset }).map((_, i) => (
                       <div key={`e${i}`} />
@@ -313,7 +299,6 @@ export default function DashboardHome() {
                       const k = `${calYear}-${String(calMonth + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
                       const entries = byDay.get(k) || [];
                       const isToday = k === todayKey;
-                      const isPast = k < todayKey && entries.length > 0;
                       const hasAkut = entries.some((e) => getAkutFlag(e) === true);
 
                       return (
@@ -322,11 +307,11 @@ export default function DashboardHome() {
                           type="button"
                           onClick={() => entries.length > 0 && router.push("/dashboard/kalender")}
                           className={[
-                            "relative flex flex-col items-center rounded-lg py-1 text-xs transition-colors",
+                            "relative flex flex-col items-center rounded py-1 text-xs transition-colors",
                             isToday
-                              ? "bg-brand-teal text-white font-bold"
+                              ? "font-semibold text-brand-text underline underline-offset-2"
                               : entries.length > 0
-                                ? "cursor-pointer font-semibold text-brand-text hover:bg-brand-border/40"
+                                ? "cursor-pointer font-medium text-brand-text hover:bg-brand-border/30"
                                 : "text-brand-text2",
                           ].join(" ")}
                           disabled={entries.length === 0}
@@ -336,8 +321,7 @@ export default function DashboardHome() {
                           {entries.length > 0 && (
                             <span className={[
                               "absolute bottom-0.5 h-1 w-1 rounded-full",
-                              hasAkut ? "bg-brand-danger" : isPast ? "bg-brand-warning" : "bg-brand-teal",
-                              isToday ? "bg-white/80" : "",
+                              hasAkut ? "bg-brand-danger" : "bg-brand-text2",
                             ].join(" ")} />
                           )}
                         </button>
@@ -359,7 +343,7 @@ export default function DashboardHome() {
                     <div className="space-y-2">
                       {upcomingAppointments.map(([dateKey, entries]) => (
                         <div key={dateKey}>
-                          <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-brand-text2">
+                          <div className="mb-1 text-[10px] font-medium text-brand-text2">
                             {new Date(dateKey + "T00:00:00").toLocaleDateString("de-DE", {
                               weekday: "short", day: "2-digit", month: "2-digit",
                             })}
@@ -369,9 +353,9 @@ export default function DashboardHome() {
                               key={item.id}
                               type="button"
                               onClick={() => router.push(`/dashboard/falloeffnungen/${item.id}`)}
-                              className="flex w-full items-center gap-2 rounded-lg border border-brand-border/60 px-3 py-2.5 text-left text-xs transition-colors hover:bg-brand-teal/5 focus:outline-none focus:ring-2 focus:ring-brand-teal/30 mb-1"
+                              className="flex w-full items-center gap-2 rounded border border-brand-border/60 px-3 py-2 text-left text-xs transition-colors hover:bg-brand-border/20 focus:outline-none focus:ring-1 focus:ring-brand-border mb-1"
                             >
-                              <span className="font-semibold text-brand-blue min-w-0 flex-1 truncate">
+                              <span className="font-medium text-brand-text min-w-0 flex-1 truncate">
                                 {item.aktenzeichen || `#${item.id}`}
                               </span>
                               <span className="truncate text-brand-text2 max-w-[80px]">
@@ -387,9 +371,9 @@ export default function DashboardHome() {
                       <button
                         type="button"
                         onClick={() => router.push("/dashboard/kalender")}
-                        className="mt-1 w-full rounded-lg border border-brand-teal/30 py-2 text-xs font-semibold text-brand-teal transition-colors hover:bg-brand-teal/5"
+                        className="mt-1 w-full rounded border border-brand-border py-2 text-xs text-brand-text2 transition-colors hover:bg-brand-border/20"
                       >
-                        Alle Termine →
+                        Alle Termine anzeigen
                       </button>
                     </div>
                   )}
@@ -407,37 +391,34 @@ export default function DashboardHome() {
 
 /* ─── StatCard component ───────────────────────────────────── */
 function StatCard({
-  label, value, sub, icon, accent, highlight = false,
+  label, value, icon, alert = false, onClick,
 }: {
   label: string;
   value: number;
-  sub: string;
   icon: React.ReactNode;
-  accent: "blue" | "danger" | "warning" | "success";
-  highlight?: boolean;
+  alert?: boolean;
+  onClick?: () => void;
 }) {
-  const borderColor = {
-    blue:    "border-t-brand-blue",
-    danger:  "border-t-brand-danger",
-    warning: "border-t-brand-warning",
-    success: "border-t-brand-success",
-  }[accent];
-
-  const valueColor = {
-    blue:    "text-brand-navy",
-    danger:  highlight ? "text-brand-danger" : "text-brand-navy",
-    warning: "text-brand-navy",
-    success: "text-brand-navy",
-  }[accent];
-
   return (
-    <div className={`rounded-xl border border-brand-border bg-brand-surface p-4 border-t-2 ${borderColor} ${highlight ? "ring-1 ring-brand-danger/20" : ""}`}>
-      <div className="flex items-start justify-between gap-2">
-        <div className="text-xs font-semibold text-brand-text2 leading-snug">{label}</div>
-        <div className="shrink-0 opacity-70">{icon}</div>
+    <button
+      type="button"
+      onClick={onClick}
+      className={[
+        "w-full rounded-lg border bg-brand-surface px-4 py-3 text-left transition-colors",
+        "hover:bg-brand-border/20 focus:outline-none focus:ring-1 focus:ring-brand-border",
+        alert ? "border-brand-danger/40" : "border-brand-border",
+      ].join(" ")}
+    >
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-xs text-brand-text2">{label}</span>
+        <span className={alert ? "text-brand-danger" : "text-brand-text2"}>{icon}</span>
       </div>
-      <div className={`mt-2 text-3xl font-extrabold tabular-nums ${valueColor}`}>{value}</div>
-      <div className="mt-0.5 text-xs text-brand-text2">{sub}</div>
-    </div>
+      <div className={[
+        "mt-1.5 text-2xl font-bold tabular-nums",
+        alert && value > 0 ? "text-brand-danger" : "text-brand-text",
+      ].join(" ")}>
+        {value}
+      </div>
+    </button>
   );
 }

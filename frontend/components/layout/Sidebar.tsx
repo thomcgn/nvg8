@@ -51,8 +51,7 @@ const navSections: NavSection[] = [
     {
         title: "Personal",
         items: [
-            { href: "/dashboard/mitarbeiter", label: "Mitarbeiter", icon: UserCog, description: "Rollen & Zugänge" },
-            { href: "/dashboard/teams", label: "Teams", icon: UsersRound, description: "Struktur & Zuständigkeit" },
+            { href: "/dashboard/mitarbeiter", label: "Personal & Organisation", icon: UserCog, description: "Mitarbeitende, Teams & Struktur" },
         ],
     },
     {

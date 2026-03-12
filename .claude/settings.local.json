@@ -2,7 +2,16 @@
   "permissions": {
     "allow": [
       "Bash(./mvnw compile:*)",
-      "Bash(grep:*)"
+      "Bash(grep:*)",
+      "Read(//dev/**)",
+      "Bash(python3 -c \":*)",
+      "Bash(rm /home/tom/Schreibtisch/nvg8/backend/src/main/java/org/thomcgn/backend/common/web/GlobalExceptionHandler.java\nrm /home/tom/Schreibtisch/nvg8/backend/src/main/java/org/thomcgn/backend/common/dto/ApiErrorResponse.java)",
+      "Bash(mkdir -p /home/tom/Schreibtisch/nvg8/.claude/hooks && printf '#!/usr/bin/env python3\\\\n' > /home/tom/Schreibtisch/nvg8/.claude/hooks/post-tool-call.py)",
+      "Bash(find /home/tom/Schreibtisch/nvg8/frontend/lib -name \"messenger*\" -o -name \"message*\" 2>/dev/null | grep -v node_modules)",
+      "Bash(find /home/tom/Schreibtisch/nvg8/backend -name \"OrgUnitType.java\" | xargs cat)",
+      "Bash(cd /home/tom/Schreibtisch/nvg8/frontend && npx tsc --noEmit 2>&1 | head -40)",
+      "Bash(find /home/tom/Schreibtisch/nvg8/backend -name \"*Test*.java\" -o -name \"*Spec*.java\" 2>/dev/null | head -10)",
+      "Bash(./mvnw test:*)"
     ]
   },
   "hooks": {

@@ -6,5 +6,6 @@ public record SendMessageRequest(
         String subject,
         String body,
         List<Long> recipientUserIds,
+        List<Long> recipientOrgUnitIds,
         Long threadId
 ) {}
