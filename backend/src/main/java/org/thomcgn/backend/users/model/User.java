@@ -5,8 +5,6 @@ import org.thomcgn.backend.orgunits.model.OrgUnit;
 import org.thomcgn.backend.tenants.model.Traeger;
 
 import java.time.LocalDateTime;
-import java.util.HashSet;
-import java.util.Set;
 
 @Entity
 @Table(
@@ -41,9 +39,6 @@ public class User extends Person {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "default_org_unit_id")
     private OrgUnit defaultOrgUnit;
-
-    @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
-    private Set<UserOrgRole> orgRoles = new HashSet<>();
 
     @Embedded
     private MitarbeiterFaehigkeiten mitarbeiterFaehigkeiten = new MitarbeiterFaehigkeiten();
@@ -106,14 +101,6 @@ public class User extends Person {
 
     public void setDefaultOrgUnit(OrgUnit defaultOrgUnit) {
         this.defaultOrgUnit = defaultOrgUnit;
-    }
-
-    public Set<UserOrgRole> getOrgRoles() {
-        return orgRoles;
-    }
-
-    public void setOrgRoles(Set<UserOrgRole> orgRoles) {
-        this.orgRoles = orgRoles;
     }
 
     public MitarbeiterFaehigkeiten getMitarbeiterFaehigkeiten() {

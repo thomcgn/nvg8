@@ -2,22 +2,19 @@ package org.thomcgn.backend.teams.service;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.thomcgn.backend.auth.model.Role;
 import org.thomcgn.backend.auth.service.AdminGuard;
 import org.thomcgn.backend.common.errors.DomainException;
 import org.thomcgn.backend.common.errors.ErrorCode;
 import org.thomcgn.backend.orgunits.model.OrgUnit;
+import org.thomcgn.backend.orgunits.model.OrgUnitMembership;
 import org.thomcgn.backend.orgunits.model.OrgUnitType;
+import org.thomcgn.backend.orgunits.repo.OrgUnitMembershipRepository;
 import org.thomcgn.backend.teams.dto.AssignUserToTeamRequest;
 import org.thomcgn.backend.teams.dto.TeamMemberListItem;
 import org.thomcgn.backend.teams.dto.TeamMembershipResponse;
 import org.thomcgn.backend.teams.dto.UpdateTeamMembershipRequest;
 import org.thomcgn.backend.teams.model.TeamMembershipType;
-import org.thomcgn.backend.teams.model.UserTeamMembership;
-import org.thomcgn.backend.teams.repo.UserTeamMembershipRepository;
 import org.thomcgn.backend.users.model.User;
-import org.thomcgn.backend.users.model.UserOrgRole;
-import org.thomcgn.backend.users.repo.UserOrgRoleRepository;
 import org.thomcgn.backend.users.repo.UserRepository;
 
 import java.util.List;
@@ -25,20 +22,17 @@ import java.util.List;
 @Service
 public class TeamMembershipService {
 
-    private final UserTeamMembershipRepository membershipRepository;
+    private final OrgUnitMembershipRepository membershipRepository;
     private final UserRepository userRepository;
-    private final UserOrgRoleRepository userOrgRoleRepository;
     private final AdminGuard adminGuard;
 
     public TeamMembershipService(
-            UserTeamMembershipRepository membershipRepository,
+            OrgUnitMembershipRepository membershipRepository,
             UserRepository userRepository,
-            UserOrgRoleRepository userOrgRoleRepository,
             AdminGuard adminGuard
     ) {
         this.membershipRepository = membershipRepository;
         this.userRepository = userRepository;
-        this.userOrgRoleRepository = userOrgRoleRepository;
         this.adminGuard = adminGuard;
     }
 
@@ -53,17 +47,18 @@ public class TeamMembershipService {
         TeamMembershipType membershipType = parseMembershipType(req.membershipType());
         boolean primary = Boolean.TRUE.equals(req.primary());
 
-        UserTeamMembership membership = membershipRepository.findByUserIdAndTeamOrgUnitId(user.getId(), team.getId())
+        OrgUnitMembership membership = membershipRepository
+                .findByUserIdAndOrgUnitIdAndRoleIsNull(user.getId(), team.getId())
                 .map(existing -> {
                     existing.setEnabled(true);
-                    existing.setMembershipType(membershipType);
+                    existing.setMembershipType(membershipType.name());
                     return existing;
                 })
                 .orElseGet(() -> {
-                    UserTeamMembership created = new UserTeamMembership();
+                    OrgUnitMembership created = new OrgUnitMembership();
                     created.setUser(user);
-                    created.setTeamOrgUnit(team);
-                    created.setMembershipType(membershipType);
+                    created.setOrgUnit(team);
+                    created.setMembershipType(membershipType.name());
                     created.setEnabled(true);
                     return created;
                 });
@@ -75,30 +70,11 @@ public class TeamMembershipService {
             membership.setPrimary(true);
         }
 
-        UserTeamMembership saved = membershipRepository.save(membership);
+        OrgUnitMembership saved = membershipRepository.save(membership);
 
         ensureFachbereichMembership(user, team);
 
         return toResponse(saved);
-    }
-
-    private void ensureFachbereichMembership(User user, OrgUnit team) {
-        OrgUnit parent = team.getParent();
-        if (parent == null || parent.getType() != OrgUnitType.ABTEILUNG) {
-            return;
-        }
-
-        boolean alreadyMember = userOrgRoleRepository.existsByUserIdAndOrgUnitIdAndEnabledTrue(user.getId(), parent.getId());
-        if (alreadyMember) {
-            return;
-        }
-
-        UserOrgRole fachbereichRole = new UserOrgRole();
-        fachbereichRole.setUser(user);
-        fachbereichRole.setOrgUnit(parent);
-        fachbereichRole.setRole(Role.FACHKRAFT);
-        fachbereichRole.setEnabled(true);
-        userOrgRoleRepository.save(fachbereichRole);
     }
 
     @Transactional(readOnly = true)
@@ -106,13 +82,14 @@ public class TeamMembershipService {
         OrgUnit team = adminGuard.requireCanManageOrgUnit(teamOrgUnitId);
         requireTeam(team);
 
-        return membershipRepository.findByTeamOrgUnitIdAndEnabledTrueOrderByCreatedAtAsc(teamOrgUnitId).stream()
+        return membershipRepository
+                .findByOrgUnitIdAndMembershipTypeIsNotNullAndEnabledTrueOrderByCreatedAtAsc(teamOrgUnitId).stream()
                 .map(m -> new TeamMemberListItem(
                         m.getId(),
                         m.getUser().getId(),
                         m.getUser().getDisplayName(),
                         m.getUser().getEmail(),
-                        m.getMembershipType().name(),
+                        m.getMembershipType(),
                         m.isPrimary(),
                         m.isEnabled()
                 ))
@@ -124,21 +101,22 @@ public class TeamMembershipService {
         userRepository.findById(userId)
                 .orElseThrow(() -> DomainException.notFound(ErrorCode.USER_NOT_FOUND, "User not found"));
 
-        return membershipRepository.findByUserIdAndEnabledTrueOrderByCreatedAtAsc(userId).stream()
+        return membershipRepository
+                .findByUserIdAndMembershipTypeIsNotNullAndEnabledTrueOrderByCreatedAtAsc(userId).stream()
                 .map(this::toResponse)
                 .toList();
     }
 
     @Transactional
     public TeamMembershipResponse update(Long membershipId, UpdateTeamMembershipRequest req) {
-        UserTeamMembership membership = membershipRepository.findById(membershipId)
+        OrgUnitMembership membership = membershipRepository.findById(membershipId)
                 .orElseThrow(() -> DomainException.notFound(ErrorCode.NOT_FOUND, "Team membership not found"));
 
-        adminGuard.requireCanManageOrgUnit(membership.getTeamOrgUnit().getId());
-        requireTeam(membership.getTeamOrgUnit());
+        adminGuard.requireCanManageOrgUnit(membership.getOrgUnit().getId());
+        requireTeam(membership.getOrgUnit());
 
         if (req.membershipType() != null && !req.membershipType().isBlank()) {
-            membership.setMembershipType(parseMembershipType(req.membershipType()));
+            membership.setMembershipType(parseMembershipType(req.membershipType()).name());
         }
 
         if (req.enabled() != null) {
@@ -152,29 +130,42 @@ public class TeamMembershipService {
             membership.setPrimary(false);
         }
 
-        UserTeamMembership saved = membershipRepository.save(membership);
-        return toResponse(saved);
+        return toResponse(membershipRepository.save(membership));
     }
 
     @Transactional
     public void disable(Long membershipId) {
-        UserTeamMembership membership = membershipRepository.findById(membershipId)
+        OrgUnitMembership membership = membershipRepository.findById(membershipId)
                 .orElseThrow(() -> DomainException.notFound(ErrorCode.NOT_FOUND, "Team membership not found"));
 
-        adminGuard.requireCanManageOrgUnit(membership.getTeamOrgUnit().getId());
-        requireTeam(membership.getTeamOrgUnit());
+        adminGuard.requireCanManageOrgUnit(membership.getOrgUnit().getId());
+        requireTeam(membership.getOrgUnit());
 
         membership.setEnabled(false);
         membership.setPrimary(false);
     }
 
-    private void clearPrimaryMemberships(Long userId) {
-        List<UserTeamMembership> primaryMemberships =
-                membershipRepository.findByUserIdAndPrimaryTrueAndEnabledTrue(userId);
-
-        for (UserTeamMembership m : primaryMemberships) {
-            m.setPrimary(false);
+    private void ensureFachbereichMembership(User user, OrgUnit team) {
+        OrgUnit parent = team.getParent();
+        if (parent == null || parent.getType() != OrgUnitType.ABTEILUNG) {
+            return;
         }
+
+        if (membershipRepository.existsByUserIdAndOrgUnitIdAndEnabledTrue(user.getId(), parent.getId())) {
+            return;
+        }
+
+        OrgUnitMembership fachbereichRole = new OrgUnitMembership();
+        fachbereichRole.setUser(user);
+        fachbereichRole.setOrgUnit(parent);
+        fachbereichRole.setRole("FACHKRAFT");
+        fachbereichRole.setEnabled(true);
+        membershipRepository.save(fachbereichRole);
+    }
+
+    private void clearPrimaryMemberships(Long userId) {
+        membershipRepository.findByUserIdAndPrimaryTrueAndEnabledTrue(userId)
+                .forEach(m -> m.setPrimary(false));
     }
 
     private void requireTeam(OrgUnit orgUnit) {
@@ -197,15 +188,15 @@ public class TeamMembershipService {
         }
     }
 
-    private TeamMembershipResponse toResponse(UserTeamMembership membership) {
+    private TeamMembershipResponse toResponse(OrgUnitMembership m) {
         return new TeamMembershipResponse(
-                membership.getId(),
-                membership.getUser().getId(),
-                membership.getTeamOrgUnit().getId(),
-                membership.getTeamOrgUnit().getName(),
-                membership.getMembershipType().name(),
-                membership.isPrimary(),
-                membership.isEnabled()
+                m.getId(),
+                m.getUser().getId(),
+                m.getOrgUnit().getId(),
+                m.getOrgUnit().getName(),
+                m.getMembershipType(),
+                m.isPrimary(),
+                m.isEnabled()
         );
     }
 }

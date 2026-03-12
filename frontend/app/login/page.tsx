@@ -75,7 +75,9 @@ export default function LoginPage() {
       const ctxs = res.contexts || [];
       setContexts(ctxs);
 
-      if (ctxs.length === 1) {
+      if (ctxs.length === 0) {
+        setErr("Ihr Konto hat keinen Einrichtungszugang. Bitte wenden Sie sich an den Administrator.");
+      } else if (ctxs.length === 1) {
         await selectContext(ctxs[0].orgUnitId);
       } else {
         setContextOpen(true);

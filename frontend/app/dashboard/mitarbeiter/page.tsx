@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -1553,6 +1554,8 @@ function StrukturTab() {
         return roles.includes("TRAEGER_ADMIN") || roles.includes("EINRICHTUNG_ADMIN");
     }, [me]);
 
+    const isSystemAdmin = useMemo(() => (me?.roles ?? []).includes("SYSTEM_ADMIN"), [me]);
+
     const selectedIsTeam        = selectedNodeType === "TEAM";
     const selectedIsTraegerRoot = selectedNodeType === "TRAEGER";
     const canCreateChildOrgUnit = canManage && !!selectedNodeId;
@@ -1645,17 +1648,41 @@ function StrukturTab() {
         }
     }
 
+    async function handleRemoveMember(membershipId: number, displayName: string) {
+        if (!confirm(`Mitglied „${displayName}" aus diesem Team entfernen?`)) return;
+        try {
+            await apiFetch(`/admin/team-memberships/${membershipId}`, { method: "DELETE" });
+            setPageMessage(`„${displayName}" wurde aus dem Team entfernt.`);
+            if (selectedNodeId && selectedNodeType) await loadDetails(selectedNodeId, selectedNodeType);
+        } catch (e: any) {
+            setPageError(e?.message ?? "Entfernen fehlgeschlagen.");
+        }
+    }
+
     return (
         <div className="space-y-4">
             {/* Aktionsleiste */}
             <div className="flex flex-wrap gap-3">
-                <Button
-                    onClick={() => setCreateTraegerOpen(true)}
-                    disabled={!canManage}
-                    title={!canManage ? "Nur für Admins" : "Träger anlegen"}
-                >
-                    + Träger anlegen
-                </Button>
+                <TooltipProvider>
+                    <Tooltip>
+                        <TooltipTrigger asChild>
+                            <span>
+                                <Button
+                                    onClick={() => setCreateTraegerOpen(true)}
+                                    disabled={!isSystemAdmin}
+                                    style={!isSystemAdmin ? { pointerEvents: "none" } : undefined}
+                                >
+                                    + Träger anlegen
+                                </Button>
+                            </span>
+                        </TooltipTrigger>
+                        {!isSystemAdmin && (
+                            <TooltipContent>
+                                Nur System-Admins können Träger anlegen
+                            </TooltipContent>
+                        )}
+                    </Tooltip>
+                </TooltipProvider>
 
                 <Button
                     variant="secondary"
@@ -1783,10 +1810,19 @@ function StrukturTab() {
                                                                 </div>
                                                                 <div className="text-xs text-brand-text2">{m.email}</div>
                                                             </div>
-                                                            <div className="flex flex-wrap gap-1">
+                                                            <div className="flex flex-wrap items-center gap-1">
                                                                 <Badge>{labelForMembershipType(m.membershipType)}</Badge>
                                                                 {m.primary && <Badge>Primär</Badge>}
                                                                 {!m.enabled && <Badge>Deaktiviert</Badge>}
+                                                                {canManage && (
+                                                                    <button
+                                                                        onClick={() => handleRemoveMember(m.membershipId, m.displayName || m.email)}
+                                                                        className="ml-1 rounded px-2 py-0.5 text-xs text-red-600 hover:bg-red-50 border border-red-200"
+                                                                        title="Aus Team entfernen"
+                                                                    >
+                                                                        Entfernen
+                                                                    </button>
+                                                                )}
                                                             </div>
                                                         </div>
                                                     </div>

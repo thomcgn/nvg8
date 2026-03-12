@@ -9,10 +9,11 @@ import org.thomcgn.backend.common.errors.DomainException;
 import org.thomcgn.backend.common.errors.ErrorCode;
 import org.thomcgn.backend.common.security.JwtService;
 import org.thomcgn.backend.orgunits.model.OrgUnit;
+import org.thomcgn.backend.orgunits.model.OrgUnitMembership;
 import org.thomcgn.backend.orgunits.model.OrgUnitType;
+import org.thomcgn.backend.orgunits.repo.OrgUnitMembershipRepository;
+import org.thomcgn.backend.orgunits.repo.OrgUnitRepository;
 import org.thomcgn.backend.users.model.User;
-import org.thomcgn.backend.users.model.UserOrgRole;
-import org.thomcgn.backend.users.repo.UserOrgRoleRepository;
 import org.thomcgn.backend.users.repo.UserRepository;
 
 import java.util.LinkedHashMap;
@@ -23,18 +24,21 @@ import java.util.Map;
 public class AuthService {
 
     private final UserRepository userRepository;
-    private final UserOrgRoleRepository userOrgRoleRepository;
+    private final OrgUnitMembershipRepository membershipRepository;
+    private final OrgUnitRepository orgUnitRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
 
     public AuthService(
             UserRepository userRepository,
-            UserOrgRoleRepository userOrgRoleRepository,
+            OrgUnitMembershipRepository membershipRepository,
+            OrgUnitRepository orgUnitRepository,
             PasswordEncoder passwordEncoder,
             JwtService jwtService
     ) {
         this.userRepository = userRepository;
-        this.userOrgRoleRepository = userOrgRoleRepository;
+        this.membershipRepository = membershipRepository;
+        this.orgUnitRepository = orgUnitRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
     }
@@ -61,31 +65,42 @@ public class AuthService {
             return new LoginResponse(baseToken, List.of(), true, systemToken);
         }
 
-        List<UserOrgRole> orgRoles = userOrgRoleRepository.findAllActiveByUserId(user.getId());
-        List<AvailableContextDto> contexts = buildEinrichtungContexts(orgRoles);
+        List<OrgUnitMembership> memberships = membershipRepository.findAllActiveRolesByUserId(user.getId());
+        List<AvailableContextDto> contexts = buildEinrichtungContexts(memberships);
         return new LoginResponse(baseToken, contexts, false, null);
     }
 
-    private List<AvailableContextDto> buildEinrichtungContexts(List<UserOrgRole> roles) {
-        // Deduplizieren per (traegerId, einrichtungId)
+    private List<AvailableContextDto> buildEinrichtungContexts(List<OrgUnitMembership> memberships) {
         Map<Long, AvailableContextDto> seen = new LinkedHashMap<>();
-        for (UserOrgRole uor : roles) {
-            OrgUnit ou = uor.getOrgUnit();
+        for (OrgUnitMembership m : memberships) {
+            OrgUnit ou = m.getOrgUnit();
             if (ou == null || !ou.isEnabled()) continue;
             if (ou.getTraeger() == null || !ou.getTraeger().isEnabled()) continue;
+
+            // TRAEGER-Rollen berechtigen für alle Einrichtungen unter diesem Träger
+            if (ou.getType() == OrgUnitType.TRAEGER) {
+                orgUnitRepository.findAllEnabledByTraegerId(ou.getTraeger().getId()).stream()
+                        .filter(e -> e.getType() == OrgUnitType.EINRICHTUNG)
+                        .forEach(einr -> seen.putIfAbsent(einr.getId(), toDto(einr)));
+                continue;
+            }
 
             OrgUnit einr = findEinrichtungAncestor(ou);
             if (einr == null) continue;
 
-            seen.putIfAbsent(einr.getId(), new AvailableContextDto(
-                    einr.getTraeger().getId(),
-                    einr.getTraeger().getName(),
-                    einr.getId(),
-                    einr.getType().name(),
-                    einr.getName()
-            ));
+            seen.putIfAbsent(einr.getId(), toDto(einr));
         }
         return List.copyOf(seen.values());
+    }
+
+    private AvailableContextDto toDto(OrgUnit einr) {
+        return new AvailableContextDto(
+                einr.getTraeger().getId(),
+                einr.getTraeger().getName(),
+                einr.getId(),
+                einr.getType().name(),
+                einr.getName()
+        );
     }
 
     private OrgUnit findEinrichtungAncestor(OrgUnit start) {

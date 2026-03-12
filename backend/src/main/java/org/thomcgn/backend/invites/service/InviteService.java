@@ -13,9 +13,9 @@ import org.thomcgn.backend.invites.dto.*;
 import org.thomcgn.backend.invites.model.Invite;
 import org.thomcgn.backend.invites.repo.InviteRepository;
 import org.thomcgn.backend.orgunits.model.OrgUnit;
+import org.thomcgn.backend.orgunits.model.OrgUnitMembership;
+import org.thomcgn.backend.orgunits.repo.OrgUnitMembershipRepository;
 import org.thomcgn.backend.users.model.User;
-import org.thomcgn.backend.users.model.UserOrgRole;
-import org.thomcgn.backend.users.repo.UserOrgRoleRepository;
 import org.thomcgn.backend.users.repo.UserRepository;
 
 import java.time.Instant;
@@ -29,7 +29,7 @@ public class InviteService {
 
     private final InviteRepository inviteRepository;
     private final UserRepository userRepository;
-    private final UserOrgRoleRepository userOrgRoleRepository;
+    private final OrgUnitMembershipRepository membershipRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
     private final AdminGuard adminGuard;
@@ -40,14 +40,14 @@ public class InviteService {
     public InviteService(
             InviteRepository inviteRepository,
             UserRepository userRepository,
-            UserOrgRoleRepository userOrgRoleRepository,
+            OrgUnitMembershipRepository membershipRepository,
             PasswordEncoder passwordEncoder,
             JwtService jwtService,
             AdminGuard adminGuard
     ) {
         this.inviteRepository = inviteRepository;
         this.userRepository = userRepository;
-        this.userOrgRoleRepository = userOrgRoleRepository;
+        this.membershipRepository = membershipRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
         this.adminGuard = adminGuard;
@@ -148,18 +148,18 @@ public class InviteService {
             Role role = r;
 
             User finalUser = user;
-            userOrgRoleRepository.findByUserIdAndOrgUnitIdAndRole(user.getId(), inv.getOrgUnit().getId(), role)
+            membershipRepository.findByUserIdAndOrgUnitIdAndRole(user.getId(), inv.getOrgUnit().getId(), role.name())
                     .map(existing -> {
                         existing.setEnabled(true);
                         return existing;
                     })
                     .orElseGet(() -> {
-                        UserOrgRole uor = new UserOrgRole();
-                        uor.setUser(finalUser);
-                        uor.setOrgUnit(inv.getOrgUnit());
-                        uor.setRole(role);
-                        uor.setEnabled(true);
-                        return userOrgRoleRepository.save(uor);
+                        OrgUnitMembership m = new OrgUnitMembership();
+                        m.setUser(finalUser);
+                        m.setOrgUnit(inv.getOrgUnit());
+                        m.setRole(role.name());
+                        m.setEnabled(true);
+                        return membershipRepository.save(m);
                     });
         }
 

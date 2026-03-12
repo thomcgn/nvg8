@@ -9,6 +9,8 @@ import org.thomcgn.backend.auth.service.AdminGuard;
 import org.thomcgn.backend.common.errors.DomainException;
 import org.thomcgn.backend.common.errors.ErrorCode;
 import org.thomcgn.backend.orgunits.model.OrgUnit;
+import org.thomcgn.backend.orgunits.model.OrgUnitMembership;
+import org.thomcgn.backend.orgunits.repo.OrgUnitMembershipRepository;
 import org.thomcgn.backend.users.dto.AssignRoleRequest;
 import org.thomcgn.backend.users.dto.ChangeRoleRequest;
 import org.thomcgn.backend.users.dto.CreateUserRequest;
@@ -23,26 +25,24 @@ import org.thomcgn.backend.users.model.MitarbeiterFaehigkeiten;
 import org.thomcgn.backend.users.model.StaatsangehoerigkeitGruppe;
 import org.thomcgn.backend.users.model.StaatsangehoerigkeitSonderfall;
 import org.thomcgn.backend.users.model.User;
-import org.thomcgn.backend.users.model.UserOrgRole;
-import org.thomcgn.backend.users.repo.UserOrgRoleRepository;
 import org.thomcgn.backend.users.repo.UserRepository;
 
 @Service
 public class UserAdminService {
 
     private final UserRepository userRepository;
-    private final UserOrgRoleRepository userOrgRoleRepository;
+    private final OrgUnitMembershipRepository membershipRepository;
     private final PasswordEncoder passwordEncoder;
     private final AdminGuard adminGuard;
 
     public UserAdminService(
             UserRepository userRepository,
-            UserOrgRoleRepository userOrgRoleRepository,
+            OrgUnitMembershipRepository membershipRepository,
             PasswordEncoder passwordEncoder,
             AdminGuard adminGuard
     ) {
         this.userRepository = userRepository;
-        this.userOrgRoleRepository = userOrgRoleRepository;
+        this.membershipRepository = membershipRepository;
         this.passwordEncoder = passwordEncoder;
         this.adminGuard = adminGuard;
     }
@@ -79,7 +79,7 @@ public class UserAdminService {
     }
 
     @Transactional
-    public UserOrgRole assignRole(Long userId, AssignRoleRequest req) {
+    public OrgUnitMembership assignRole(Long userId, AssignRoleRequest req) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> DomainException.notFound(ErrorCode.USER_NOT_FOUND, "User not found"));
 
@@ -87,18 +87,17 @@ public class UserAdminService {
     }
 
     @Transactional
-    public void disableRole(Long userId, Long userOrgRoleId) {
-        UserOrgRole uor = userOrgRoleRepository.findById(userOrgRoleId)
+    public void disableRole(Long userId, Long membershipId) {
+        OrgUnitMembership m = membershipRepository.findById(membershipId)
                 .orElseThrow(() -> DomainException.notFound(ErrorCode.NOT_FOUND, "Role assignment not found"));
 
-        if (!uor.getUser().getId().equals(userId)) {
+        if (!m.getUser().getId().equals(userId)) {
             throw DomainException.forbidden(ErrorCode.ACCESS_DENIED, "Role assignment does not belong to user.");
         }
 
-        adminGuard.requireCanManageOrgUnit(uor.getOrgUnit().getId());
-        // Caller darf keine Rolle entfernen, die über seiner eigenen liegt
-        checkCanAssignRole(uor.getRole());
-        uor.setEnabled(false);
+        adminGuard.requireCanManageOrgUnit(m.getOrgUnit().getId());
+        checkCanAssignRoleByName(m.getRole());
+        m.setEnabled(false);
     }
 
     /**
@@ -106,15 +105,15 @@ public class UserAdminService {
      * Niemand kann eine Rolle vergeben, die über seiner eigenen liegt.
      */
     @Transactional
-    public UserOrgRole changeRole(Long userId, Long userOrgRoleId, ChangeRoleRequest req) {
-        UserOrgRole uor = userOrgRoleRepository.findById(userOrgRoleId)
+    public OrgUnitMembership changeRole(Long userId, Long membershipId, ChangeRoleRequest req) {
+        OrgUnitMembership m = membershipRepository.findById(membershipId)
                 .orElseThrow(() -> DomainException.notFound(ErrorCode.NOT_FOUND, "Role assignment not found"));
 
-        if (!uor.getUser().getId().equals(userId)) {
+        if (!m.getUser().getId().equals(userId)) {
             throw DomainException.forbidden(ErrorCode.ACCESS_DENIED, "Role assignment does not belong to user.");
         }
 
-        adminGuard.requireCanManageOrgUnit(uor.getOrgUnit().getId());
+        adminGuard.requireCanManageOrgUnit(m.getOrgUnit().getId());
 
         Role newRole;
         try { newRole = Role.valueOf(req.newRole()); }
@@ -122,16 +121,13 @@ public class UserAdminService {
             throw DomainException.badRequest(ErrorCode.VALIDATION_FAILED, "Unknown role: " + req.newRole());
         }
 
-        // Weder die alte noch die neue Rolle darf über der eigenen liegen
-        checkCanAssignRole(uor.getRole());
+        checkCanAssignRoleByName(m.getRole());
         checkCanAssignRole(newRole);
 
-        // Alte Zuweisung deaktivieren
-        uor.setEnabled(false);
+        m.setEnabled(false);
 
-        // Neue Zuweisung erstellen (oder reaktivieren falls schon vorhanden)
-        User user = uor.getUser();
-        return assignRoleInternal(user, new AssignRoleRequest(uor.getOrgUnit().getId(), newRole.name()));
+        User user = m.getUser();
+        return assignRoleInternal(user, new AssignRoleRequest(m.getOrgUnit().getId(), newRole.name()));
     }
 
     // ── Rollenhierarchie ────────────────────────────────────────────────────────
@@ -170,6 +166,14 @@ public class UserAdminService {
                     ErrorCode.ACCESS_DENIED,
                     "Du kannst keine Rolle vergeben, die über deiner eigenen Berechtigung liegt (" + targetRole.name() + ")."
             );
+        }
+    }
+
+    private void checkCanAssignRoleByName(String roleName) {
+        try {
+            checkCanAssignRole(Role.valueOf(roleName));
+        } catch (IllegalArgumentException ignored) {
+            // Unbekannte Rolle – kein Hierarchy-Check nötig
         }
     }
 
@@ -257,7 +261,7 @@ public class UserAdminService {
         return mf;
     }
 
-    private UserOrgRole assignRoleInternal(User user, AssignRoleRequest req) {
+    private OrgUnitMembership assignRoleInternal(User user, AssignRoleRequest req) {
         OrgUnit targetOrg = adminGuard.requireCanManageOrgUnit(req.orgUnitId());
 
         Role role;
@@ -267,21 +271,20 @@ public class UserAdminService {
             throw DomainException.badRequest(ErrorCode.VALIDATION_FAILED, "Unknown role: " + req.role());
         }
 
-        // Niemand kann über seine eigene Rolle hinaus promoten
         checkCanAssignRole(role);
 
-        return userOrgRoleRepository.findByUserIdAndOrgUnitIdAndRole(user.getId(), targetOrg.getId(), role)
+        return membershipRepository.findByUserIdAndOrgUnitIdAndRole(user.getId(), targetOrg.getId(), role.name())
                 .map(existing -> {
                     existing.setEnabled(true);
                     return existing;
                 })
                 .orElseGet(() -> {
-                    UserOrgRole uor = new UserOrgRole();
-                    uor.setUser(user);
-                    uor.setOrgUnit(targetOrg);
-                    uor.setRole(role);
-                    uor.setEnabled(true);
-                    return userOrgRoleRepository.save(uor);
+                    OrgUnitMembership m = new OrgUnitMembership();
+                    m.setUser(user);
+                    m.setOrgUnit(targetOrg);
+                    m.setRole(role.name());
+                    m.setEnabled(true);
+                    return membershipRepository.save(m);
                 });
     }
 

@@ -4,9 +4,9 @@ import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+import org.thomcgn.backend.orgunits.model.OrgUnitMembership;
 import org.thomcgn.backend.users.dto.*;
 import org.thomcgn.backend.users.model.User;
-import org.thomcgn.backend.users.model.UserOrgRole;
 import org.thomcgn.backend.users.service.UserAdminService;
 
 @RestController
@@ -32,30 +32,35 @@ public class UserAdminController {
             @PathVariable Long userId,
             @Valid @RequestBody AssignRoleRequest req
     ) {
-        UserOrgRole uor = userAdminService.assignRole(userId, req);
-        return ResponseEntity.ok(new UserOrgRoleResponse(
-                uor.getId(), uor.getUser().getId(), uor.getOrgUnit().getId(), uor.getRole().name(), uor.isEnabled()
-        ));
+        OrgUnitMembership m = userAdminService.assignRole(userId, req);
+        return ResponseEntity.ok(toResponse(m));
     }
 
-    /** Rolle ändern (promote / demote) — niemand kann über seine eigene Rolle hinaus */
     @PreAuthorize("hasRole('TRAEGER_ADMIN') or hasRole('EINRICHTUNG_ADMIN')")
-    @PutMapping("/{userId}/roles/{userOrgRoleId}")
+    @PutMapping("/{userId}/roles/{membershipId}")
     public ResponseEntity<UserOrgRoleResponse> changeRole(
             @PathVariable Long userId,
-            @PathVariable Long userOrgRoleId,
+            @PathVariable Long membershipId,
             @Valid @RequestBody ChangeRoleRequest req
     ) {
-        UserOrgRole uor = userAdminService.changeRole(userId, userOrgRoleId, req);
-        return ResponseEntity.ok(new UserOrgRoleResponse(
-                uor.getId(), uor.getUser().getId(), uor.getOrgUnit().getId(), uor.getRole().name(), uor.isEnabled()
-        ));
+        OrgUnitMembership m = userAdminService.changeRole(userId, membershipId, req);
+        return ResponseEntity.ok(toResponse(m));
     }
 
     @PreAuthorize("hasRole('TRAEGER_ADMIN') or hasRole('EINRICHTUNG_ADMIN')")
-    @DeleteMapping("/{userId}/roles/{userOrgRoleId}")
-    public ResponseEntity<Void> disableRole(@PathVariable Long userId, @PathVariable Long userOrgRoleId) {
-        userAdminService.disableRole(userId, userOrgRoleId);
+    @DeleteMapping("/{userId}/roles/{membershipId}")
+    public ResponseEntity<Void> disableRole(@PathVariable Long userId, @PathVariable Long membershipId) {
+        userAdminService.disableRole(userId, membershipId);
         return ResponseEntity.noContent().build();
+    }
+
+    private UserOrgRoleResponse toResponse(OrgUnitMembership m) {
+        return new UserOrgRoleResponse(
+                m.getId(),
+                m.getUser().getId(),
+                m.getOrgUnit().getId(),
+                m.getRole(),
+                m.isEnabled()
+        );
     }
 }
