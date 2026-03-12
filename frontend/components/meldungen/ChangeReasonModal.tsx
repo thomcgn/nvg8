@@ -11,18 +11,18 @@ type Props = {
 };
 
 function requiresInfoEffectiveAt(reason: ChangeReason) {
-    return reason === "nachtrag" || reason === "update" || reason === "reassessment";
+    return reason === "NACHTRAG" || reason === "UPDATE" || reason === "REASSESSMENT";
 }
 
 export default function ChangeReasonModal({ open, title, onClose, onConfirm }: Props) {
-    const [changeReason, setChangeReason] = useState<ChangeReason>("fix");
+    const [changeReason, setChangeReason] = useState<ChangeReason>("FIX");
     const [infoEffectiveAt, setInfoEffectiveAt] = useState<string>("");
     const [reasonText, setReasonText] = useState<string>("");
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
         if (!open) {
-            setChangeReason("fix");
+            setChangeReason("FIX");
             setInfoEffectiveAt("");
             setReasonText("");
             setError(null);
@@ -68,10 +68,10 @@ export default function ChangeReasonModal({ open, title, onClose, onConfirm }: P
                 <div className="mFormRow">
                     <label>Änderungsgrund (Pflicht)</label>
                     <select value={changeReason} onChange={(e) => setChangeReason(e.target.value as ChangeReason)}>
-                        <option value="fix">Korrektur (Fehlerberichtigung)</option>
-                        <option value="nachtrag">Nachtrag (neue Information)</option>
-                        <option value="update">Sachlage geändert (Update)</option>
-                        <option value="reassessment">Fachliche Neubewertung</option>
+                        <option value="FIX">Korrektur (Fehlerberichtigung)</option>
+                        <option value="NACHTRAG">Nachtrag (neue Information)</option>
+                        <option value="UPDATE">Sachlage geändert (Update)</option>
+                        <option value="REASSESSMENT">Fachliche Neubewertung</option>
                     </select>
                 </div>
 

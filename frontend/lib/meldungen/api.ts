@@ -1,6 +1,6 @@
 import { apiFetch } from "@/lib/api";
 
-export type ChangeReason = "fix" | "nachtrag" | "update" | "reassessment";
+export type ChangeReason = "FIX" | "NACHTRAG" | "UPDATE" | "REASSESSMENT";
 
 export type MeldungDetail = {
     meldungId: string;
