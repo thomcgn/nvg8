@@ -2,6 +2,7 @@ package org.thomcgn.backend.teams.service;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.thomcgn.backend.auth.model.Role;
 import org.thomcgn.backend.auth.service.AdminGuard;
 import org.thomcgn.backend.common.errors.DomainException;
 import org.thomcgn.backend.common.errors.ErrorCode;
@@ -15,6 +16,8 @@ import org.thomcgn.backend.teams.model.TeamMembershipType;
 import org.thomcgn.backend.teams.model.UserTeamMembership;
 import org.thomcgn.backend.teams.repo.UserTeamMembershipRepository;
 import org.thomcgn.backend.users.model.User;
+import org.thomcgn.backend.users.model.UserOrgRole;
+import org.thomcgn.backend.users.repo.UserOrgRoleRepository;
 import org.thomcgn.backend.users.repo.UserRepository;
 
 import java.util.List;
@@ -24,15 +27,18 @@ public class TeamMembershipService {
 
     private final UserTeamMembershipRepository membershipRepository;
     private final UserRepository userRepository;
+    private final UserOrgRoleRepository userOrgRoleRepository;
     private final AdminGuard adminGuard;
 
     public TeamMembershipService(
             UserTeamMembershipRepository membershipRepository,
             UserRepository userRepository,
+            UserOrgRoleRepository userOrgRoleRepository,
             AdminGuard adminGuard
     ) {
         this.membershipRepository = membershipRepository;
         this.userRepository = userRepository;
+        this.userOrgRoleRepository = userOrgRoleRepository;
         this.adminGuard = adminGuard;
     }
 
@@ -71,7 +77,28 @@ public class TeamMembershipService {
 
         UserTeamMembership saved = membershipRepository.save(membership);
 
+        ensureFachbereichMembership(user, team);
+
         return toResponse(saved);
+    }
+
+    private void ensureFachbereichMembership(User user, OrgUnit team) {
+        OrgUnit parent = team.getParent();
+        if (parent == null || parent.getType() != OrgUnitType.ABTEILUNG) {
+            return;
+        }
+
+        boolean alreadyMember = userOrgRoleRepository.existsByUserIdAndOrgUnitIdAndEnabledTrue(user.getId(), parent.getId());
+        if (alreadyMember) {
+            return;
+        }
+
+        UserOrgRole fachbereichRole = new UserOrgRole();
+        fachbereichRole.setUser(user);
+        fachbereichRole.setOrgUnit(parent);
+        fachbereichRole.setRole(Role.FACHKRAFT);
+        fachbereichRole.setEnabled(true);
+        userOrgRoleRepository.save(fachbereichRole);
     }
 
     @Transactional(readOnly = true)
