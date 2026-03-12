@@ -333,7 +333,8 @@ public class FalleroeffnungService {
                             f.getCreatedBy() != null ? f.getCreatedBy().getDisplayName() : null,
                             f.getCreatedAt(),
                             akut,
-                            dringlichkeit
+                            dringlichkeit,
+                            cur != null ? cur.getNaechsteUeberpruefungAm() : null
                     );
                 })
                 .toList();

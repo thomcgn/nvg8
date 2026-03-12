@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
+    CalendarDays,
     ClipboardList,
     UserCog,
     UsersRound,
@@ -37,6 +38,7 @@ const navSections: NavSection[] = [
         title: "Fallführung",
         items: [
             { href: "/dashboard/akten", label: "Akten", icon: ClipboardList, description: "Übersicht & Suche" },
+            { href: "/dashboard/kalender", label: "Kalender", icon: CalendarDays, description: "Überprüfungstermine" },
         ],
     },
     {

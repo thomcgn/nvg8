@@ -664,6 +664,9 @@ export function MeldungEditor(props: {
         const obs = Array.isArray((form as any).observations) ? (form as any).observations : [];
         if (obs.length === 0) return "Bitte mindestens eine Beobachtung erfassen.";
 
+        const pruefung = String((form as any).naechsteUeberpruefungAm ?? "").trim();
+        if (!pruefung) return "Nächste Überprüfung am ist erforderlich (Pflichtfeld im Bereich Planung).";
+
         if (isCorrection) {
             const r = String(changeReason ?? "").trim();
             if (!r) return "Änderungsgrund ist erforderlich (Pflicht bei Korrektur).";
@@ -1773,12 +1776,12 @@ export function MeldungEditor(props: {
                                         />
                                     </FieldRow>
 
-                                    <FieldRow label="Nächste Überprüfung am (YYYY-MM-DD)">
+                                    <FieldRow label="Nächste Überprüfung am *" hint="Pflichtfeld – Datum im Format JJJJ-MM-TT">
                                         <Input
+                                            type="date"
                                             value={String((form as any).naechsteUeberpruefungAm ?? "")}
                                             onChange={(e) => set("naechsteUeberpruefungAm" as any, e.target.value || null)}
                                             disabled={disabled || statusIsDone}
-                                            placeholder="2026-03-06"
                                         />
                                     </FieldRow>
 

@@ -1,6 +1,7 @@
 package org.thomcgn.backend.falloeffnungen.dto;
 
 import java.time.Instant;
+import java.time.LocalDate;
 
 public record FalleroeffnungListItemResponse(
         Long id,
@@ -20,5 +21,6 @@ public record FalleroeffnungListItemResponse(
 
         // ✅ Neu für Dashboard: aus current Meldung abgeleitet (falls vorhanden)
         Boolean akutGefahrImVerzug,
-        String dringlichkeit
+        String dringlichkeit,
+        LocalDate naechsteUeberpruefungAm
 ) {}
