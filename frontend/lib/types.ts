@@ -234,6 +234,7 @@ export type FalleroeffnungListItem = {
   // ✅ Dashboard-Spalten (werden vom Backend optional geliefert)
   akutGefahrImVerzug?: boolean | null;
   dringlichkeit?: string | null;
+  naechsteUeberpruefungAm?: string | null;
 };
 
 export type FalleroeffnungListResponse = {

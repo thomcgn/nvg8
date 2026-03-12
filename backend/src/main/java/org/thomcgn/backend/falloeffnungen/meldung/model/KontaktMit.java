@@ -5,5 +5,7 @@ public enum KontaktMit {
     MUTTER,
     VATER,
     BEZUGSPERSON,
+    JUGENDAMT,
+    ARZT,
     SONSTIGE
 }

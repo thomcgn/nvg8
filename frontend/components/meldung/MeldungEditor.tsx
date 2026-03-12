@@ -153,35 +153,29 @@ const JNU_LABEL: Record<(typeof JANEINUNKLAR)[number], string> = {
 
 const KONTAKT_MIT = [
     "KIND",
-    "SORGEBERECHTIGTE",
     "MUTTER",
     "VATER",
     "BEZUGSPERSON",
-    "SCHULE",
-    "KITA",
-    "ARZT",
     "JUGENDAMT",
+    "ARZT",
     "SONSTIGE",
 ] as const;
 const KONTAKT_MIT_LABEL: Record<(typeof KONTAKT_MIT)[number], string> = {
     KIND: "Kind",
-    SORGEBERECHTIGTE: "Sorgeberechtigte",
     MUTTER: "Mutter",
     VATER: "Vater",
     BEZUGSPERSON: "Bezugsperson",
-    SCHULE: "Schule",
-    KITA: "Kita",
-    ARZT: "Arzt / Ärztin",
     JUGENDAMT: "Jugendamt",
+    ARZT: "Arzt / Ärztin",
     SONSTIGE: "Sonstige",
 };
 
-const KONTAKT_STATUS = ["GEPLANT", "ERFOLGT", "NICHT_ERREICHT", "ABGESAGT"] as const;
+const KONTAKT_STATUS = ["GEPLANT", "ERREICHT", "NICHT_ERREICHT", "ABGEBROCHEN"] as const;
 const KONTAKT_STATUS_LABEL: Record<(typeof KONTAKT_STATUS)[number], string> = {
     GEPLANT: "Geplant",
-    ERFOLGT: "Erfolgt",
+    ERREICHT: "Erreicht",
     NICHT_ERREICHT: "Nicht erreicht",
-    ABGESAGT: "Abgesagt",
+    ABGEBROCHEN: "Abgebrochen",
 };
 
 const KONTAKTART = ["TELEFON", "EMAIL", "PERSOENLICH", "SCHRIFTLICH", "SONSTIGES"] as const;
@@ -669,6 +663,9 @@ export function MeldungEditor(props: {
 
         const obs = Array.isArray((form as any).observations) ? (form as any).observations : [];
         if (obs.length === 0) return "Bitte mindestens eine Beobachtung erfassen.";
+
+        const pruefung = String((form as any).naechsteUeberpruefungAm ?? "").trim();
+        if (!pruefung) return "Nächste Überprüfung am ist erforderlich (Pflichtfeld im Bereich Planung).";
 
         if (isCorrection) {
             const r = String(changeReason ?? "").trim();
@@ -1779,12 +1776,12 @@ export function MeldungEditor(props: {
                                         />
                                     </FieldRow>
 
-                                    <FieldRow label="Nächste Überprüfung am (YYYY-MM-DD)">
+                                    <FieldRow label="Nächste Überprüfung am *" hint="Pflichtfeld – Datum im Format JJJJ-MM-TT">
                                         <Input
+                                            type="date"
                                             value={String((form as any).naechsteUeberpruefungAm ?? "")}
                                             onChange={(e) => set("naechsteUeberpruefungAm" as any, e.target.value || null)}
                                             disabled={disabled || statusIsDone}
-                                            placeholder="2026-03-06"
                                         />
                                     </FieldRow>
 
