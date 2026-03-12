@@ -36,7 +36,7 @@ public class TraegerService {
 
     @Transactional
     public TraegerResponse create(CreateTraegerRequest req) {
-        access.requireAny(Role.TRAEGER_ADMIN);
+        access.requireAny(Role.SYSTEM_ADMIN, Role.TRAEGER_ADMIN);
 
         String slug = generateSlug(req.name());
         // Eindeutigkeit sichern
@@ -90,8 +90,13 @@ public class TraegerService {
 
     @Transactional(readOnly = true)
     public List<TraegerResponse> list() {
-        access.requireAny(Role.TRAEGER_ADMIN);
-        return repo.findAll().stream().map(this::toDto).toList();
+        access.requireAny(Role.SYSTEM_ADMIN, Role.TRAEGER_ADMIN);
+        if (access.has(Role.SYSTEM_ADMIN)) {
+            return repo.findAll().stream().map(this::toDto).toList();
+        }
+        // TRAEGER_ADMIN sieht nur seinen eigenen Träger
+        Long traegerId = SecurityUtils.currentTraegerIdRequired();
+        return repo.findById(traegerId).stream().map(this::toDto).toList();
     }
 
     @Transactional

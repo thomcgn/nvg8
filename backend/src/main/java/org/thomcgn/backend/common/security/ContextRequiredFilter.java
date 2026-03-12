@@ -90,6 +90,12 @@ public class ContextRequiredFilter extends OncePerRequestFilter {
             return;
         }
 
+        // System-Admin braucht keinen Einrichtungs-Kontext
+        if (principal.isSystem()) {
+            filterChain.doFilter(request, response);
+            return;
+        }
+
         // Context fehlt -> 403 (CONTEXT_REQUIRED)
         if (!principal.isContext() || principal.getTraegerId() == null || principal.getOrgUnitId() == null) {
 

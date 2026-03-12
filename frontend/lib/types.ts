@@ -34,6 +34,8 @@ export type AuthContextOverviewResponse = {
 export type LoginResponse = {
   baseToken: string;
   contexts: AvailableContextDto[];
+  systemAdmin: boolean;
+  systemToken: string | null;
 };
 
 export type SelectContextResponse = {

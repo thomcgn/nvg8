@@ -28,6 +28,9 @@ public class User extends Person {
     @Column(nullable = false)
     private boolean enabled = true;
 
+    @Column(name = "system_admin", nullable = false)
+    private boolean systemAdmin = false;
+
     @Column(name = "last_login")
     private LocalDateTime lastLogin;
 
@@ -71,6 +74,14 @@ public class User extends Person {
 
     public void setEnabled(boolean enabled) {
         this.enabled = enabled;
+    }
+
+    public boolean isSystemAdmin() {
+        return systemAdmin;
+    }
+
+    public void setSystemAdmin(boolean systemAdmin) {
+        this.systemAdmin = systemAdmin;
     }
 
     public LocalDateTime getLastLogin() {

@@ -65,6 +65,13 @@ export default function LoginPage() {
         body: { email, password },
       });
 
+      // System-Admin: Access-Cookie wurde serverseitig direkt gesetzt, kein Context-Switch nötig
+      if (res.systemAdmin) {
+        await refresh();
+        router.push("/dashboard");
+        return;
+      }
+
       const ctxs = res.contexts || [];
       setContexts(ctxs);
 
@@ -222,9 +229,7 @@ export default function LoginPage() {
                             >
                               <div className="min-w-0">
                                 <div className="text-sm font-semibold text-brand-text">{c.orgUnitName}</div>
-                                <div className="mt-0.5 text-xs text-brand-text2">
-                                  {c.orgUnitType} · {c.traegerName}
-                                </div>
+                                <div className="mt-0.5 text-xs text-brand-text2">{c.traegerName}</div>
                               </div>
                               <ArrowRight className="h-4 w-4 text-brand-text2" />
                             </button>

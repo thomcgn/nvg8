@@ -109,7 +109,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             return out;
         }
 
-        if (JwtService.isContextToken(c)) {
+        if (JwtService.isContextToken(c) || JwtService.isSystemToken(c)) {
             Object rolesObj = c.get(JwtService.CLAIM_ROLES);
             if (rolesObj instanceof List<?> list) {
                 for (Object r : list) {

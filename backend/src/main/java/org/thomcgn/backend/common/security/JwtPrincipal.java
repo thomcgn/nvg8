@@ -38,6 +38,10 @@ public class JwtPrincipal {
         return claims != null && JwtService.isBaseToken(claims);
     }
 
+    public boolean isSystem() {
+        return claims != null && JwtService.isSystemToken(claims);
+    }
+
     public Long getTraegerId() {
         return claims != null ? claims.get(JwtService.CLAIM_TID, Long.class) : null;
     }

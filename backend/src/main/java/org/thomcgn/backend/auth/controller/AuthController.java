@@ -36,13 +36,21 @@ public class AuthController {
     public ResponseEntity<LoginResponse> login(@RequestBody LoginRequest req) {
         LoginResponse res = authService.login(req);
 
-        long baseMaxAge = jwtProperties.getBaseTtlMinutes() * 60L;
+        long baseMaxAge   = jwtProperties.getBaseTtlMinutes()   * 60L;
+        long accessMaxAge = jwtProperties.getAccessTtlMinutes() * 60L;
 
-        return ResponseEntity.ok()
-                .header(HttpHeaders.SET_COOKIE, AuthCookies.baseCookie(res.baseToken(), baseMaxAge, cookieSecure).toString())
-                // optional: access cookie beim login leeren
-                .header(HttpHeaders.SET_COOKIE, AuthCookies.clearAccess(cookieSecure).toString())
-                .body(res);
+        var builder = ResponseEntity.ok()
+                .header(HttpHeaders.SET_COOKIE, AuthCookies.baseCookie(res.baseToken(), baseMaxAge, cookieSecure).toString());
+
+        if (res.systemAdmin() && res.systemToken() != null) {
+            // System-Admin: Access-Cookie direkt beim Login setzen, kein Context-Switch nötig
+            builder = builder.header(HttpHeaders.SET_COOKIE,
+                    AuthCookies.accessCookie(res.systemToken(), accessMaxAge, cookieSecure).toString());
+        } else {
+            builder = builder.header(HttpHeaders.SET_COOKIE, AuthCookies.clearAccess(cookieSecure).toString());
+        }
+
+        return builder.body(res);
     }
 
     @PostMapping("/context")

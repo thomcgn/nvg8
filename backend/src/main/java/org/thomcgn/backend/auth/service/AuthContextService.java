@@ -141,6 +141,12 @@ public class AuthContextService {
             // schneller Filter: gleicher Träger
             if (!ou.getTraeger().getId().equals(targetTraegerId)) continue;
 
+            // TRAEGER-Level Rollen gelten trägerübergreifend für alle Einrichtungen
+            if (ou.getType() == OrgUnitType.TRAEGER) {
+                ctxRoles.add(uor.getRole().name());
+                continue;
+            }
+
             OrgUnit ancestor = findEinrichtungAncestor(ou);
             if (ancestor == null) continue;
 

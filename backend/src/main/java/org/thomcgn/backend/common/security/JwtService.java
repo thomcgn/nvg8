@@ -14,7 +14,7 @@
     @Service
     public class JwtService {
 
-        public static final String CLAIM_TYP = "typ";     // "base" | "ctx"
+        public static final String CLAIM_TYP = "typ";     // "base" | "ctx" | "sys"
         public static final String CLAIM_UID = "uid";     // user id
         public static final String CLAIM_TID = "tid";     // traeger id (ctx only)
         public static final String CLAIM_OID = "oid";     // active orgUnit id (ctx only)
@@ -73,11 +73,33 @@
                     .parseClaimsJws(token);
         }
 
+        public String issueSystemToken(Long userId, String email) {
+            Instant now = Instant.now();
+            Instant exp = now.plusSeconds(props.getAccessTtlMinutes() * 60);
+
+            return Jwts.builder()
+                    .setIssuer(props.getIssuer())
+                    .setSubject(email)
+                    .setIssuedAt(Date.from(now))
+                    .setExpiration(Date.from(exp))
+                    .addClaims(Map.of(
+                            CLAIM_TYP, "sys",
+                            CLAIM_UID, userId,
+                            CLAIM_ROLES, List.of("SYSTEM_ADMIN")
+                    ))
+                    .signWith(key, SignatureAlgorithm.HS256)
+                    .compact();
+        }
+
         public static boolean isContextToken(Claims c) {
             return "ctx".equals(c.get(CLAIM_TYP, String.class));
         }
 
         public static boolean isBaseToken(Claims c) {
             return "base".equals(c.get(CLAIM_TYP, String.class));
+        }
+
+        public static boolean isSystemToken(Claims c) {
+            return "sys".equals(c.get(CLAIM_TYP, String.class));
         }
     }
