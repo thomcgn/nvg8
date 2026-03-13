@@ -3,6 +3,24 @@
 import * as React from "react";
 import type { MeldungDraftRequest, MeldungResponse } from "@/lib/api/meldung";
 import { ANLASS_CATALOG, ANLASS_CODES, ANLASS_DEFAULT_SEVERITY, anlassLabel } from "@/lib/anlass/catalog";
+import { kinderschutzbogenApi, type KatalogResponse } from "@/lib/api/kinderschutzbogen";
+import { djiApi, type DjiKatalogResponse } from "@/lib/api/dji";
+import { meldebogenApi } from "@/lib/api/meldebogen";
+import { schutzplanApi } from "@/lib/api/schutzplan";
+import { hausbesuchApi } from "@/lib/api/hausbesuch";
+import {
+    KinderschutzbogenTabContent,
+    type KinderschutzbogenState,
+    defaultKinderschutzbogenState,
+} from "./KinderschutzbogenTabContent";
+import {
+    DjiTabContent,
+    type DjiFormState,
+    defaultDjiFormState,
+    initDjiPositionen,
+} from "./DjiTabContent";
+import { SchutzplanTabContent, type SchutzplanState, defaultSchutzplanState } from "./SchutzplanTabContent";
+import { HausbesuchTabContent, type HausbesuchState, defaultHausbesuchState } from "./HausbesuchTabContent";
 
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -434,12 +452,13 @@ function FieldRow(props: {
 /* ---------------- Component ---------------- */
 
 export function MeldungEditor(props: {
+    fallId: number;
     value: MeldungResponse;
     disabled?: boolean;
     onSaveDraft: (req: MeldungDraftRequest) => Promise<MeldungResponse | void>;
     onSubmit: (mirrorToNotizen: boolean, changeReason?: string) => Promise<void>;
 }) {
-    const { value, disabled = false, onSaveDraft, onSubmit } = props;
+    const { fallId, value, disabled = false, onSaveDraft, onSubmit } = props;
 
     const statusIsDone = isDoneStatus((value as any)?.status);
 
@@ -449,22 +468,27 @@ export function MeldungEditor(props: {
         return t === "KORREKTUR" || (typeof correctsId === "number" && correctsId > 0);
     }, [value]);
 
-    const TAB_ITEMS = React.useMemo(
-        () =>
-            [
-                ["basis", "Basis"],
-                ["anlass", "Anlässe"],
-                ["obs", "Beobachtungen"],
-                ["fach", "Fachbewertung"],
-                ["akut", "Akut / Schutz"],
-                ["kontakte", "Kontakte"],
-                ["planung", "Planung"],
-                ["save", "Speichern"],
-            ] as const,
-        []
-    );
+    const [hausbesuchEnabled, setHausbesuchEnabled] = React.useState(false);
 
-    const [activeTab, setActiveTab] = React.useState<(typeof TAB_ITEMS)[number][0]>("basis");
+    const TAB_ITEMS = React.useMemo(() => {
+        const items: [string, string][] = [
+            ["basis", "Basis"],
+            ["anlass", "Anlässe"],
+            ["obs", "Beobachtungen"],
+            ["fach", "Fachbewertung"],
+            ["akut", "Akut / Schutz"],
+            ["kontakte", "Kontakte"],
+            ["stuttgarter", "Stuttgarter"],
+            ["dji_sicherheit", "DJI Sicherheit"],
+            ["dji_risiko", "DJI Risiko"],
+            ["schutzplan", "Schutzplan"],
+        ];
+        if (hausbesuchEnabled) items.push(["hausbesuch", "Hausbesuch"]);
+        items.push(["planung", "Planung"], ["save", "Speichern"]);
+        return items;
+    }, [hausbesuchEnabled]);
+
+    const [activeTab, setActiveTab] = React.useState<string>("basis");
 
     const [form, setForm] = React.useState<MeldungDraftRequest>(() => syncAllObservations(toDraftFromResponse(value)));
     const initialDraftRef = React.useRef<MeldungDraftRequest>(syncAllObservations(toDraftFromResponse(value)));
@@ -477,6 +501,88 @@ export function MeldungEditor(props: {
 
     const [changeReason, setChangeReason] = React.useState(String((value as any)?.reasonText ?? (value as any)?.changeReason ?? ""));
     const [submitErr, setSubmitErr] = React.useState<string | null>(null);
+
+    // ---- Melder-Info (unique Meldebogen fields) ----
+    const [melderInfo, setMelderInfo] = React.useState({
+        melderName: "",
+        melderKontakt: "",
+        melderBeziehungKind: "",
+        melderGlaubwuerdigkeit: null as string | null,
+        kindAktuellerAufenthalt: "",
+        belastungKoerperlErkrankung: false,
+        belastungPsychErkrankung: false,
+        belastungSucht: false,
+        belastungHaeuslicheGewalt: false,
+        belastungSuizidgefahr: false,
+        belastungGewalttaetigeErz: false,
+        belastungSozialeIsolation: false,
+        belastungSonstiges: "",
+    });
+
+    // ---- Kinderschutzbogen (Stuttgarter) ----
+    const [stuttgarterKatalog, setStuttgarterKatalog] = React.useState<KatalogResponse | null>(null);
+    const [stuttgarterKatalogLoading, setStuttgarterKatalogLoading] = React.useState(false);
+    const [stuttgarterForm, setStuttgarterForm] = React.useState<KinderschutzbogenState>(defaultKinderschutzbogenState);
+    const [stuttgarterSavedId, setStuttgarterSavedId] = React.useState<number | null>(null);
+
+    // ---- DJI Sicherheitseinschätzung ----
+    const [djiSicherheitKatalog, setDjiSicherheitKatalog] = React.useState<DjiKatalogResponse | null>(null);
+    const [djiSicherheitLoading, setDjiSicherheitLoading] = React.useState(false);
+    const [djiSicherheitForm, setDjiSicherheitForm] = React.useState<DjiFormState>(defaultDjiFormState);
+    const [djiSicherheitSavedId, setDjiSicherheitSavedId] = React.useState<number | null>(null);
+
+    // ---- DJI Risikoeinschätzung ----
+    const [djiRisikoKatalog, setDjiRisikoKatalog] = React.useState<DjiKatalogResponse | null>(null);
+    const [djiRisikoLoading, setDjiRisikoLoading] = React.useState(false);
+    const [djiRisikoForm, setDjiRisikoForm] = React.useState<DjiFormState>(defaultDjiFormState);
+    const [djiRisikoSavedId, setDjiRisikoSavedId] = React.useState<number | null>(null);
+
+    // ---- Schutzplan ----
+    const [schutzplanForm, setSchutzplanForm] = React.useState<SchutzplanState>(defaultSchutzplanState);
+    const [schutzplanSavedId, setSchutzplanSavedId] = React.useState<number | null>(null);
+
+    // ---- Hausbesuch (optional) ----
+    const [hausbesuchForm, setHausbesuchForm] = React.useState<HausbesuchState>(defaultHausbesuchState);
+    const [hausbesuchSavedId, setHausbesuchSavedId] = React.useState<number | null>(null);
+
+    // Load catalogs on mount
+    React.useEffect(() => {
+        setStuttgarterKatalogLoading(true);
+        kinderschutzbogenApi
+            .katalog(fallId)
+            .then((k) => {
+                setStuttgarterKatalog(k);
+                const init: KinderschutzbogenState["bewertungen"] = {};
+                k.items.forEach((item) => { init[item.code] = { rating: null, notiz: "" }; });
+                setStuttgarterForm((prev) => ({ ...prev, bewertungen: init }));
+            })
+            .catch(() => {})
+            .finally(() => setStuttgarterKatalogLoading(false));
+    }, [fallId]);
+
+    React.useEffect(() => {
+        setDjiSicherheitLoading(true);
+        djiApi
+            .katalog(fallId, "SICHERHEITSEINSCHAETZUNG")
+            .then((k) => {
+                setDjiSicherheitKatalog(k);
+                setDjiSicherheitForm((prev) => ({ ...prev, positionen: initDjiPositionen(k) }));
+            })
+            .catch(() => {})
+            .finally(() => setDjiSicherheitLoading(false));
+    }, [fallId]);
+
+    React.useEffect(() => {
+        setDjiRisikoLoading(true);
+        djiApi
+            .katalog(fallId, "RISIKOEINSCHAETZUNG")
+            .then((k) => {
+                setDjiRisikoKatalog(k);
+                setDjiRisikoForm((prev) => ({ ...prev, positionen: initDjiPositionen(k) }));
+            })
+            .catch(() => {})
+            .finally(() => setDjiRisikoLoading(false));
+    }, [fallId]);
 
     React.useEffect(() => {
         const nextDraft = syncAllObservations(toDraftFromResponse(value));
@@ -710,6 +816,179 @@ export function MeldungEditor(props: {
         try {
             const normalized = syncAllObservations(form);
             await onSaveDraft(normalized);
+
+            // Save companion forms before finalizing the Meldung
+
+            // Meldebogen (unique melder fields + auto-mapped from Meldung form)
+            const MELDEWEG_TO_MELDUNGART: Record<string, string> = {
+                TELEFON: "TELEFONISCH", EMAIL: "EMAIL", PERSOENLICH: "PERSOENLICH", BRIEF: "SCHRIFTLICH", SONSTIGES: "PERSOENLICH",
+            };
+            const DRING_TO_HANDLUNG: Record<string, string> = {
+                AKUT_HEUTE: "SOFORT", ZEITNAH_24_48H: "INNERHALB_24H", BEOBACHTEN: "INNERHALB_WOCHE", UNKLAR: "SPAETER",
+            };
+            const AMPEL_TO_ERST: Record<string, string> = { GRUEN: "KEINE", GELB: "GERING", ROT: "AKUT" };
+            try {
+                await meldebogenApi.create(fallId, {
+                    eingangsdatum: new Date().toISOString().split("T")[0],
+                    erfassendeFachkraft: null,
+                    meldungart: MELDEWEG_TO_MELDUNGART[(form as any).meldeweg ?? ""] ?? null,
+                    melderName: melderInfo.melderName || null,
+                    melderKontakt: melderInfo.melderKontakt || null,
+                    melderBeziehungKind: melderInfo.melderBeziehungKind || null,
+                    melderGlaubwuerdigkeit: melderInfo.melderGlaubwuerdigkeit,
+                    schilderung: (form as any).kurzbeschreibung || null,
+                    kindAktuellerAufenthalt: melderInfo.kindAktuellerAufenthalt || null,
+                    belastungKoerperlErkrankung: melderInfo.belastungKoerperlErkrankung,
+                    belastungPsychErkrankung: melderInfo.belastungPsychErkrankung,
+                    belastungSucht: melderInfo.belastungSucht,
+                    belastungHaeuslicheGewalt: melderInfo.belastungHaeuslicheGewalt,
+                    belastungSuizidgefahr: melderInfo.belastungSuizidgefahr,
+                    belastungGewalttaetigeErz: melderInfo.belastungGewalttaetigeErz,
+                    belastungSozialeIsolation: melderInfo.belastungSozialeIsolation,
+                    belastungSonstiges: melderInfo.belastungSonstiges || null,
+                    ersteinschaetzung: AMPEL_TO_ERST[(form as any).fachAmpel ?? ""] ?? null,
+                    handlungsdringlichkeit: DRING_TO_HANDLUNG[(form as any).dringlichkeit ?? ""] ?? null,
+                    ersteinschaetzungFreitext: (form as any).fachText || null,
+                });
+            } catch { /* non-critical */ }
+
+            // Stuttgarter Kinderschutzbogen
+            if (stuttgarterKatalog) {
+                try {
+                    const ksbReq = {
+                        bewertungsdatum: stuttgarterForm.bewertungsdatum,
+                        bewertungen: Object.entries(stuttgarterForm.bewertungen).map(([itemCode, b]) => ({
+                            itemCode, rating: b.rating, notiz: b.notiz || null,
+                        })),
+                        gesamteinschaetzungManuell: stuttgarterForm.gesamteinschaetzungManuell,
+                        gesamteinschaetzungFreitext: stuttgarterForm.gesamteinschaetzungFreitext || null,
+                    };
+                    if (stuttgarterSavedId) {
+                        await kinderschutzbogenApi.update(fallId, stuttgarterSavedId, ksbReq);
+                    } else {
+                        const r = await kinderschutzbogenApi.create(fallId, ksbReq);
+                        setStuttgarterSavedId(r.id);
+                    }
+                } catch { /* non-critical */ }
+            }
+
+            // DJI Sicherheitseinschätzung
+            if (djiSicherheitKatalog) {
+                try {
+                    const posReqs = djiSicherheitKatalog.positionen.map((item) => {
+                        const s = djiSicherheitForm.positionen[item.code];
+                        return {
+                            positionCode: item.code,
+                            belege: s?.belege || undefined,
+                            bewertungBool: item.bewertungstyp === "BOOLEAN_MIT_BELEGE" ? s?.bewertungBool ?? null : undefined,
+                            bewertungStufe: item.bewertungstyp === "SECHSSTUFEN" ? s?.bewertungStufe ?? null : undefined,
+                        };
+                    });
+                    const djiSReq = {
+                        formTyp: "SICHERHEITSEINSCHAETZUNG" as const,
+                        bewertungsdatum: djiSicherheitForm.bewertungsdatum,
+                        positionen: posReqs,
+                        gesamteinschaetzung: djiSicherheitForm.gesamteinschaetzung,
+                        gesamtfreitext: djiSicherheitForm.gesamtfreitext || null,
+                    };
+                    if (djiSicherheitSavedId) {
+                        await djiApi.update(fallId, djiSicherheitSavedId, djiSReq);
+                    } else {
+                        const r = await djiApi.create(fallId, djiSReq);
+                        setDjiSicherheitSavedId(r.id);
+                    }
+                } catch { /* non-critical */ }
+            }
+
+            // DJI Risikoeinschätzung
+            if (djiRisikoKatalog) {
+                try {
+                    const posReqs = djiRisikoKatalog.positionen.map((item) => {
+                        const s = djiRisikoForm.positionen[item.code];
+                        return {
+                            positionCode: item.code,
+                            belege: s?.belege || undefined,
+                            bewertungBool: item.bewertungstyp === "BOOLEAN_MIT_BELEGE" ? s?.bewertungBool ?? null : undefined,
+                            bewertungStufe: item.bewertungstyp === "SECHSSTUFEN" ? s?.bewertungStufe ?? null : undefined,
+                        };
+                    });
+                    const djiRReq = {
+                        formTyp: "RISIKOEINSCHAETZUNG" as const,
+                        bewertungsdatum: djiRisikoForm.bewertungsdatum,
+                        positionen: posReqs,
+                        gesamteinschaetzung: djiRisikoForm.gesamteinschaetzung,
+                        gesamtfreitext: djiRisikoForm.gesamtfreitext || null,
+                    };
+                    if (djiRisikoSavedId) {
+                        await djiApi.update(fallId, djiRisikoSavedId, djiRReq);
+                    } else {
+                        const r = await djiApi.create(fallId, djiRReq);
+                        setDjiRisikoSavedId(r.id);
+                    }
+                } catch { /* non-critical */ }
+            }
+
+            // Schutzplan
+            try {
+                const spReq = {
+                    erstelltAm: schutzplanForm.erstelltAm,
+                    gueltigBis: schutzplanForm.gueltigBis || null,
+                    status: "AKTIV",
+                    gefaehrdungssituation: schutzplanForm.gefaehrdungssituation || null,
+                    vereinbarungen: schutzplanForm.vereinbarungen || null,
+                    beteiligte: schutzplanForm.beteiligte || null,
+                    naechsterTermin: schutzplanForm.naechsterTermin || null,
+                    gesamtfreitext: schutzplanForm.gesamtfreitext || null,
+                    massnahmen: schutzplanForm.massnahmen.map((m) => ({
+                        massnahme: m.massnahme,
+                        verantwortlich: m.verantwortlich || undefined,
+                        bisDatum: m.bisDatum || null,
+                        status: m.status,
+                    })),
+                };
+                if (schutzplanSavedId) {
+                    await schutzplanApi.update(fallId, schutzplanSavedId, spReq);
+                } else {
+                    const r = await schutzplanApi.create(fallId, spReq);
+                    setSchutzplanSavedId(r.id);
+                }
+            } catch { /* non-critical */ }
+
+            // Hausbesuch (optional)
+            if (hausbesuchEnabled) {
+                try {
+                    const hbReq = {
+                        besuchsdatum: hausbesuchForm.besuchsdatum,
+                        besuchszeitVon: hausbesuchForm.besuchszeitVon || null,
+                        besuchszeitBis: hausbesuchForm.besuchszeitBis || null,
+                        anwesende: hausbesuchForm.anwesende || null,
+                        whgOrdnung: hausbesuchForm.whgOrdnung || null,
+                        whgHygiene: hausbesuchForm.whgHygiene || null,
+                        whgNahrungsversorgung: hausbesuchForm.whgNahrungsversorgung || null,
+                        whgUnfallgefahren: hausbesuchForm.whgUnfallgefahren || null,
+                        whgSonstiges: hausbesuchForm.whgSonstiges || null,
+                        kindErscheinungsbild: hausbesuchForm.kindErscheinungsbild || null,
+                        kindVerhalten: hausbesuchForm.kindVerhalten || null,
+                        kindStimmung: hausbesuchForm.kindStimmung || null,
+                        kindAeusserungen: hausbesuchForm.kindAeusserungen || null,
+                        kindHinweiseGefaehrdung: hausbesuchForm.kindHinweiseGefaehrdung || null,
+                        bpErscheinungsbild: hausbesuchForm.bpErscheinungsbild || null,
+                        bpVerhalten: hausbesuchForm.bpVerhalten || null,
+                        bpUmgangKind: hausbesuchForm.bpUmgangKind || null,
+                        bpKooperation: hausbesuchForm.bpKooperation || null,
+                        einschaetzungAmpel: hausbesuchForm.einschaetzungAmpel,
+                        einschaetzungText: hausbesuchForm.einschaetzungText || null,
+                        naechsteSchritte: hausbesuchForm.naechsteSchritte || null,
+                        naechsterTermin: hausbesuchForm.naechsterTermin || null,
+                    };
+                    if (hausbesuchSavedId) {
+                        await hausbesuchApi.update(fallId, hausbesuchSavedId, hbReq);
+                    } else {
+                        const r = await hausbesuchApi.create(fallId, hbReq);
+                        setHausbesuchSavedId(r.id);
+                    }
+                } catch { /* non-critical */ }
+            }
 
             const trimmed = String(changeReason ?? "").trim();
             await onSubmit(submitMirror, isCorrection ? trimmed : undefined);
@@ -1050,6 +1329,95 @@ export function MeldungEditor(props: {
                                         );
                                     })()}
                                 </div>
+
+                                {/* ── Melder-Informationen ── */}
+                                <Separator className="my-3" />
+                                <div className="text-sm font-semibold text-brand-text">Melder-Informationen</div>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    <FieldRow label="Name der meldenden Person">
+                                        <Input
+                                            value={melderInfo.melderName}
+                                            onChange={(e) => setMelderInfo((p) => ({ ...p, melderName: e.target.value }))}
+                                            placeholder="z.B. Frau Müller"
+                                            disabled={disabled || statusIsDone}
+                                        />
+                                    </FieldRow>
+                                    <FieldRow label="Kontakt (Telefon / E-Mail)">
+                                        <Input
+                                            value={melderInfo.melderKontakt}
+                                            onChange={(e) => setMelderInfo((p) => ({ ...p, melderKontakt: e.target.value }))}
+                                            placeholder="z.B. 0123 456789"
+                                            disabled={disabled || statusIsDone}
+                                        />
+                                    </FieldRow>
+                                    <FieldRow label="Beziehung zum Kind">
+                                        <Input
+                                            value={melderInfo.melderBeziehungKind}
+                                            onChange={(e) => setMelderInfo((p) => ({ ...p, melderBeziehungKind: e.target.value }))}
+                                            placeholder="z.B. Lehrerin, Nachbarin"
+                                            disabled={disabled || statusIsDone}
+                                        />
+                                    </FieldRow>
+                                    <FieldRow label="Glaubwürdigkeit">
+                                        <select
+                                            className="h-10 w-full rounded-2xl border border-brand-border/40 bg-white px-3 text-sm text-brand-text"
+                                            value={melderInfo.melderGlaubwuerdigkeit ?? ""}
+                                            onChange={(e) => setMelderInfo((p) => ({ ...p, melderGlaubwuerdigkeit: e.target.value || null }))}
+                                            disabled={disabled || statusIsDone}
+                                        >
+                                            <option value="">—</option>
+                                            <option value="GUT">Gut</option>
+                                            <option value="MITTEL">Mittel</option>
+                                            <option value="GERING">Gering</option>
+                                        </select>
+                                    </FieldRow>
+                                    <FieldRow label="Aktueller Aufenthaltsort Kind" hint="Wo befindet sich das Kind gerade?">
+                                        <Input
+                                            value={melderInfo.kindAktuellerAufenthalt}
+                                            onChange={(e) => setMelderInfo((p) => ({ ...p, kindAktuellerAufenthalt: e.target.value }))}
+                                            placeholder="z.B. zu Hause, Schule, unbekannt"
+                                            disabled={disabled || statusIsDone}
+                                        />
+                                    </FieldRow>
+                                </div>
+
+                                {/* ── Belastungsfaktoren ── */}
+                                <Separator className="my-3" />
+                                <div className="text-sm font-semibold text-brand-text">Belastungsfaktoren</div>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                    {(
+                                        [
+                                            ["belastungKoerperlErkrankung", "Körperliche Erkrankung"],
+                                            ["belastungPsychErkrankung", "Psychische Erkrankung"],
+                                            ["belastungSucht", "Sucht"],
+                                            ["belastungHaeuslicheGewalt", "Häusliche Gewalt"],
+                                            ["belastungSuizidgefahr", "Suizidgefahr"],
+                                            ["belastungGewalttaetigeErz", "Gewalttätige Erziehung"],
+                                            ["belastungSozialeIsolation", "Soziale Isolation"],
+                                        ] as [keyof typeof melderInfo, string][]
+                                    ).map(([key, label]) => (
+                                        <div
+                                            key={key}
+                                            className={`rounded-2xl border p-3 flex items-center justify-between ${melderInfo[key] ? "border-amber-300 bg-amber-50" : "border-brand-border/25 bg-white"}`}
+                                        >
+                                            <span className={`text-sm ${melderInfo[key] ? "font-semibold text-amber-800" : "text-brand-text"}`}>{label}</span>
+                                            <Switch
+                                                checked={!!melderInfo[key]}
+                                                onCheckedChange={(v) => setMelderInfo((p) => ({ ...p, [key]: v }))}
+                                                disabled={disabled || statusIsDone}
+                                            />
+                                        </div>
+                                    ))}
+                                </div>
+                                <FieldRow label="Sonstige Belastungen">
+                                    <Textarea
+                                        rows={2}
+                                        value={melderInfo.belastungSonstiges}
+                                        onChange={(e) => setMelderInfo((p) => ({ ...p, belastungSonstiges: e.target.value }))}
+                                        placeholder="Weitere relevante Belastungsfaktoren…"
+                                        disabled={disabled || statusIsDone}
+                                    />
+                                </FieldRow>
                             </PageCard>
                         </TabsContent>
 
@@ -1762,8 +2130,101 @@ export function MeldungEditor(props: {
                                         </div>
                                     ))}
                                 </div>
+
+                                {/* ── Hausbesuch-Toggle ── */}
+                                <Separator className="my-3" />
+                                <div
+                                    className={`rounded-2xl border p-3 flex items-center justify-between ${hausbesuchEnabled ? "border-blue-300 bg-blue-50" : "border-brand-border/25 bg-white"}`}
+                                >
+                                    <div className="min-w-0">
+                                        <div className={`text-sm font-semibold ${hausbesuchEnabled ? "text-blue-800" : "text-brand-text"}`}>
+                                            Hausbesuch / Elterngespräch zu Hause
+                                        </div>
+                                        <div className="text-xs text-brand-text2 mt-0.5">
+                                            Hat ein Hausbesuch stattgefunden oder ist geplant? Aktivieren, um das Protokoll auszufüllen.
+                                        </div>
+                                    </div>
+                                    <Switch
+                                        checked={hausbesuchEnabled}
+                                        onCheckedChange={setHausbesuchEnabled}
+                                        disabled={disabled || statusIsDone}
+                                    />
+                                </div>
                             </PageCard>
                         </TabsContent>
+
+                        <TabsContent value="stuttgarter" className="m-0">
+                            <PageCard title="Stuttgarter Kinderschutzbogen" icon={<ShieldAlert className="h-4 w-4 text-brand-text2" />}>
+                                <div className="text-sm text-brand-text2 -mt-1 mb-2">
+                                    Strukturierte Risikoeinschätzung nach dem Stuttgarter Modell (§8a SGB VIII).
+                                </div>
+                                <KinderschutzbogenTabContent
+                                    katalog={stuttgarterKatalog}
+                                    katalogLoading={stuttgarterKatalogLoading}
+                                    form={stuttgarterForm}
+                                    onChange={setStuttgarterForm}
+                                    disabled={disabled || statusIsDone}
+                                />
+                            </PageCard>
+                        </TabsContent>
+
+                        <TabsContent value="dji_sicherheit" className="m-0">
+                            <PageCard title="DJI · Sicherheitseinschätzung" icon={<ShieldAlert className="h-4 w-4 text-brand-text2" />}>
+                                <div className="text-sm text-brand-text2 -mt-1 mb-2">
+                                    Kindler et al. – 5 binäre Kriterien, wird nach jedem Kontakt ausgefüllt.
+                                </div>
+                                <DjiTabContent
+                                    katalog={djiSicherheitKatalog}
+                                    katalogLoading={djiSicherheitLoading}
+                                    form={djiSicherheitForm}
+                                    onChange={setDjiSicherheitForm}
+                                    disabled={disabled || statusIsDone}
+                                />
+                            </PageCard>
+                        </TabsContent>
+
+                        <TabsContent value="dji_risiko" className="m-0">
+                            <PageCard title="DJI · Risikoeinschätzung" icon={<ShieldAlert className="h-4 w-4 text-brand-text2" />}>
+                                <div className="text-sm text-brand-text2 -mt-1 mb-2">
+                                    Kindler et al. – 6 Domänen für mittel- und längerfristiges Gefährdungsrisiko.
+                                </div>
+                                <DjiTabContent
+                                    katalog={djiRisikoKatalog}
+                                    katalogLoading={djiRisikoLoading}
+                                    form={djiRisikoForm}
+                                    onChange={setDjiRisikoForm}
+                                    disabled={disabled || statusIsDone}
+                                />
+                            </PageCard>
+                        </TabsContent>
+
+                        <TabsContent value="schutzplan" className="m-0">
+                            <PageCard title="Schutzplan" icon={<CheckCircle2 className="h-4 w-4 text-brand-text2" />}>
+                                <div className="text-sm text-brand-text2 -mt-1 mb-2">
+                                    Koordinierte Schutzmaßnahmen mit Verantwortlichen und Fristen.
+                                </div>
+                                <SchutzplanTabContent
+                                    form={schutzplanForm}
+                                    onChange={setSchutzplanForm}
+                                    disabled={disabled || statusIsDone}
+                                />
+                            </PageCard>
+                        </TabsContent>
+
+                        {hausbesuchEnabled && (
+                            <TabsContent value="hausbesuch" className="m-0">
+                                <PageCard title="Hausbesuch / Elterngespräch" icon={<Building2 className="h-4 w-4 text-brand-text2" />}>
+                                    <div className="text-sm text-brand-text2 -mt-1 mb-2">
+                                        Protokoll des Hausbesuchs oder Elterngesprächs zu Hause.
+                                    </div>
+                                    <HausbesuchTabContent
+                                        form={hausbesuchForm}
+                                        onChange={setHausbesuchForm}
+                                        disabled={disabled || statusIsDone}
+                                    />
+                                </PageCard>
+                            </TabsContent>
+                        )}
 
                         <TabsContent value="planung" className="m-0">
                             <PageCard title="Planung" icon={<ClipboardCheck className="h-4 w-4 text-brand-text2" />}>

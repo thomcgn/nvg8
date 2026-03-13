@@ -252,6 +252,7 @@ export default function ErstmeldungPage() {
                         </Card>
                     ) : meldung ? (
                         <MeldungEditor
+                            fallId={fallId}
                             value={meldung}
                             disabled={disabled}
                             onSaveDraft={onSaveDraft}
