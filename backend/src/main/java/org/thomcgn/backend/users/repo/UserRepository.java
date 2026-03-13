@@ -13,12 +13,4 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     @Query("select u from User u where u.defaultTraeger.id = :traegerId and u.enabled = true order by u.nachname, u.vorname")
     List<User> findAllEnabledByTraegerId(@Param("traegerId") Long traegerId);
-    @Query("""
-  select u from User u
-  left join fetch u.orgRoles r
-  left join fetch r.orgUnit ou
-  left join fetch ou.traeger t
-  where u.id = :id
-""")
-    Optional<User> findByIdWithOrgRoles(@Param("id") Long id);
 }
