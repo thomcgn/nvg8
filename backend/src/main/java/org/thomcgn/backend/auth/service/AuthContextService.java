@@ -48,26 +48,49 @@ public class AuthContextService {
 
         List<OrgUnitMembership> memberships = membershipRepository.findAllActiveRolesByUserId(userId);
 
-        Map<CtxKey, CtxAgg> agg = new LinkedHashMap<>();
-
+        // Pass 1: collect all (traegerId → roles) for TRAEGER-level memberships
+        Map<Long, Set<String>> traegerRoles = new LinkedHashMap<>();
         for (OrgUnitMembership m : memberships) {
             OrgUnit ou = m.getOrgUnit();
             if (ou == null || !ou.isEnabled()) continue;
             if (ou.getTraeger() == null || !ou.getTraeger().isEnabled()) continue;
+            if (ou.getType() == OrgUnitType.TRAEGER) {
+                traegerRoles.computeIfAbsent(ou.getTraeger().getId(), k -> new LinkedHashSet<>()).add(m.getRole());
+            }
+        }
+
+        Map<CtxKey, CtxAgg> agg = new LinkedHashMap<>();
+
+        // Pass 2: direct (non-TRAEGER) memberships resolve to their Einrichtung ancestor
+        for (OrgUnitMembership m : memberships) {
+            OrgUnit ou = m.getOrgUnit();
+            if (ou == null || !ou.isEnabled()) continue;
+            if (ou.getTraeger() == null || !ou.getTraeger().isEnabled()) continue;
+            if (ou.getType() == OrgUnitType.TRAEGER) continue;
 
             OrgUnit einr = findEinrichtungAncestor(ou);
-            if (einr == null) continue;
-            if (!einr.isEnabled()) continue;
+            if (einr == null || !einr.isEnabled()) continue;
             if (einr.getTraeger() == null || !einr.getTraeger().isEnabled()) continue;
 
             Long traegerId = einr.getTraeger().getId();
-            Long einrichtungId = einr.getId();
-
-            CtxKey key = new CtxKey(traegerId, einrichtungId);
+            CtxKey key = new CtxKey(traegerId, einr.getId());
             CtxAgg a = agg.computeIfAbsent(key, k ->
-                    new CtxAgg(traegerId, einr.getTraeger().getName(), einrichtungId, einr.getName())
-            );
+                    new CtxAgg(traegerId, einr.getTraeger().getName(), einr.getId(), einr.getName()));
             a.roles.add(m.getRole());
+        }
+
+        // Pass 3: for TRAEGER-level roles, add all Einrichtungen under that Träger
+        for (Map.Entry<Long, Set<String>> entry : traegerRoles.entrySet()) {
+            Long traegerId = entry.getKey();
+            Set<String> roles = entry.getValue();
+            orgUnitRepository.findAllEnabledByTraegerId(traegerId).stream()
+                    .filter(e -> e.getType() == OrgUnitType.EINRICHTUNG)
+                    .forEach(einr -> {
+                        CtxKey key = new CtxKey(traegerId, einr.getId());
+                        CtxAgg a = agg.computeIfAbsent(key, k ->
+                                new CtxAgg(traegerId, einr.getTraeger().getName(), einr.getId(), einr.getName()));
+                        a.roles.addAll(roles);
+                    });
         }
 
         List<AuthContextResponse> out = new ArrayList<>(agg.size());
