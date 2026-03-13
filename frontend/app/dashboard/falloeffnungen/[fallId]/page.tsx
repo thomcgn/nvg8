@@ -27,6 +27,7 @@ import {
     X,
     Printer,
     Info,
+    Shield,
 } from "lucide-react";
 
 /* =========================================================
@@ -1324,6 +1325,35 @@ export default function FallMeldungenPage() {
                             >
                                 <RefreshCw className="h-4 w-4" />
                                 Aktualisieren
+                            </Button>
+                        </div>
+                    </div>
+
+                    {/* Kinderschutzbogen */}
+                    <div className="rounded-2xl border border-brand-border/40 bg-white p-4 sm:p-5">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                            <div className="flex items-start gap-3 min-w-0">
+                                <Shield className="h-5 w-5 text-brand-text2 mt-0.5" />
+                                <div className="min-w-0">
+                                    <div className="text-base font-semibold text-brand-text">
+                                        Kinderschutzbogen
+                                    </div>
+                                    <div className="mt-1 text-sm text-brand-text2">
+                                        Stuttgarter Kinderschutzbogen – Gefährdungseinschätzung
+                                    </div>
+                                </div>
+                            </div>
+                            <Button
+                                variant="secondary"
+                                onClick={() =>
+                                    router.push(
+                                        `/dashboard/falloeffnungen/${fallId}/kinderschutzbogen`
+                                    )
+                                }
+                                className="gap-2 h-11 w-full sm:w-auto justify-center"
+                            >
+                                Assessments
+                                <ArrowRight className="h-4 w-4" />
                             </Button>
                         </div>
                     </div>
