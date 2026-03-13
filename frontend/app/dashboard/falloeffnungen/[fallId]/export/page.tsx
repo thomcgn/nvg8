@@ -136,7 +136,7 @@ function buildTimeline(data: ExportPayload): TimelineEntry[] {
       date: item.createdAt ?? null,
       title: `Meldung #${item.id}`,
       subtitle: item.status ?? undefined,
-      body: item.kurzbeschreibung ?? item.fachlicheBewertung ?? undefined,
+      body: item.kurzbeschreibung ?? undefined,
       section: 'Meldung',
     });
   });
@@ -229,6 +229,7 @@ export default function FallExportPage() {
 
   React.useEffect(() => {
     if (!fallId) return;
+    const fid: number = fallId;
     let cancelled = false;
 
     async function load() {
@@ -236,13 +237,13 @@ export default function FallExportPage() {
       setError(null);
       try {
         const [fallRes, meldungenRes, meldeboegenRes, kinderschutzRes, djiRes, schutzplaeneRes, hausbesucheRes] = await Promise.allSettled([
-          apiFetch<FalleroeffnungResponse>(`/falloeffnungen/${fallId}`),
-          loadByList<MeldungListItemResponse, MeldungResponse>(() => meldungApi.list(fallId), (id) => meldungApi.get(fallId, id)),
-          loadByList<MeldebogenListItem, MeldebogenResponse>(() => meldebogenApi.list(fallId), (id) => meldebogenApi.get(fallId, id)),
-          loadByList<KinderschutzbogenListItem, KinderschutzbogenResponse>(() => kinderschutzbogenApi.list(fallId), (id) => kinderschutzbogenApi.get(fallId, id)),
-          loadByList<DjiAssessmentListItem, DjiAssessmentResponse>(() => djiApi.list(fallId), (id) => djiApi.get(fallId, id)),
-          loadByList<SchutzplanListItem, SchutzplanResponse>(() => schutzplanApi.list(fallId), (id) => schutzplanApi.get(fallId, id)),
-          loadByList<HausbesuchListItem, HausbesuchResponse>(() => hausbesuchApi.list(fallId), (id) => hausbesuchApi.get(fallId, id)),
+          apiFetch<FalleroeffnungResponse>(`/falloeffnungen/${fid}`),
+          loadByList<MeldungListItemResponse, MeldungResponse>(() => meldungApi.list(fid), (id) => meldungApi.get(fid, id)),
+          loadByList<MeldebogenListItem, MeldebogenResponse>(() => meldebogenApi.list(fid), (id) => meldebogenApi.get(fid, id)),
+          loadByList<KinderschutzbogenListItem, KinderschutzbogenResponse>(() => kinderschutzbogenApi.list(fid), (id) => kinderschutzbogenApi.get(fid, id)),
+          loadByList<DjiAssessmentListItem, DjiAssessmentResponse>(() => djiApi.list(fid), (id) => djiApi.get(fid, id)),
+          loadByList<SchutzplanListItem, SchutzplanResponse>(() => schutzplanApi.list(fid), (id) => schutzplanApi.get(fid, id)),
+          loadByList<HausbesuchListItem, HausbesuchResponse>(() => hausbesuchApi.list(fid), (id) => hausbesuchApi.get(fid, id)),
         ]);
 
         if (cancelled) return;
@@ -386,8 +387,8 @@ export default function FallExportPage() {
                   <Kv label="Angelegt am" value={fmtDate(item.createdAt ?? null, true)} />
                   <Kv label="Anlässe" value={Array.isArray(item.anlassCodes) ? item.anlassCodes.map((code) => anlassLabel(code)).join(', ') : '—'} />
                   <Kv label="Kurzbeschreibung" value={item.kurzbeschreibung ?? '—'} />
-                  <Kv label="Bewertung" value={item.fachlicheBewertung ?? '—'} />
-                  <Kv label="Maßnahmen" value={item.massnahmenEmpfohlen ?? '—'} />
+                  <Kv label="Bewertung" value={item.fachText ?? '—'} />
+                  <Kv label="Maßnahmen" value={item.dringlichkeit ?? '—'} />
                   {index < data.meldungen.length - 1 ? <Separator className="mt-3" /> : null}
                 </div>
               ))}
