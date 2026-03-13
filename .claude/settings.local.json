@@ -16,7 +16,23 @@
       "Bash(ls -1 /home/tom/Schreibtisch/nvg8/backend/src/main/resources/db/migration/*.sql | sort)",
       "Bash(git -C /home/tom/Schreibtisch/nvg8 diff --name-only HEAD backend/src/main/resources/db/migration/)",
       "Bash(git -C /home/tom/Schreibtisch/nvg8 status --short backend/src/main/resources/db/migration/)",
-      "Bash(kill 50543)"
+      "Bash(kill 50543)",
+      "Bash(find /home/tom/Schreibtisch/nvg8/backend/src/main/java -name \"*Demo*\" -o -name \"*demo*\" 2>/dev/null | grep -v \".DS_Store\")",
+      "Bash(find /home/tom/Schreibtisch/nvg8/backend/src/main/java -type d -name \"*case*\" -o -name \"*8a*\" 2>/dev/null | grep -E \"java.*case|java.*8a\")",
+      "Bash(find /home/tom/Schreibtisch/nvg8/frontend -type f \\\\\\( -name \"*ssessment*\" -o -name \"*8a*\" -o -name \"*case*\" \\\\\\) 2>/dev/null | head -20)",
+      "Bash(find /home/tom/Schreibtisch/nvg8/frontend/app -type f -name \"*.tsx\" -o -name \"*.ts\" 2>/dev/null | head -30)",
+      "Bash(find /home/tom/Schreibtisch/nvg8/backend/src/main/java -name \"*Repository.java\" -type f | head -3 | xargs -I {} basename {})",
+      "WebFetch(domain:www.stuttgart.de)",
+      "WebSearch",
+      "Bash(cd /home/tom/Schreibtisch/nvg8/backend && ./mvnw clean package -DskipTests -q 2>&1 | tail -30)",
+      "Bash(find /home/tom/Schreibtisch/nvg8/frontend/app/dashboard -name \"*falloeffnungen*\" -type f 2>/dev/null | head -10)",
+      "Bash(while read:*)",
+      "Bash(do echo:*)",
+      "Read(//home/tom/Schreibtisch/nvg8/frontend/app/dashboard/**)",
+      "Bash(done)",
+      "Bash(wc -l /home/tom/Schreibtisch/nvg8/frontend/app/dashboard/falloeffnungen/\\\\[fallId\\\\]/page.tsx)",
+      "Bash(cd /home/tom/Schreibtisch/nvg8/frontend && npm run build 2>&1 | tail -40)",
+      "Bash(cd /home/tom/Schreibtisch/nvg8/backend && ./mvnw clean package -DskipTests -q 2>&1 | tail -20)"
     ]
   },
   "hooks": {
