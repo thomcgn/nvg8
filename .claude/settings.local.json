@@ -13,7 +13,10 @@
       "Bash(find /home/tom/Schreibtisch/nvg8/backend -name \"*Test*.java\" -o -name \"*Spec*.java\" 2>/dev/null | head -10)",
       "Bash(./mvnw test:*)",
       "Bash(cd /home/tom/Schreibtisch/nvg8/frontend && npm run build 2>&1 | tail -20)",
-      "Bash(ls -1 /home/tom/Schreibtisch/nvg8/backend/src/main/resources/db/migration/*.sql | sort)"
+      "Bash(ls -1 /home/tom/Schreibtisch/nvg8/backend/src/main/resources/db/migration/*.sql | sort)",
+      "Bash(git -C /home/tom/Schreibtisch/nvg8 diff --name-only HEAD backend/src/main/resources/db/migration/)",
+      "Bash(git -C /home/tom/Schreibtisch/nvg8 status --short backend/src/main/resources/db/migration/)",
+      "Bash(kill 50543)"
     ]
   },
   "hooks": {
