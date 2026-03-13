@@ -69,7 +69,7 @@ DELETE FROM kind_bezugspersonen
 DELETE FROM kinder         WHERE traeger_id = (SELECT id FROM traeger WHERE slug = 'demo-traeger');
 DELETE FROM bezugspersonen WHERE traeger_id = (SELECT id FROM traeger WHERE slug = 'demo-traeger');
 
-DELETE FROM user_org_roles WHERE user_id IN (SELECT id FROM users WHERE email IN ('demo@kidoc.local','admin@kidoc.io'));
+DELETE FROM org_unit_memberships WHERE user_id IN (SELECT id FROM users WHERE email IN ('demo@kidoc.local','admin@kidoc.io'));
 DELETE FROM users          WHERE email IN ('demo@kidoc.local','admin@kidoc.io');
 DELETE FROM org_units      WHERE traeger_id = (SELECT id FROM traeger WHERE slug = 'demo-traeger');
 DELETE FROM traeger        WHERE slug = 'demo-traeger';
@@ -102,15 +102,15 @@ VALUES ('demo@kidoc.local', '$2b$10$ttZ/gNAS8sSgJ3NRk8rnv.WfTxcbyyRPER0.XGeSNv1w
         (SELECT id FROM org_units WHERE name = 'Villa Kunterbunt' AND type = 'EINRICHTUNG'),
         now(), now(), 'D.', 'Emo');
 
-INSERT INTO user_org_roles (user_id, org_unit_id, role, enabled, created_at, updated_at) VALUES (
+INSERT INTO org_unit_memberships (user_id, org_unit_id, role, membership_type, is_primary, enabled, created_at, updated_at) VALUES (
     (SELECT id FROM users WHERE email = 'demo@kidoc.local'),
     (SELECT id FROM org_units WHERE name = 'Musterträger e.V.' AND type = 'TRAEGER'),
-    'TRAEGER_ADMIN', true, now(), now());
+    'TRAEGER_ADMIN', NULL, false, true, now(), now());
 
-INSERT INTO user_org_roles (user_id, org_unit_id, role, enabled, created_at, updated_at) VALUES (
+INSERT INTO org_unit_memberships (user_id, org_unit_id, role, membership_type, is_primary, enabled, created_at, updated_at) VALUES (
     (SELECT id FROM users WHERE email = 'demo@kidoc.local'),
     (SELECT id FROM org_units WHERE name = 'Villa Kunterbunt' AND type = 'EINRICHTUNG'),
-    'EINRICHTUNG_ADMIN', true, now(), now());
+    'EINRICHTUNG_ADMIN', NULL, false, true, now(), now());
 
 -- ═══════════════════════════════════════════════════════════════════════════
 -- KINDER
