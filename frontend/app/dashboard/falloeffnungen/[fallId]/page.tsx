@@ -57,6 +57,7 @@ export default function FallPage() {
 
     useEffect(() => {
         if (!fallId) return;
+        const fid: number = fallId;
 
         let cancelled = false;
 
@@ -66,8 +67,8 @@ export default function FallPage() {
 
             try {
                 const [fallRes, meldungenRes] = await Promise.all([
-                    apiFetch<FalleroeffnungResponse>(`/falloeffnungen/${fallId}`),
-                    meldungApi.list(fallId),
+                    apiFetch<FalleroeffnungResponse>(`/falloeffnungen/${fid}`),
+                    meldungApi.list(fid),
                 ]);
 
                 if (cancelled) return;

@@ -45,7 +45,10 @@
       "Bash(npm run:*)",
       "Bash(find /home/tom/Schreibtisch/nvg8/backend/src/main/java -name \"*Akte*\" -o -name \"*KindDossier*\" 2>/dev/null | head -20)",
       "Bash(find /home/tom/Schreibtisch/nvg8/frontend/app/dashboard/falloeffnungen/[fallId] -type f -name \"*.tsx\" | sort)",
-      "Bash(npx tsc:*)"
+      "Bash(npx tsc:*)",
+      "Bash(ls /home/tom/Schreibtisch/nvg8/frontend/app/dashboard/akten/\\\\[akteId\\\\]/ 2>/dev/null)",
+      "Bash(ls /home/tom/Schreibtisch/nvg8/frontend/app/dashboard/akten/\\\\[akteId\\\\]/\\\\[fallId\\\\]/ 2>/dev/null)",
+      "Bash(ls /home/tom/Schreibtisch/nvg8/frontend/app/dashboard/akten/\\\\[akteId\\\\]/\\\\[fallId\\\\]/meldung/ 2>/dev/null)"
     ]
   },
   "hooks": {
