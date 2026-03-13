@@ -32,7 +32,18 @@
       "Bash(done)",
       "Bash(wc -l /home/tom/Schreibtisch/nvg8/frontend/app/dashboard/falloeffnungen/\\\\[fallId\\\\]/page.tsx)",
       "Bash(cd /home/tom/Schreibtisch/nvg8/frontend && npm run build 2>&1 | tail -40)",
-      "Bash(cd /home/tom/Schreibtisch/nvg8/backend && ./mvnw clean package -DskipTests -q 2>&1 | tail -20)"
+      "Bash(cd /home/tom/Schreibtisch/nvg8/backend && ./mvnw clean package -DskipTests -q 2>&1 | tail -20)",
+      "Bash(ls -la /home/tom/Schreibtisch/nvg8/frontend/app/dashboard/falloeffnungen/\\\\[fallId\\\\]/kinderschutzbogen/)",
+      "Bash(find /home/tom/Schreibtisch/nvg8/frontend/app/dashboard/falloeffnungen/\\\\[fallId\\\\]/kinderschutzbogen -type f -name \"*.tsx\" -o -name \"*.ts\" | sort)",
+      "Bash(find /home/tom/Schreibtisch/nvg8/backend/src/main/java/org/thomcgn/backend -type d -name \"model\" | head -10 | xargs -I {} ls {})",
+      "WebFetch(domain:www.dji.de)",
+      "Bash(pdftotext \"/home/tom/.claude/projects/-home-tom-Schreibtisch-nvg8/546ffbe4-e965-4058-8ddd-aa6d4e3b9aed/tool-results/webfetch-1773401184793-36vnkb.pdf\" /tmp/asd_handbuch.txt)",
+      "Read(//tmp/**)",
+      "Bash(ls /home/tom/Schreibtisch/nvg8/frontend/app/dashboard/falloeffnungen/[fallId]/)",
+      "Bash(ls /home/tom/Schreibtisch/nvg8/frontend/app/dashboard/falloeffnungen/[fallId]/dji/)",
+      "Bash(cd /home/tom/Schreibtisch/nvg8/frontend && npm run build 2>&1 | grep -E \"error|Error|warn|Route\" | head -50)",
+      "Bash(npm run:*)",
+      "Bash(find /home/tom/Schreibtisch/nvg8/backend/src/main/java -name \"*Akte*\" -o -name \"*KindDossier*\" 2>/dev/null | head -20)"
     ]
   },
   "hooks": {

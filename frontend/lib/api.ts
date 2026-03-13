@@ -3,7 +3,6 @@ import { apiSwitchContext } from "@/lib/context";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || "";
 
-
 export type ProblemDetails = {
   status?: number;
   title?: string;
@@ -52,8 +51,8 @@ function asProblemDetails(body: unknown): ProblemDetails | undefined {
 }
 
 async function rawFetch<T>(
-    path: string,
-    options: Omit<RequestInit, "body"> & { body?: any } = {}
+  path: string,
+  options: Omit<RequestInit, "body"> & { body?: any } = {}
 ): Promise<T> {
   const normalizedPath = path.startsWith("/") ? path : `/${path}`;
 
@@ -78,11 +77,11 @@ async function rawFetch<T>(
         const body = await res.json();
         problem = asProblemDetails(body);
         message =
-            problem?.detail ||
-            problem?.title ||
-            (typeof (body as any)?.message === "string"
-                ? (body as any).message
-                : message);
+          problem?.detail ||
+          problem?.title ||
+          (typeof (body as any)?.message === "string"
+            ? (body as any).message
+            : message);
       } else {
         const text = await res.text();
         if (text) message = text;
@@ -101,8 +100,8 @@ async function rawFetch<T>(
 }
 
 export async function apiFetch<T>(
-    path: string,
-    options: Omit<RequestInit, "body"> & { body?: any } = {}
+  path: string,
+  options: Omit<RequestInit, "body"> & { body?: any } = {}
 ): Promise<T> {
   try {
     return await rawFetch<T>(path, options);
@@ -110,10 +109,10 @@ export async function apiFetch<T>(
     if (!(e instanceof ApiError)) throw e;
 
     const isContextRequired =
-        e.status === 403 &&
-        (e.code === "CONTEXT_REQUIRED" ||
-            e.problem?.code === "CONTEXT_REQUIRED" ||
-            e.message.includes("Switch context"));
+      e.status === 403 &&
+      (e.code === "CONTEXT_REQUIRED" ||
+        e.problem?.code === "CONTEXT_REQUIRED" ||
+        e.message.includes("Switch context"));
 
     const desiredEinrichtungId = getCurrentEinrichtungId();
 
@@ -139,7 +138,7 @@ export type FallMeldungListItem = {
 };
 
 export async function listMeldungenByFallId(fallId: number) {
-  // Dein Backend liefert: https://localhost:8080/falloeffnungen/1/meldungen
-  // -> das ist KEIN /api-prefix. Deshalb exakt so:
-  return apiFetch<FallMeldungListItem[]>(`/falloeffnungen/${fallId}/meldungen`, { method: "GET" });
+  return apiFetch<FallMeldungListItem[]>(`/falloeffnungen/${fallId}/meldungen`, {
+    method: "GET",
+  });
 }

@@ -1,8 +1,9 @@
-package org.thomcgn.backend.support.github;
+package org.thomcgn.backend.support.github.service;
 
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
+import org.thomcgn.backend.support.github.GithubProperties;
 
 import java.util.List;
 import java.util.Map;

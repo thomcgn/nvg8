@@ -1,1 +1,4 @@
 /.claude/
+data/nvg8db.lock.db
+data/nvg8db.mv.db
+data/nvg8db.trace.db
