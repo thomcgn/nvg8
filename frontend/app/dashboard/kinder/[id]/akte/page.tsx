@@ -174,7 +174,7 @@
                                 <CardContent className="text-sm text-muted-foreground">Bitte einen Moment…</CardContent>
                             </Card>
                         ) : meldung ? (
-                            <MeldungEditor value={meldung} disabled={disabled} onSaveDraft={onSaveDraft} onSubmit={onSubmit} />
+                            <MeldungEditor fallId={fallId ?? 0} value={meldung} disabled={disabled} onSaveDraft={onSaveDraft} onSubmit={onSubmit} />
                         ) : null}
                     </div>
                 </div>

@@ -2,8 +2,6 @@ import { apiFetch } from "@/lib/api";
 
 const base = (fallId: number) => `/falloeffnungen/${fallId}/kinderschutzbogen`;
 
-// ─── Typen ──────────────────────────────────────────────────────────────────
-
 export type KatalogItem = {
     code: string;
     label: string;
@@ -65,8 +63,6 @@ export type CreateKinderschutzbogenRequest = {
     gesamteinschaetzungFreitext: string | null;
 };
 
-// ─── API ────────────────────────────────────────────────────────────────────
-
 export const kinderschutzbogenApi = {
     katalog: (fallId: number) =>
         apiFetch<KatalogResponse>(`${base(fallId)}/katalog`),
@@ -83,8 +79,6 @@ export const kinderschutzbogenApi = {
     update: (fallId: number, id: number, req: CreateKinderschutzbogenRequest) =>
         apiFetch<KinderschutzbogenResponse>(`${base(fallId)}/${id}`, { method: "PUT", body: req }),
 };
-
-// ─── Hilfsfunktionen ────────────────────────────────────────────────────────
 
 export const RATINGS = [-2, -1, 1, 2] as const;
 export type Rating = (typeof RATINGS)[number];

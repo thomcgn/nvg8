@@ -1,1 +1,5 @@
 /.claude/
+data/nvg8db.lock.db
+data/nvg8db.mv.db
+data/nvg8db.trace.db
+/frontend/lib/case-engine/PDF_EXPORT_NOTES.md
