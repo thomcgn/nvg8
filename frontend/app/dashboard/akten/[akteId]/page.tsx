@@ -29,6 +29,21 @@ function safeNumber(v: unknown): number | null {
     return null;
 }
 
+function asRecord(value: unknown): Record<string, unknown> | null {
+    return typeof value === "object" && value !== null ? (value as Record<string, unknown>) : null;
+}
+
+function getProp(value: unknown, key: string): unknown {
+    const rec = asRecord(value);
+    return rec ? rec[key] : undefined;
+}
+
+function errorMessage(error: unknown, fallback: string): string {
+    if (error instanceof Error && error.message.trim()) return error.message;
+    if (typeof error === "string" && error.trim()) return error;
+    return fallback;
+}
+
 function formatDateTimeDE(v?: string | null) {
     if (!v) return "—";
     const d = new Date(v);
@@ -61,7 +76,7 @@ function isMeldungLocked(status: string | null | undefined) {
 
 function extractRequestedEinrichtungId(err: unknown): number | null {
     if (!(err instanceof ApiError)) return null;
-    const meta = err.problem?.meta as any;
+    const meta = asRecord(err.problem?.meta);
 
     const candidates = [
         meta?.requestedEinrichtungOrgUnitId,
@@ -126,8 +141,7 @@ export default function AkteDetailPage() {
 
     // ✅ Route ist /dashboard/akten/[id]
     const akteId = useMemo(() => {
-        const p: any = params as any;
-        return safeNumber(p?.akteId) ?? safeNumber(p?.id) ?? null;
+        return safeNumber(getProp(params, "akteId")) ?? safeNumber(getProp(params, "id")) ?? null;
     }, [params]);
     const [akte, setAkte] = React.useState<AkteResponse | null>(null);
     const [faelle, setFaelle] = React.useState<FallListResponse | null>(null);
@@ -166,8 +180,8 @@ export default function AkteDetailPage() {
                 await loadContext();
                 setContextRequired(false);
                 await retryFn();
-            } catch (e: any) {
-                setContextHint(e?.message || "Kontext konnte nicht gewechselt werden.");
+            } catch (e: unknown) {
+                setContextHint(errorMessage(e, "Kontext konnte nicht gewechselt werden."));
             } finally {
                 setSwitchingContext(false);
             }
@@ -199,7 +213,7 @@ export default function AkteDetailPage() {
             setLoadingMeldungStates(true);
             const map = await loadMeldungStatusByFallIds(ids);
             setMeldungStatusByFallId(map);
-        } catch (e: any) {
+        } catch (e: unknown) {
             if (e instanceof ApiError && e.code === "CONTEXT_REQUIRED") {
                 setContextRequired(true);
                 setErr(null);
@@ -214,7 +228,7 @@ export default function AkteDetailPage() {
                 setFaelle(null);
                 setMeldungStatusByFallId({});
             } else {
-                setErr(e?.message || "Konnte Akte nicht laden.");
+                setErr(errorMessage(e, "Konnte Akte nicht laden."));
                 setAkte(null);
                 setFaelle(null);
                 setMeldungStatusByFallId({});
@@ -229,7 +243,7 @@ export default function AkteDetailPage() {
         load();
     }, [load]);
 
-    const fallItems = faelle?.items || [];
+    const fallItems = useMemo(() => faelle?.items ?? [], [faelle?.items]);
     const total = faelle?.total ?? fallItems.length ?? 0;
 
     const fallWithDraftMeldung = useMemo(
@@ -270,7 +284,7 @@ export default function AkteDetailPage() {
 
         try {
             await doCreate();
-        } catch (e: any) {
+        } catch (e: unknown) {
             if (e instanceof ApiError && e.code === "CONTEXT_REQUIRED") {
                 setContextRequired(true);
 
@@ -285,7 +299,7 @@ export default function AkteDetailPage() {
                 return;
             }
 
-            setErr(e?.message || "Fall konnte nicht erstellt werden.");
+            setErr(errorMessage(e, "Fall konnte nicht erstellt werden."));
         }
     }, [
         akteId,
@@ -438,7 +452,8 @@ export default function AkteDetailPage() {
                                         const msIsDraft = ms === "ENTWURF" || ms === "DRAFT";
                                         const msLocked = isMeldungLocked(msRaw);
 
-                                        const opened = (f as any)?.openedAt ?? (f as any)?.createdAt ?? null;
+                                        const openedRaw = (f as Record<string, unknown>)?.openedAt ?? f.createdAt ?? null;
+                                        const opened = typeof openedRaw === "string" ? openedRaw : null;
 
                                         return (
                                             <div key={f.id} className="rounded-2xl border border-brand-border/25 bg-white p-3">
@@ -446,7 +461,7 @@ export default function AkteDetailPage() {
                                                     <div className="min-w-0">
                                                         <div className="flex items-center gap-2 min-w-0">
                                                             <FileText className="h-4 w-4 text-brand-text2 shrink-0" />
-                                                            <div className="text-sm font-semibold text-brand-text break-words">
+                                                            <div className="text-sm font-semibold text-brand-text wrap-break-word">
                                                                 {f.fallNo ? `Fall ${f.fallNo}` : "Fall"} · {f.aktenzeichen || `#${f.id}`}
                                                             </div>
                                                         </div>
@@ -454,7 +469,7 @@ export default function AkteDetailPage() {
                                                     </div>
 
                                                     <div className="flex flex-wrap items-center gap-2">
-                                                        <Badge tone={toneForStatus((f as any)?.status)}>{(f as any)?.status || "—"}</Badge>
+                                                        <Badge tone={toneForStatus(f.status)}>{f.status || "—"}</Badge>
 
                                                         {loadingMeldungStates ? (
                                                             <Badge tone="neutral">Meldung…</Badge>

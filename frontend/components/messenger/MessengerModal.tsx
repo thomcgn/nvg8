@@ -32,12 +32,12 @@ type View = "list" | "detail";
 
 export function MessengerModal({
     open,
-    onClose,
-    onUnreadChange,
+    onCloseAction,
+    onUnreadChangeAction,
 }: {
     open: boolean;
-    onClose: () => void;
-    onUnreadChange?: () => void;
+    onCloseAction: () => void;
+    onUnreadChangeAction?: () => void;
 }) {
     const [tab, setTab] = useState<Tab>("inbox");
     const [view, setView] = useState<View>("list");
@@ -113,7 +113,7 @@ export function MessengerModal({
         setErr("");
         if (tab === "inbox") loadInbox();
         else if (tab === "sent") loadSent();
-    }, [tab]);
+    }, [tab, open]);
 
     async function openDetail(messageId: number, recipientRowId?: number) {
         setErr("");
@@ -130,7 +130,7 @@ export function MessengerModal({
                         item.recipientRowId === recipientRowId ? { ...item, isRead: true } : item
                     )
                 );
-                onUnreadChange?.();
+                onUnreadChangeAction?.();
             }
         } catch {
             setErr("Nachricht konnte nicht geladen werden.");
@@ -147,7 +147,7 @@ export function MessengerModal({
                 setView("list");
                 setDetail(null);
             }
-            onUnreadChange?.();
+            onUnreadChangeAction?.();
         } catch {
             setErr("Löschen fehlgeschlagen.");
         }
@@ -196,7 +196,7 @@ export function MessengerModal({
         <div className="fixed inset-0 z-50">
             <button
                 aria-label="Schließen"
-                onClick={onClose}
+                onClick={onCloseAction}
                 className="absolute inset-0 bg-black/40"
             />
 
@@ -208,7 +208,7 @@ export function MessengerModal({
                         <div className="text-xs text-brand-text2">Internes Postfach</div>
                     </div>
                     <button
-                        onClick={onClose}
+                        onClick={onCloseAction}
                         className="h-10 w-10 rounded-xl border border-brand-border bg-white/80 hover:bg-brand-teal/15 transition grid place-items-center"
                     >
                         <X className="h-4 w-4" />

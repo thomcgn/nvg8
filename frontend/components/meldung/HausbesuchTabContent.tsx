@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { AMPEL_LABELS, AMPEL_CLASSES } from "@/lib/api/hausbesuch";
 
-export interface HausbesuchState {
+export type HausbesuchState = {
     besuchsdatum: string;
     besuchszeitVon: string;
     besuchszeitBis: string;
@@ -60,11 +60,11 @@ export function defaultHausbesuchState(): HausbesuchState {
 
 const AMPEL_CODES = ["GRUEN", "GELB", "ROT"] as const;
 
-interface Props {
+type Props = {
     form: HausbesuchState;
     onChange: (form: HausbesuchState) => void;
     disabled?: boolean;
-}
+};
 
 function TextAreaField({
     label,
@@ -89,7 +89,7 @@ function TextAreaField({
     );
 }
 
-export function HausbesuchTabContent({ form, onChange, disabled }: Props) {
+export function HausbesuchTabContent({ form, onChange: onChangeAction, disabled }: Props) {
     return (
         <div className="space-y-4">
             <Card className="border border-brand-border/40 shadow-sm">
@@ -103,7 +103,7 @@ export function HausbesuchTabContent({ form, onChange, disabled }: Props) {
                             <input
                                 type="date"
                                 value={form.besuchsdatum}
-                                onChange={(e) => onChange({ ...form, besuchsdatum: e.target.value })}
+                                onChange={(e) => onChangeAction({ ...form, besuchsdatum: e.target.value })}
                                 disabled={disabled}
                                 className="border border-brand-border/40 rounded-xl px-3 py-2 text-sm text-brand-text bg-white w-full"
                             />
@@ -113,7 +113,7 @@ export function HausbesuchTabContent({ form, onChange, disabled }: Props) {
                             <input
                                 type="time"
                                 value={form.besuchszeitVon}
-                                onChange={(e) => onChange({ ...form, besuchszeitVon: e.target.value })}
+                                onChange={(e) => onChangeAction({ ...form, besuchszeitVon: e.target.value })}
                                 disabled={disabled}
                                 className="border border-brand-border/40 rounded-xl px-3 py-2 text-sm text-brand-text bg-white w-full"
                             />
@@ -123,7 +123,7 @@ export function HausbesuchTabContent({ form, onChange, disabled }: Props) {
                             <input
                                 type="time"
                                 value={form.besuchszeitBis}
-                                onChange={(e) => onChange({ ...form, besuchszeitBis: e.target.value })}
+                                onChange={(e) => onChangeAction({ ...form, besuchszeitBis: e.target.value })}
                                 disabled={disabled}
                                 className="border border-brand-border/40 rounded-xl px-3 py-2 text-sm text-brand-text bg-white w-full"
                             />
@@ -133,7 +133,7 @@ export function HausbesuchTabContent({ form, onChange, disabled }: Props) {
                         <label className="text-xs font-semibold text-brand-text2 block mb-1">Anwesende Personen</label>
                         <Input
                             value={form.anwesende}
-                            onChange={(e) => onChange({ ...form, anwesende: e.target.value })}
+                            onChange={(e) => onChangeAction({ ...form, anwesende: e.target.value })}
                             placeholder="z.B. Mutter, Kind, Vater…"
                             disabled={disabled}
                             className="text-sm"
@@ -147,11 +147,11 @@ export function HausbesuchTabContent({ form, onChange, disabled }: Props) {
                     <CardTitle className="text-base font-semibold text-brand-text">Wohnsituation</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3">
-                    <TextAreaField label="Ordnung / Sauberkeit" value={form.whgOrdnung} onChange={(v) => onChange({ ...form, whgOrdnung: v })} disabled={disabled} />
-                    <TextAreaField label="Hygiene" value={form.whgHygiene} onChange={(v) => onChange({ ...form, whgHygiene: v })} disabled={disabled} />
-                    <TextAreaField label="Nahrungsversorgung" value={form.whgNahrungsversorgung} onChange={(v) => onChange({ ...form, whgNahrungsversorgung: v })} disabled={disabled} />
-                    <TextAreaField label="Unfallgefahren" value={form.whgUnfallgefahren} onChange={(v) => onChange({ ...form, whgUnfallgefahren: v })} disabled={disabled} />
-                    <TextAreaField label="Sonstiges" value={form.whgSonstiges} onChange={(v) => onChange({ ...form, whgSonstiges: v })} disabled={disabled} />
+                    <TextAreaField label="Ordnung / Sauberkeit" value={form.whgOrdnung} onChange={(v) => onChangeAction({ ...form, whgOrdnung: v })} disabled={disabled} />
+                    <TextAreaField label="Hygiene" value={form.whgHygiene} onChange={(v) => onChangeAction({ ...form, whgHygiene: v })} disabled={disabled} />
+                    <TextAreaField label="Nahrungsversorgung" value={form.whgNahrungsversorgung} onChange={(v) => onChangeAction({ ...form, whgNahrungsversorgung: v })} disabled={disabled} />
+                    <TextAreaField label="Unfallgefahren" value={form.whgUnfallgefahren} onChange={(v) => onChangeAction({ ...form, whgUnfallgefahren: v })} disabled={disabled} />
+                    <TextAreaField label="Sonstiges" value={form.whgSonstiges} onChange={(v) => onChangeAction({ ...form, whgSonstiges: v })} disabled={disabled} />
                 </CardContent>
             </Card>
 
@@ -160,11 +160,11 @@ export function HausbesuchTabContent({ form, onChange, disabled }: Props) {
                     <CardTitle className="text-base font-semibold text-brand-text">Beobachtungen Kind</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3">
-                    <TextAreaField label="Erscheinungsbild" value={form.kindErscheinungsbild} onChange={(v) => onChange({ ...form, kindErscheinungsbild: v })} disabled={disabled} />
-                    <TextAreaField label="Verhalten" value={form.kindVerhalten} onChange={(v) => onChange({ ...form, kindVerhalten: v })} disabled={disabled} />
-                    <TextAreaField label="Stimmung" value={form.kindStimmung} onChange={(v) => onChange({ ...form, kindStimmung: v })} disabled={disabled} />
-                    <TextAreaField label="Äußerungen" value={form.kindAeusserungen} onChange={(v) => onChange({ ...form, kindAeusserungen: v })} disabled={disabled} />
-                    <TextAreaField label="Hinweise auf Gefährdung" value={form.kindHinweiseGefaehrdung} onChange={(v) => onChange({ ...form, kindHinweiseGefaehrdung: v })} disabled={disabled} />
+                    <TextAreaField label="Erscheinungsbild" value={form.kindErscheinungsbild} onChange={(v) => onChangeAction({ ...form, kindErscheinungsbild: v })} disabled={disabled} />
+                    <TextAreaField label="Verhalten" value={form.kindVerhalten} onChange={(v) => onChangeAction({ ...form, kindVerhalten: v })} disabled={disabled} />
+                    <TextAreaField label="Stimmung" value={form.kindStimmung} onChange={(v) => onChangeAction({ ...form, kindStimmung: v })} disabled={disabled} />
+                    <TextAreaField label="Äußerungen" value={form.kindAeusserungen} onChange={(v) => onChangeAction({ ...form, kindAeusserungen: v })} disabled={disabled} />
+                    <TextAreaField label="Hinweise auf Gefährdung" value={form.kindHinweiseGefaehrdung} onChange={(v) => onChangeAction({ ...form, kindHinweiseGefaehrdung: v })} disabled={disabled} />
                 </CardContent>
             </Card>
 
@@ -173,10 +173,10 @@ export function HausbesuchTabContent({ form, onChange, disabled }: Props) {
                     <CardTitle className="text-base font-semibold text-brand-text">Beobachtungen Bezugspersonen</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3">
-                    <TextAreaField label="Erscheinungsbild" value={form.bpErscheinungsbild} onChange={(v) => onChange({ ...form, bpErscheinungsbild: v })} disabled={disabled} />
-                    <TextAreaField label="Verhalten" value={form.bpVerhalten} onChange={(v) => onChange({ ...form, bpVerhalten: v })} disabled={disabled} />
-                    <TextAreaField label="Umgang mit Kind" value={form.bpUmgangKind} onChange={(v) => onChange({ ...form, bpUmgangKind: v })} disabled={disabled} />
-                    <TextAreaField label="Kooperation" value={form.bpKooperation} onChange={(v) => onChange({ ...form, bpKooperation: v })} disabled={disabled} />
+                    <TextAreaField label="Erscheinungsbild" value={form.bpErscheinungsbild} onChange={(v) => onChangeAction({ ...form, bpErscheinungsbild: v })} disabled={disabled} />
+                    <TextAreaField label="Verhalten" value={form.bpVerhalten} onChange={(v) => onChangeAction({ ...form, bpVerhalten: v })} disabled={disabled} />
+                    <TextAreaField label="Umgang mit Kind" value={form.bpUmgangKind} onChange={(v) => onChangeAction({ ...form, bpUmgangKind: v })} disabled={disabled} />
+                    <TextAreaField label="Kooperation" value={form.bpKooperation} onChange={(v) => onChangeAction({ ...form, bpKooperation: v })} disabled={disabled} />
                 </CardContent>
             </Card>
 
@@ -192,7 +192,7 @@ export function HausbesuchTabContent({ form, onChange, disabled }: Props) {
                                 <button
                                     key={a}
                                     disabled={disabled}
-                                    onClick={() => onChange({ ...form, einschaetzungAmpel: form.einschaetzungAmpel === a ? null : a })}
+                                    onClick={() => onChangeAction({ ...form, einschaetzungAmpel: form.einschaetzungAmpel === a ? null : a })}
                                     className={`rounded-xl border px-3 py-1.5 text-sm font-medium transition-colors disabled:opacity-50 ${
                                         form.einschaetzungAmpel === a
                                             ? AMPEL_CLASSES[a]
@@ -204,14 +204,14 @@ export function HausbesuchTabContent({ form, onChange, disabled }: Props) {
                             ))}
                         </div>
                     </div>
-                    <TextAreaField label="Einschätzungstext" value={form.einschaetzungText} onChange={(v) => onChange({ ...form, einschaetzungText: v })} placeholder="Fachliche Einschätzung…" rows={3} disabled={disabled} />
-                    <TextAreaField label="Nächste Schritte" value={form.naechsteSchritte} onChange={(v) => onChange({ ...form, naechsteSchritte: v })} placeholder="Geplante Folgeschritte…" rows={2} disabled={disabled} />
+                    <TextAreaField label="Einschätzungstext" value={form.einschaetzungText} onChange={(v) => onChangeAction({ ...form, einschaetzungText: v })} placeholder="Fachliche Einschätzung…" rows={3} disabled={disabled} />
+                    <TextAreaField label="Nächste Schritte" value={form.naechsteSchritte} onChange={(v) => onChangeAction({ ...form, naechsteSchritte: v })} placeholder="Geplante Folgeschritte…" rows={2} disabled={disabled} />
                     <div>
                         <label className="text-xs font-semibold text-brand-text2 block mb-1">Nächster Termin</label>
                         <input
                             type="date"
                             value={form.naechsterTermin}
-                            onChange={(e) => onChange({ ...form, naechsterTermin: e.target.value })}
+                            onChange={(e) => onChangeAction({ ...form, naechsterTermin: e.target.value })}
                             disabled={disabled}
                             className="border border-brand-border/40 rounded-xl px-3 py-2 text-sm text-brand-text bg-white focus:outline-none"
                         />

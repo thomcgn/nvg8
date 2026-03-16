@@ -26,6 +26,12 @@ function dringLabel(d: string | null | undefined): string | null {
     return d;
 }
 
+function errorMessage(error: unknown, fallback: string): string {
+    if (error instanceof Error && error.message.trim()) return error.message;
+    if (typeof error === "string" && error.trim()) return error;
+    return fallback;
+}
+
 function FallList() {
     const router = useRouter();
     const searchParams = useSearchParams();
@@ -53,8 +59,8 @@ function FallList() {
                 `/falloeffnungen?${params.toString()}`
             );
             setData(res);
-        } catch (e: any) {
-            setError(e?.message || "Konnte Fälle nicht laden.");
+        } catch (e: unknown) {
+            setError(errorMessage(e, "Konnte Fälle nicht laden."));
             setData(null);
         } finally {
             setLoading(false);
@@ -89,7 +95,7 @@ function FallList() {
     return (
         <AuthGate>
             <div className="min-h-screen bg-brand-bg overflow-x-hidden">
-                <Topbar title={title} onSearch={setQ} />
+                <Topbar title={title} onSearchAction={setQ} />
 
                 <div className="mx-auto w-full max-w-5xl px-4 pb-8 pt-4 sm:px-6">
                     {error && (
@@ -113,8 +119,8 @@ function FallList() {
                                     </div>
                                 )}
                                 {items.map((item: FalleroeffnungListItem) => {
-                                    const dring = dringLabel((item as any).dringlichkeit);
-                                    const isAkut = (item as any).akutGefahrImVerzug === true;
+                                    const dring = dringLabel(item.dringlichkeit);
+                                    const isAkut = item.akutGefahrImVerzug === true;
                                     return (
                                         <button
                                             key={item.id}

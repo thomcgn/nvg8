@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AuthGate } from "@/components/AuthGate";
-import { TopbarConnected as Topbar } from "@/components/layout/TopbarConnected";;
+import { TopbarConnected as Topbar } from "@/components/layout/TopbarConnected";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -115,7 +115,7 @@ type BezugspersonListItem = {
 };
 
 type BezugspersonSearchResponse = {
-    items: any[];
+    items: unknown[];
     total: number;
     page: number;
     size: number;
@@ -142,11 +142,22 @@ type BezugspersonDetail = {
 };
 
 type KindSearchResponse = {
-    items: any[];
+    items: unknown[];
     total: number;
     page: number;
     size: number;
 };
+
+type UnknownRecord = Record<string, unknown>;
+
+function asRecord(value: unknown): UnknownRecord | null {
+    return typeof value === "object" && value !== null ? (value as UnknownRecord) : null;
+}
+
+function getProp(value: unknown, key: string): unknown {
+    const rec = asRecord(value);
+    return rec ? rec[key] : undefined;
+}
 
 const GENDER_OPTIONS: Array<{ value: Gender; label: string }> = [
     { value: "MAENNLICH", label: "Männlich" },
@@ -227,32 +238,40 @@ function sameIgnoreCase(a: string, b: string) {
     return a.trim().toLowerCase() === b.trim().toLowerCase();
 }
 
-function normalizeBpListItem(raw: any): BezugspersonListItem {
+function normalizeBpListItem(raw: unknown): BezugspersonListItem {
+    const rec = asRecord(raw);
     return {
-        id: Number(raw?.id),
+        id: Number(rec?.id),
         displayName:
-            String(raw?.displayName ?? raw?.name ?? raw?.fullName ?? "").trim() ||
+            String(rec?.displayName ?? rec?.name ?? rec?.fullName ?? "").trim() ||
             "(ohne Namen)",
-        geburtsdatum: raw?.geburtsdatum ?? raw?.birthDate ?? raw?.dateOfBirth ?? null,
-        telefon: raw?.telefon ?? raw?.phone ?? null,
-        kontaktEmail: raw?.kontaktEmail ?? raw?.email ?? null,
+        geburtsdatum: (rec?.geburtsdatum ?? rec?.birthDate ?? rec?.dateOfBirth ?? null) as string | null,
+        telefon: (rec?.telefon ?? rec?.phone ?? null) as string | null,
+        kontaktEmail: (rec?.kontaktEmail ?? rec?.email ?? null) as string | null,
     };
 }
 
-function normalizeBpDetail(raw: any): BezugspersonDetail {
+function normalizeBpDetail(raw: unknown): BezugspersonDetail {
+    const rec = asRecord(raw);
+    const addr = asRecord(rec?.adresse);
     return {
-        id: Number(raw?.id),
-        displayName: raw?.displayName ?? null,
-        vorname: raw?.vorname ?? null,
-        nachname: raw?.nachname ?? null,
-        geburtsdatum: raw?.geburtsdatum ?? null,
-        telefon: raw?.telefon ?? null,
-        kontaktEmail: raw?.kontaktEmail ?? null,
-        strasse: raw?.strasse ?? raw?.adresse?.strasse ?? null,
-        hausnummer: raw?.hausnummer ?? raw?.adresse?.hausnummer ?? null,
-        plz: raw?.plz ?? raw?.adresse?.plz ?? null,
-        ort: raw?.ort ?? raw?.adresse?.ort ?? null,
-        adresse: raw?.adresse ?? null,
+        id: Number(rec?.id),
+        displayName: (rec?.displayName ?? null) as string | null,
+        vorname: (rec?.vorname ?? null) as string | null,
+        nachname: (rec?.nachname ?? null) as string | null,
+        geburtsdatum: (rec?.geburtsdatum ?? null) as string | null,
+        telefon: (rec?.telefon ?? null) as string | null,
+        kontaktEmail: (rec?.kontaktEmail ?? null) as string | null,
+        strasse: (rec?.strasse ?? addr?.strasse ?? null) as string | null,
+        hausnummer: (rec?.hausnummer ?? addr?.hausnummer ?? null) as string | null,
+        plz: (rec?.plz ?? addr?.plz ?? null) as string | null,
+        ort: (rec?.ort ?? addr?.ort ?? null) as string | null,
+        adresse: addr ? {
+            strasse: (addr.strasse ?? null) as string | null,
+            hausnummer: (addr.hausnummer ?? null) as string | null,
+            plz: (addr.plz ?? null) as string | null,
+            ort: (addr.ort ?? null) as string | null,
+        } : null,
     };
 }
 
@@ -314,7 +333,7 @@ function ConfirmRow({
     return (
         <div className="grid grid-cols-[120px_1fr] gap-3 py-2 sm:grid-cols-[140px_1fr]">
             <div className="text-xs text-muted-foreground">{label}</div>
-            <div className="text-sm font-medium leading-snug break-words whitespace-pre-wrap">
+            <div className="text-sm font-medium leading-snug wrap-break-word whitespace-pre-wrap">
                 {children}
             </div>
         </div>
@@ -550,18 +569,6 @@ export default function KindWizardPage() {
     }, [bpOpen]);
 
     // --------- Validation ---------
-    const canNext1 = useMemo(() => {
-        return (
-            kVorname.trim().length > 0 &&
-            kNachname.trim().length > 0 &&
-            kGeb.trim().length > 0 &&
-            kGender !== "UNBEKANNT" &&
-            kStr.trim().length > 0 &&
-            kHnr.trim().length > 0 &&
-            kPlz.trim().length > 0 &&
-            kOrt.trim().length > 0
-        );
-    }, [kVorname, kNachname, kGeb, kGender, kStr, kHnr, kPlz, kOrt]);
 
     const canNext3 = useMemo(() => {
         if (!bpValidFrom.trim()) return false;
@@ -621,13 +628,14 @@ export default function KindWizardPage() {
     }
 
     // --------- Duplicate checks (best-effort via search endpoints) ---------
-    function normalizeKindListItem(raw: any) {
+    function normalizeKindListItem(raw: unknown) {
+        const rec = asRecord(raw);
         return {
-            id: Number(raw?.id),
-            vorname: String(raw?.vorname ?? raw?.firstName ?? "").trim(),
-            nachname: String(raw?.nachname ?? raw?.lastName ?? "").trim(),
-            geburtsdatum: raw?.geburtsdatum ?? raw?.birthDate ?? raw?.dateOfBirth ?? null,
-            displayName: String(raw?.displayName ?? raw?.name ?? "").trim(),
+            id: Number(rec?.id),
+            vorname: String(rec?.vorname ?? rec?.firstName ?? "").trim(),
+            nachname: String(rec?.nachname ?? rec?.lastName ?? "").trim(),
+            geburtsdatum: (rec?.geburtsdatum ?? rec?.birthDate ?? rec?.dateOfBirth ?? null) as string | null,
+            displayName: String(rec?.displayName ?? rec?.name ?? "").trim(),
         };
     }
 
@@ -798,10 +806,14 @@ export default function KindWizardPage() {
 
             setConfirmOpen(false);
             router.push(`/dashboard/kinder/${res.kindId}`);
-        } catch (e: any) {
-            setErr(e?.message || "Konnte Kind nicht anlegen.");
+        } catch (e: unknown) {
+            const msg =
+                typeof getProp(e, "message") === "string"
+                    ? String(getProp(e, "message"))
+                    : "Konnte Kind nicht anlegen.";
+            setErr(msg);
             toast.error("Speichern fehlgeschlagen", {
-                description: e?.message || "Bitte erneut versuchen.",
+                description: msg || "Bitte erneut versuchen.",
                 duration: 5000,
             });
         } finally {
@@ -1024,7 +1036,7 @@ export default function KindWizardPage() {
                                             ref={refFoerderDetails}
                                             value={foerderbedarfDetails}
                                             onChange={(e) => setFoerderbedarfDetails(e.target.value)}
-                                            className="min-h-[96px]"
+                                            className="min-h-24"
                                             placeholder="z.B. Logopädie, Motorik, Sprache…"
                                         />
                                     </Field>
@@ -1036,7 +1048,7 @@ export default function KindWizardPage() {
                                         ref={!foerderbedarf ? refHinweise : undefined}
                                         value={gesundheit}
                                         onChange={(e) => setGesundheit(e.target.value)}
-                                        className="min-h-[96px]"
+                                        className="min-h-24"
                                         placeholder="Optional…"
                                     />
                                 </Field>
@@ -1171,7 +1183,7 @@ export default function KindWizardPage() {
                                                             </Button>
                                                         </PopoverTrigger>
 
-                                                        <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0">
+                                                        <PopoverContent className="w-(--radix-popover-trigger-width) p-0">
                                                             <Command shouldFilter={false}>
                                                                 <CommandInput
                                                                     placeholder="Name eingeben…"

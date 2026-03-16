@@ -11,9 +11,13 @@ export type MeldungListItemResponse = {
     status: string;
     type: string;
     createdAt: string | null;
+    updatedAt?: string | null;
     createdByDisplayName: string | null;
     supersedesId: number | null;
     correctsId: number | null;
+    detail?: {
+        kurzbeschreibung?: string | null;
+    } | null;
 };
 
 export type MeldungChangeResponse = {
@@ -247,9 +251,12 @@ export type MeldungSubmitRequest = {
 };
 
 function extractHttpStatus(err: unknown): number | null {
-    // apiFetch wirft bei euch ein Error-Objekt, das häufig `.status` oder `.problem.status` hat.
-    const e = err as any;
-    const s = e?.status ?? e?.problem?.status;
+    const rec = typeof err === "object" && err !== null ? (err as Record<string, unknown>) : null;
+    const status = rec?.status;
+    const problem = typeof rec?.problem === "object" && rec.problem !== null
+        ? (rec.problem as Record<string, unknown>)
+        : null;
+    const s = typeof status === "number" ? status : problem?.status;
     return typeof s === "number" ? s : null;
 }
 
@@ -262,7 +269,7 @@ function extractHttpStatus(err: unknown): number | null {
 async function ensureCurrentMeldung(fallId: number): Promise<MeldungResponse> {
     try {
         return await apiFetch<MeldungResponse>(`/falloeffnungen/${fallId}/meldungen/current`, { method: "GET" });
-    } catch (e: any) {
+    } catch (e: unknown) {
         const st = extractHttpStatus(e);
         if (st !== 404) throw e;
 
@@ -271,7 +278,7 @@ async function ensureCurrentMeldung(fallId: number): Promise<MeldungResponse> {
                 method: "POST",
                 body: null,
             });
-        } catch (e2: any) {
+        } catch (e2: unknown) {
             const st2 = extractHttpStatus(e2);
             if (st2 === 409) {
                 return await apiFetch<MeldungResponse>(`/falloeffnungen/${fallId}/meldungen/current`, { method: "GET" });

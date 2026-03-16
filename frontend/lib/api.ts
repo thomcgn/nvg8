@@ -11,7 +11,7 @@ export type ProblemDetails = {
   instance?: string;
   timestamp?: string;
   path?: string;
-  meta?: any;
+  meta?: unknown;
 };
 
 export class ApiError extends Error {
@@ -28,7 +28,7 @@ export class ApiError extends Error {
   }
 }
 
-function isObject(v: unknown): v is Record<string, any> {
+function isObject(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null;
 }
 
@@ -43,7 +43,7 @@ function asProblemDetails(body: unknown): ProblemDetails | undefined {
     instance: typeof body.instance === "string" ? body.instance : undefined,
     timestamp: typeof body.timestamp === "string" ? body.timestamp : undefined,
     path: typeof body.path === "string" ? body.path : undefined,
-    meta: (body as any).meta,
+    meta: body.meta,
   };
 
   if (!pd.status && !pd.title && !pd.detail && !pd.code) return undefined;
@@ -52,7 +52,7 @@ function asProblemDetails(body: unknown): ProblemDetails | undefined {
 
 async function rawFetch<T>(
   path: string,
-  options: Omit<RequestInit, "body"> & { body?: any } = {}
+  options: Omit<RequestInit, "body"> & { body?: unknown } = {}
 ): Promise<T> {
   const normalizedPath = path.startsWith("/") ? path : `/${path}`;
 
@@ -74,14 +74,12 @@ async function rawFetch<T>(
 
     try {
       if (ct.includes("application/json")) {
-        const body = await res.json();
+        const body: unknown = await res.json();
         problem = asProblemDetails(body);
         message =
           problem?.detail ||
           problem?.title ||
-          (typeof (body as any)?.message === "string"
-            ? (body as any).message
-            : message);
+          (isObject(body) && typeof body["message"] === "string" ? body["message"] : message);
       } else {
         const text = await res.text();
         if (text) message = text;
@@ -101,7 +99,7 @@ async function rawFetch<T>(
 
 export async function apiFetch<T>(
   path: string,
-  options: Omit<RequestInit, "body"> & { body?: any } = {}
+  options: Omit<RequestInit, "body"> & { body?: unknown } = {}
 ): Promise<T> {
   try {
     return await rawFetch<T>(path, options);

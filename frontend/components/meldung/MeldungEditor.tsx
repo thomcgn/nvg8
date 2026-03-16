@@ -1,4 +1,3 @@
-
 "use client";
 
 import * as React from "react";
@@ -27,11 +26,50 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import {
+  ABW_AUTO,
+  ABW_AUTO_LABEL,
+  AMPEL,
+  AMPEL_LABEL,
+  JANEINUNKLAR,
+  JNU_LABEL,
+  KONTAKTART,
+  KONTAKTART_LABEL,
+  KONTAKT_MIT,
+  KONTAKT_MIT_LABEL,
+  KONTAKT_STATUS,
+  KONTAKT_STATUS_LABEL,
+  OBS_ORT,
+  OBS_ORT_LABEL,
+  OBS_QUELLE,
+  OBS_QUELLE_LABEL,
+  OBS_ZEITRAUM,
+  OBS_ZEITRAUM_LABEL,
+  SICHT,
+  SICHT_LABEL,
+  WORKFLOW_STEPS,
+} from "./meldungEditor.constants";
+import {
+  changeTooltip,
+  changedInputClass,
+  changedLabelClass,
+  clampSeverity,
+  getByPath,
+  isDoneStatus,
+  isSameValue,
+  nowIso,
+  pick,
+  toErrorMessage,
+  toLocalDate,
+  todayLocalDate,
+} from "./meldungEditor.helpers";
+import { MeldungBasisSection } from "./MeldungBasisSection";
+import { FieldRow, SectionCard } from "./MeldungEditor.ui";
+import type { MelderInfo, ObservationDraft, StepStatus, TagDraft, WorkflowStepKey } from "./meldungEditor.types";
 
 import {
   FileText,
@@ -40,7 +78,6 @@ import {
   Save,
   CheckCircle2,
   AlertTriangle,
-  Phone,
   Building2,
   ChevronLeft,
   ChevronRight,
@@ -80,187 +117,6 @@ import {
  * Editor seinen gesamten Persistenzlauf beendet hat.
  */
 
-/* ---------------- Helpers ---------------- */
-
-function clampSeverity(n: number): number {
-  if (!Number.isFinite(n)) return 0;
-  return Math.max(0, Math.min(3, Math.round(n)));
-}
-
-function pick<T extends string>(value: string, allowed: readonly T[], fallback: T): T {
-  return (allowed as readonly string[]).includes(value) ? (value as T) : fallback;
-}
-
-function nowIso() {
-  return new Date().toISOString();
-}
-
-function todayLocalDate() {
-  return new Date().toISOString().split("T")[0];
-}
-
-function normalizeCompareValue(value: unknown): string {
-  if (value === null || value === undefined) return "";
-  if (typeof value === "string") return value.trim();
-  if (typeof value === "number" || typeof value === "boolean") return String(value);
-  return JSON.stringify(value);
-}
-
-function getByPath(obj: any, path: string): unknown {
-  return path.split(".").reduce((acc, key) => (acc == null ? undefined : acc[key]), obj);
-}
-
-function isSameValue(a: unknown, b: unknown): boolean {
-  return normalizeCompareValue(a) === normalizeCompareValue(b);
-}
-
-function renderPreviousValue(v: unknown) {
-  const s = normalizeCompareValue(v);
-  return s ? s : "—";
-}
-
-function changedInputClass(changed: boolean) {
-  return changed ? "border-red-300 bg-red-50/40 focus-visible:ring-red-300" : "";
-}
-
-function changedLabelClass(changed: boolean) {
-  return changed ? "text-red-700" : "text-brand-text";
-}
-
-function changeTooltip(changed: boolean, previousValue: unknown) {
-  if (!changed) return undefined;
-  return `Vorherige Version: ${renderPreviousValue(previousValue)}`;
-}
-
-function isDoneStatus(status: string | null | undefined) {
-  const s = String(status ?? "").toUpperCase();
-  return s.includes("ABGESCH") || s.includes("GESCHLOSS") || s.includes("SUBMIT");
-}
-
-function toLocalDate(value: string | null | undefined) {
-  const s = String(value ?? "").trim();
-  return s || null;
-}
-
-/* ---------------- Backend Enums ---------------- */
-
-const MELDEWEG = ["TELEFON", "EMAIL", "PERSOENLICH", "BRIEF", "SONSTIGES"] as const;
-const MELDEWEG_LABEL: Record<(typeof MELDEWEG)[number], string> = {
-  TELEFON: "Telefon",
-  EMAIL: "E-Mail",
-  PERSOENLICH: "Persönlich",
-  BRIEF: "Brief",
-  SONSTIGES: "Sonstiges",
-};
-
-const DRING = ["AKUT_HEUTE", "ZEITNAH_24_48H", "BEOBACHTEN", "UNKLAR"] as const;
-const DRING_LABEL: Record<(typeof DRING)[number], string> = {
-  AKUT_HEUTE: "Akut (heute)",
-  ZEITNAH_24_48H: "Zeitnah (24–48h)",
-  BEOBACHTEN: "Beobachten",
-  UNKLAR: "Unklar",
-};
-
-const DATENB = ["BEOBACHTUNG", "ERZAEHLUNG", "DOKUMENT", "UNKLAR"] as const;
-const DATENB_LABEL: Record<(typeof DATENB)[number], string> = {
-  BEOBACHTUNG: "Beobachtung",
-  ERZAEHLUNG: "Erzählung",
-  DOKUMENT: "Dokument",
-  UNKLAR: "Unklar",
-};
-
-const AMPEL = ["GRUEN", "GELB", "ROT"] as const;
-const AMPEL_LABEL: Record<(typeof AMPEL)[number], string> = {
-  GRUEN: "Grün",
-  GELB: "Gelb",
-  ROT: "Rot",
-};
-
-const OBS_QUELLE = ["EIGENE_WAHRNEHMUNG", "KIND", "DRITTE", "UNBEKANNT"] as const;
-const OBS_QUELLE_LABEL: Record<(typeof OBS_QUELLE)[number], string> = {
-  EIGENE_WAHRNEHMUNG: "Eigene Wahrnehmung",
-  KIND: "Kind",
-  DRITTE: "Dritte",
-  UNBEKANNT: "Unbekannt",
-};
-
-const OBS_ORT = ["ZUHAUSE", "SCHULE_KITA", "OEFFENTLICH", "SONSTIGES"] as const;
-const OBS_ORT_LABEL: Record<(typeof OBS_ORT)[number], string> = {
-  ZUHAUSE: "Zuhause",
-  SCHULE_KITA: "Schule/Kita",
-  OEFFENTLICH: "Öffentlich",
-  SONSTIGES: "Sonstiges",
-};
-
-const OBS_ZEITRAUM = ["EINMALIG", "WIEDERHOLT", "UNBEKANNT"] as const;
-const OBS_ZEITRAUM_LABEL: Record<(typeof OBS_ZEITRAUM)[number], string> = {
-  EINMALIG: "Einmalig",
-  WIEDERHOLT: "Wiederholt",
-  UNBEKANNT: "Unbekannt",
-};
-
-const SICHT = ["INTERN", "EXTERN"] as const;
-const SICHT_LABEL: Record<(typeof SICHT)[number], string> = {
-  INTERN: "Intern",
-  EXTERN: "Extern",
-};
-
-const ABW_AUTO = ["GLEICH", "NIEDRIGER", "HOEHER"] as const;
-const ABW_AUTO_LABEL: Record<(typeof ABW_AUTO)[number], string> = {
-  GLEICH: "Keine Abweichung (entspricht Vorbewertung)",
-  NIEDRIGER: "Abweichung: niedriger als Vorbewertung",
-  HOEHER: "Abweichung: höher als Vorbewertung",
-};
-
-const JANEINUNKLAR = ["JA", "NEIN", "UNKLAR"] as const;
-const JNU_LABEL: Record<(typeof JANEINUNKLAR)[number], string> = {
-  JA: "Ja",
-  NEIN: "Nein",
-  UNKLAR: "Unklar",
-};
-
-const KONTAKT_MIT = ["KIND", "MUTTER", "VATER", "BEZUGSPERSON", "JUGENDAMT", "ARZT", "SONSTIGE"] as const;
-const KONTAKT_MIT_LABEL: Record<(typeof KONTAKT_MIT)[number], string> = {
-  KIND: "Kind",
-  MUTTER: "Mutter",
-  VATER: "Vater",
-  BEZUGSPERSON: "Bezugsperson",
-  JUGENDAMT: "Jugendamt",
-  ARZT: "Arzt / Ärztin",
-  SONSTIGE: "Sonstige",
-};
-
-const KONTAKT_STATUS = ["GEPLANT", "ERREICHT", "NICHT_ERREICHT", "ABGEBROCHEN"] as const;
-const KONTAKT_STATUS_LABEL: Record<(typeof KONTAKT_STATUS)[number], string> = {
-  GEPLANT: "Geplant",
-  ERREICHT: "Erreicht",
-  NICHT_ERREICHT: "Nicht erreicht",
-  ABGEBROCHEN: "Abgebrochen",
-};
-
-const KONTAKTART = ["TELEFON", "EMAIL", "PERSOENLICH", "SCHRIFTLICH", "SONSTIGES"] as const;
-const KONTAKTART_LABEL: Record<(typeof KONTAKTART)[number], string> = {
-  TELEFON: "Telefon",
-  EMAIL: "E-Mail",
-  PERSOENLICH: "Persönlich",
-  SCHRIFTLICH: "Schriftlich",
-  SONSTIGES: "Sonstiges",
-};
-
-/* ---------------- Workflow ---------------- */
-
-type WorkflowStepKey = "aufnahme" | "einschaetzung" | "massnahmen" | "planung" | "abschluss";
-
-const WORKFLOW_STEPS: { key: WorkflowStepKey; label: string; subtitle: string }[] = [
-  { key: "aufnahme", label: "1. Aufnahme", subtitle: "Basisdaten, Melder, Anlass, Beobachtungen" },
-  { key: "einschaetzung", label: "2. Einschätzung", subtitle: "Fachbewertung, Kinderschutzbogen, DJI" },
-  { key: "massnahmen", label: "3. Schutz & Kontakte", subtitle: "Akutlage, Jugendamt, Kontakte, Hausbesuch, Schutzplan" },
-  { key: "planung", label: "4. Planung", subtitle: "Verantwortung, Überprüfung, Zusammenfassung" },
-  { key: "abschluss", label: "5. Abschluss", subtitle: "Spiegeln, Änderungsgrund, finaler Abschluss" },
-];
-
-type StepStatus = "open" | "done";
-
 type CompanionIds = {
   meldebogenId: number | null;
   stuttgarterId: number | null;
@@ -270,26 +126,8 @@ type CompanionIds = {
   hausbesuchId: number | null;
 };
 
-type ObservationDraft = NonNullable<MeldungDraftRequest["observations"]>[number];
-type TagDraft = NonNullable<ObservationDraft["tags"]>[number];
 type ContactDraft = NonNullable<MeldungDraftRequest["contacts"]>[number];
 type JugendamtDraft = NonNullable<MeldungDraftRequest["jugendamt"]>;
-
-type MelderInfo = {
-  melderName: string;
-  melderKontakt: string;
-  melderBeziehungKind: string;
-  melderGlaubwuerdigkeit: string | null;
-  kindAktuellerAufenthalt: string;
-  belastungKoerperlErkrankung: boolean;
-  belastungPsychErkrankung: boolean;
-  belastungSucht: boolean;
-  belastungHaeuslicheGewalt: boolean;
-  belastungSuizidgefahr: boolean;
-  belastungGewalttaetigeErz: boolean;
-  belastungSozialeIsolation: boolean;
-  belastungSonstiges: string;
-};
 
 /* ---------------- Auto-Ampel ---------------- */
 
@@ -320,7 +158,7 @@ function computeAutoAssessment(form: MeldungDraftRequest) {
   const repeatedCount = obs.filter((o) => o?.zeitraum === "WIEDERHOLT").length;
 
   const akutBonus = (form.akutGefahrImVerzug ? 1.25 : 0) + (form.akutNotrufErforderlich ? 0.75 : 0);
-  const score = maxSeverity * 2.0 + avgSeverity * 1.0 + Math.min(2, repeatedCount) * 0.5 + akutBonus;
+  const score = maxSeverity * 2.0 + avgSeverity + Math.min(2, repeatedCount) * 0.5 + akutBonus;
 
   let autoAmpel: (typeof AMPEL)[number] = "GRUEN";
   if (score >= 4.5) autoAmpel = "ROT";
@@ -440,8 +278,8 @@ function toDraftFromResponse(v: MeldungResponse): MeldungDraftRequest {
 
 function normalizeAnlassCodes(input: unknown): string[] {
   const arr = Array.isArray(input) ? input : [];
-  const codes = arr.filter((x) => typeof x === "string" && ANLASS_CODES.includes(x));
-  return Array.from(new Set(codes));
+  const codes = arr.filter((x): x is string => typeof x === "string" && ANLASS_CODES.includes(x));
+  return [...new Set(codes)];
 }
 
 function syncObsTagsToAnlassCodes(observation: ObservationDraft, anlassCodes: string[]) {
@@ -512,13 +350,13 @@ function mapToMeldebogenRequest(form: MeldungDraftRequest, melderInfo: MelderInf
     melderGlaubwuerdigkeit: melderInfo.melderGlaubwuerdigkeit || null,
     schilderung: form.kurzbeschreibung || null,
     kindAktuellerAufenthalt: melderInfo.kindAktuellerAufenthalt || null,
-    belastungKoerperlErkrankung: !!melderInfo.belastungKoerperlErkrankung,
-    belastungPsychErkrankung: !!melderInfo.belastungPsychErkrankung,
-    belastungSucht: !!melderInfo.belastungSucht,
-    belastungHaeuslicheGewalt: !!melderInfo.belastungHaeuslicheGewalt,
-    belastungSuizidgefahr: !!melderInfo.belastungSuizidgefahr,
-    belastungGewalttaetigeErz: !!melderInfo.belastungGewalttaetigeErz,
-    belastungSozialeIsolation: !!melderInfo.belastungSozialeIsolation,
+    belastungKoerperlErkrankung: melderInfo.belastungKoerperlErkrankung,
+    belastungPsychErkrankung: melderInfo.belastungPsychErkrankung,
+    belastungSucht: melderInfo.belastungSucht,
+    belastungHaeuslicheGewalt: melderInfo.belastungHaeuslicheGewalt,
+    belastungSuizidgefahr: melderInfo.belastungSuizidgefahr,
+    belastungGewalttaetigeErz: melderInfo.belastungGewalttaetigeErz,
+    belastungSozialeIsolation: melderInfo.belastungSozialeIsolation,
     belastungSonstiges: melderInfo.belastungSonstiges || null,
     ersteinschaetzung: AMPEL_TO_ERST[form.fachAmpel ?? ""] ?? null,
     handlungsdringlichkeit: DRING_TO_HANDLUNG[form.dringlichkeit ?? ""] ?? null,
@@ -622,41 +460,6 @@ function PageCard(props: { title: string; icon?: React.ReactNode; children: Reac
   );
 }
 
-function SectionCard(props: { title: string; children: React.ReactNode; description?: string }) {
-  return (
-    <div className="rounded-2xl border border-brand-border/25 bg-white p-4 space-y-3">
-      <div>
-        <div className="text-sm font-semibold text-brand-text">{props.title}</div>
-        {props.description ? <div className="text-sm text-brand-text2 mt-1">{props.description}</div> : null}
-      </div>
-      {props.children}
-    </div>
-  );
-}
-
-function FieldRow(props: {
-  label: string;
-  children: React.ReactNode;
-  hint?: string;
-  labelClassName?: string;
-  changed?: boolean;
-  previousValue?: unknown;
-}) {
-  return (
-    <div className="space-y-1">
-      <div className="flex items-center gap-2">
-        <Label className={props.labelClassName ?? "text-brand-text"}>{props.label}</Label>
-        {props.changed ? <Badge tone="danger">geändert</Badge> : null}
-      </div>
-      {props.children}
-      {props.changed ? <div className="text-xs text-red-700">Vorher: {renderPreviousValue(props.previousValue)}</div> : null}
-      {props.hint ? (
-        <div className={props.changed ? "text-xs text-red-700/80" : "text-xs text-brand-text2"}>{props.hint}</div>
-      ) : null}
-    </div>
-  );
-}
-
 function StepBadge({ status }: { status: StepStatus }) {
   return <Badge tone={status === "done" ? "success" : "neutral"}>{status === "done" ? "fertig" : "offen"}</Badge>;
 }
@@ -667,10 +470,12 @@ export function MeldungEditor(props: {
   fallId: number;
   value: MeldungResponse;
   disabled?: boolean;
-  onSaveDraft: (req: MeldungDraftRequest) => Promise<MeldungResponse | void>;
-  onSubmit: (mirrorToNotizen: boolean, changeReason?: string) => Promise<void>;
+  onSaveDraftAction?: (req: MeldungDraftRequest) => Promise<MeldungResponse | void>;
+  onSubmitAction?: (mirrorToNotizen: boolean, changeReason?: string) => Promise<void>;
 }) {
-  const { fallId, value, disabled = false, onSaveDraft, onSubmit } = props;
+  const { fallId, value, disabled = false, onSaveDraftAction, onSubmitAction } = props;
+  const saveDraftFn = onSaveDraftAction;
+  const submitFn = onSubmitAction;
 
   const statusIsDone = isDoneStatus(value.status);
 
@@ -694,7 +499,7 @@ export function MeldungEditor(props: {
   const [submitMirror, setSubmitMirror] = React.useState(true);
   const [changeReason, setChangeReason] = React.useState("");
 
-  const [melderInfo, setMelderInfo] = React.useState({
+  const [melderInfo, setMelderInfo] = React.useState<MelderInfo>({
     melderName: "",
     melderKontakt: "",
     melderBeziehungKind: "",
@@ -830,13 +635,13 @@ export function MeldungEditor(props: {
               melderBeziehungKind: mb.melderBeziehungKind ?? "",
               melderGlaubwuerdigkeit: mb.melderGlaubwuerdigkeit ?? null,
               kindAktuellerAufenthalt: mb.kindAktuellerAufenthalt ?? "",
-              belastungKoerperlErkrankung: !!mb.belastungKoerperlErkrankung,
-              belastungPsychErkrankung: !!mb.belastungPsychErkrankung,
-              belastungSucht: !!mb.belastungSucht,
-              belastungHaeuslicheGewalt: !!mb.belastungHaeuslicheGewalt,
-              belastungSuizidgefahr: !!mb.belastungSuizidgefahr,
-              belastungGewalttaetigeErz: !!mb.belastungGewalttaetigeErz,
-              belastungSozialeIsolation: !!mb.belastungSozialeIsolation,
+              belastungKoerperlErkrankung: Boolean(mb.belastungKoerperlErkrankung),
+              belastungPsychErkrankung: Boolean(mb.belastungPsychErkrankung),
+              belastungSucht: Boolean(mb.belastungSucht),
+              belastungHaeuslicheGewalt: Boolean(mb.belastungHaeuslicheGewalt),
+              belastungSuizidgefahr: Boolean(mb.belastungSuizidgefahr),
+              belastungGewalttaetigeErz: Boolean(mb.belastungGewalttaetigeErz),
+              belastungSozialeIsolation: Boolean(mb.belastungSozialeIsolation),
               belastungSonstiges: mb.belastungSonstiges ?? "",
             }));
           }
@@ -978,6 +783,7 @@ export function MeldungEditor(props: {
     setValidationErr(null);
     setSubmitErr(null);
     setChangeReason("");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value.id]);
 
   const set = <K extends keyof MeldungDraftRequest>(k: K, v: MeldungDraftRequest[K]) =>
@@ -1151,7 +957,8 @@ export function MeldungEditor(props: {
 
   const persistAll = React.useCallback(async () => {
     const normalized = syncAllObservations(form);
-    await onSaveDraft(normalized);
+    if (!saveDraftFn) throw new Error("onSaveDraft/onSaveDraftAction fehlt.");
+    await saveDraftFn(normalized);
 
     try {
       const meldebogenReq = mapToMeldebogenRequest(normalized, melderInfo);
@@ -1243,7 +1050,7 @@ export function MeldungEditor(props: {
     hausbesuchEnabled,
     hausbesuchForm,
     melderInfo,
-    onSaveDraft,
+    saveDraftFn,
     schutzplanForm,
     stuttgarterForm,
     stuttgarterKatalog,
@@ -1261,9 +1068,9 @@ export function MeldungEditor(props: {
     try {
       await persistAll();
       setSaveMsg("Entwurf gespeichert. Meldung und Begleitbögen wurden gemeinsam persistiert.");
-    } catch (e: any) {
+    } catch (e: unknown) {
       setSaveMsg(null);
-      setSubmitErr(e?.message || "Speichern fehlgeschlagen.");
+      setSubmitErr(toErrorMessage(e, "Speichern fehlgeschlagen."));
     } finally {
       setSaving(false);
     }
@@ -1277,15 +1084,17 @@ export function MeldungEditor(props: {
     setValidationErr(vErr);
     if (vErr) return;
 
+    if (!submitFn) { setSubmitErr("onSubmitAction fehlt."); return; }
+
     setSaving(true);
     try {
       await persistAll();
       const trimmed = String(changeReason ?? "").trim();
-      await onSubmit(submitMirror, isCorrection ? trimmed : undefined);
+      await submitFn(submitMirror, isCorrection ? trimmed : undefined);
       setSaveMsg("Meldung abgeschlossen.");
-    } catch (e: any) {
+    } catch (e: unknown) {
       setSaveMsg(null);
-      setSubmitErr(e?.message || "Abschließen fehlgeschlagen.");
+      setSubmitErr(toErrorMessage(e, "Abschließen fehlgeschlagen."));
     } finally {
       setSaving(false);
     }
@@ -1308,7 +1117,7 @@ export function MeldungEditor(props: {
   const headerTitle = React.useMemo(() => {
     const t = String(value.type ?? "Meldung");
     const vNo = value.versionNo;
-    return `${t}${typeof vNo === "number" ? ` · v${vNo}` : ""}`;
+    return `${t} · v${vNo}`;
   }, [value]);
 
   const submitDisabled = disabled || statusIsDone || saving || (isCorrection && !String(changeReason ?? "").trim());
@@ -1351,214 +1160,6 @@ export function MeldungEditor(props: {
   }
 
   /* ---------------- Step sections ---------------- */
-
-  const renderBasisSection = () => (
-    <SectionCard title="Basis & Melder-Informationen" description="Einstieg in die Meldung, Datenbasis und Angaben der meldenden Person.">
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        {(() => {
-          const changed = isChanged("erfasstVonRolle");
-          const prev = previousValueOf("erfasstVonRolle");
-          return (
-            <FieldRow label="Erfasst von (Rolle)" changed={changed} previousValue={prev} labelClassName={changedLabelClass(changed)}>
-              <Input
-                value={String(form.erfasstVonRolle ?? "")}
-                onChange={(e) => set("erfasstVonRolle", e.target.value)}
-                disabled={disabled || statusIsDone}
-                className={changedInputClass(changed)}
-                title={changeTooltip(changed, prev)}
-              />
-            </FieldRow>
-          );
-        })()}
-
-        {(() => {
-          const changed = isChanged("meldeweg");
-          const prev = previousValueOf("meldeweg");
-          return (
-            <FieldRow label="Meldeweg" changed={changed} previousValue={prev} labelClassName={changedLabelClass(changed)}>
-              <select
-                className={`h-10 w-full rounded-2xl border border-brand-border/40 bg-white px-3 text-sm text-brand-text ${changedInputClass(changed)}`}
-                value={pick(String(form.meldeweg ?? "TELEFON"), MELDEWEG, "TELEFON")}
-                onChange={(e) => set("meldeweg", e.target.value)}
-                disabled={disabled || statusIsDone}
-                title={changeTooltip(changed, prev)}
-              >
-                {MELDEWEG.map((x) => <option key={x} value={x}>{MELDEWEG_LABEL[x]}</option>)}
-              </select>
-            </FieldRow>
-          );
-        })()}
-
-        {String(form.meldeweg) === "SONSTIGES" ? (
-          <FieldRow label="Meldeweg sonstiges">
-            <Input
-              value={String(form.meldewegSonstiges ?? "")}
-              onChange={(e) => set("meldewegSonstiges", e.target.value || null)}
-              disabled={disabled || statusIsDone}
-            />
-          </FieldRow>
-        ) : null}
-
-        {(() => {
-          const changed = isChanged("meldendeStelleKontakt");
-          const prev = previousValueOf("meldendeStelleKontakt");
-          return (
-            <FieldRow
-              label="Meldende Stelle (Kontakt)"
-              hint="z.B. Name/Institution, Rückrufnummer, E-Mail"
-              changed={changed}
-              previousValue={prev}
-              labelClassName={changedLabelClass(changed)}
-            >
-              <Input
-                value={String(form.meldendeStelleKontakt ?? "")}
-                onChange={(e) => set("meldendeStelleKontakt", e.target.value)}
-                disabled={disabled || statusIsDone}
-                className={changedInputClass(changed)}
-                title={changeTooltip(changed, prev)}
-              />
-            </FieldRow>
-          );
-        })()}
-
-        <FieldRow label="Datenbasis">
-          <select
-            className="h-10 w-full rounded-2xl border border-brand-border/40 bg-white px-3 text-sm text-brand-text"
-            value={pick(String(form.datenbasis ?? "UNKLAR"), DATENB, "UNKLAR")}
-            onChange={(e) => set("datenbasis", e.target.value)}
-            disabled={disabled || statusIsDone}
-          >
-            {DATENB.map((x) => <option key={x} value={x}>{DATENB_LABEL[x]}</option>)}
-          </select>
-        </FieldRow>
-
-        <FieldRow label="Dringlichkeit">
-          <select
-            className="h-10 w-full rounded-2xl border border-brand-border/40 bg-white px-3 text-sm text-brand-text"
-            value={pick(String(form.dringlichkeit ?? "UNKLAR"), DRING, "UNKLAR")}
-            onChange={(e) => set("dringlichkeit", e.target.value)}
-            disabled={disabled || statusIsDone}
-          >
-            {DRING.map((x) => <option key={x} value={x}>{DRING_LABEL[x]}</option>)}
-          </select>
-        </FieldRow>
-
-        <FieldRow label="Einwilligung vorhanden">
-          <select
-            className="h-10 w-full rounded-2xl border border-brand-border/40 bg-white px-3 text-sm text-brand-text"
-            value={String(form.einwilligungVorhanden ?? "")}
-            onChange={(e) => set("einwilligungVorhanden", e.target.value === "" ? null : e.target.value === "true")}
-            disabled={disabled || statusIsDone}
-          >
-            <option value="">—</option>
-            <option value="true">Ja</option>
-            <option value="false">Nein</option>
-          </select>
-        </FieldRow>
-
-        <FieldRow label="Schweigepflichtentbindung vorhanden">
-          <select
-            className="h-10 w-full rounded-2xl border border-brand-border/40 bg-white px-3 text-sm text-brand-text"
-            value={String(form.schweigepflichtentbindungVorhanden ?? "")}
-            onChange={(e) => set("schweigepflichtentbindungVorhanden", e.target.value === "" ? null : e.target.value === "true")}
-            disabled={disabled || statusIsDone}
-          >
-            <option value="">—</option>
-            <option value="true">Ja</option>
-            <option value="false">Nein</option>
-          </select>
-        </FieldRow>
-
-        {(() => {
-          const changed = isChanged("kurzbeschreibung");
-          const prev = previousValueOf("kurzbeschreibung");
-          return (
-            <FieldRow
-              label="Kurzbeschreibung (Sachlage)"
-              hint="Kurz, sachlich, überprüfbar. Keine Wertungen."
-              changed={changed}
-              previousValue={prev}
-              labelClassName={changedLabelClass(changed)}
-            >
-              <Textarea
-                rows={5}
-                value={String(form.kurzbeschreibung ?? "")}
-                onChange={(e) => set("kurzbeschreibung", e.target.value)}
-                disabled={disabled || statusIsDone}
-                className={changedInputClass(changed)}
-                title={changeTooltip(changed, prev)}
-              />
-            </FieldRow>
-          );
-        })()}
-      </div>
-
-      <Separator className="my-3" />
-
-      <div className="text-sm font-semibold text-brand-text">Melder-Informationen</div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <FieldRow label="Name der meldenden Person">
-          <Input value={melderInfo.melderName} onChange={(e) => setMelderInfo((p) => ({ ...p, melderName: e.target.value }))} disabled={disabled || statusIsDone} />
-        </FieldRow>
-        <FieldRow label="Kontakt (Telefon / E-Mail)">
-          <Input value={melderInfo.melderKontakt} onChange={(e) => setMelderInfo((p) => ({ ...p, melderKontakt: e.target.value }))} disabled={disabled || statusIsDone} />
-        </FieldRow>
-        <FieldRow label="Beziehung zum Kind">
-          <Input value={melderInfo.melderBeziehungKind} onChange={(e) => setMelderInfo((p) => ({ ...p, melderBeziehungKind: e.target.value }))} disabled={disabled || statusIsDone} />
-        </FieldRow>
-        <FieldRow label="Glaubwürdigkeit">
-          <select
-            className="h-10 w-full rounded-2xl border border-brand-border/40 bg-white px-3 text-sm text-brand-text"
-            value={melderInfo.melderGlaubwuerdigkeit ?? ""}
-            onChange={(e) => setMelderInfo((p) => ({ ...p, melderGlaubwuerdigkeit: e.target.value || null }))}
-            disabled={disabled || statusIsDone}
-          >
-            <option value="">—</option>
-            <option value="GUT">Gut</option>
-            <option value="MITTEL">Mittel</option>
-            <option value="GERING">Gering</option>
-          </select>
-        </FieldRow>
-        <FieldRow label="Aktueller Aufenthaltsort Kind">
-          <Input
-            value={melderInfo.kindAktuellerAufenthalt}
-            onChange={(e) => setMelderInfo((p) => ({ ...p, kindAktuellerAufenthalt: e.target.value }))}
-            disabled={disabled || statusIsDone}
-          />
-        </FieldRow>
-      </div>
-
-      <Separator className="my-3" />
-
-      <div className="text-sm font-semibold text-brand-text">Belastungsfaktoren</div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-        {(
-          [
-            ["belastungKoerperlErkrankung", "Körperliche Erkrankung"],
-            ["belastungPsychErkrankung", "Psychische Erkrankung"],
-            ["belastungSucht", "Sucht"],
-            ["belastungHaeuslicheGewalt", "Häusliche Gewalt"],
-            ["belastungSuizidgefahr", "Suizidgefahr"],
-            ["belastungGewalttaetigeErz", "Gewalttätige Erziehung"],
-            ["belastungSozialeIsolation", "Soziale Isolation"],
-          ] as [keyof typeof melderInfo, string][]
-        ).map(([key, label]) => (
-          <div key={key} className={`rounded-2xl border p-3 flex items-center justify-between ${melderInfo[key] ? "border-amber-300 bg-amber-50" : "border-brand-border/25 bg-white"}`}>
-            <span className={`text-sm ${melderInfo[key] ? "font-semibold text-amber-800" : "text-brand-text"}`}>{label}</span>
-            <Switch checked={!!melderInfo[key]} onCheckedChange={(v) => setMelderInfo((p) => ({ ...p, [key]: v }))} disabled={disabled || statusIsDone} />
-          </div>
-        ))}
-      </div>
-      <FieldRow label="Sonstige Belastungen">
-        <Textarea
-          rows={2}
-          value={melderInfo.belastungSonstiges}
-          onChange={(e) => setMelderInfo((p) => ({ ...p, belastungSonstiges: e.target.value }))}
-          disabled={disabled || statusIsDone}
-        />
-      </FieldRow>
-    </SectionCard>
-  );
 
   const renderAnlassSection = () => (
     <SectionCard title="Anlässe" description="Die Auswahl steuert die automatische Tag-Erstellung in den Beobachtungen.">
@@ -1812,7 +1413,7 @@ export function MeldungEditor(props: {
         <div className={`rounded-2xl border bg-white p-3 ${isChanged("akutGefahrImVerzug") ? "border-red-300 bg-red-50/40" : "border-brand-border/25"}`}>
           <div className="flex items-center justify-between">
             <div className={`text-sm font-semibold ${isChanged("akutGefahrImVerzug") ? "text-red-700" : "text-brand-text"}`}>Gefahr im Verzug</div>
-            <Switch checked={!!form.akutGefahrImVerzug} onCheckedChange={(v) => set("akutGefahrImVerzug", !!v)} disabled={disabled || statusIsDone} />
+            <Switch checked={!!form.akutGefahrImVerzug} onCheckedChange={(v) => set("akutGefahrImVerzug", v)} disabled={disabled || statusIsDone} />
           </div>
           <div className="mt-2 text-xs text-brand-text2">Nur setzen, wenn eine sofortige Intervention erforderlich ist.</div>
         </div>
@@ -1998,7 +1599,7 @@ export function MeldungEditor(props: {
         <div className="text-sm text-brand-text2">Optional: Abschluss in die Notizen übernehmen.</div>
         <div className="flex items-center justify-between rounded-2xl border border-brand-border/25 p-3">
           <div className="text-sm text-brand-text">Beim Abschließen spiegeln</div>
-          <Switch checked={submitMirror} onCheckedChange={(v) => setSubmitMirror(!!v)} disabled={disabled || statusIsDone} />
+          <Switch checked={submitMirror} onCheckedChange={(v) => setSubmitMirror(v)} disabled={disabled || statusIsDone} />
         </div>
       </div>
 
@@ -2047,7 +1648,16 @@ export function MeldungEditor(props: {
       case "aufnahme":
         return (
           <div className="space-y-4">
-            {renderBasisSection()}
+            <MeldungBasisSection
+              form={form}
+              melderInfo={melderInfo}
+              disabled={disabled}
+              statusIsDone={statusIsDone}
+              setField={set}
+              setMelderInfo={setMelderInfo}
+              isChanged={isChanged}
+              previousValueOf={previousValueOf}
+            />
             {renderAnlassSection()}
             {renderObservationSection()}
           </div>

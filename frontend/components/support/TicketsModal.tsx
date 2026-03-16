@@ -5,6 +5,12 @@ import { X, Plus, ExternalLink } from "lucide-react";
 import type { SupportTicket, TicketCategory, TicketPriority } from "@/lib/supportTickets";
 import { createSupportTicket, fetchMyTickets } from "@/lib/supportTickets";
 
+function errorMessage(error: unknown, fallback: string): string {
+    if (error instanceof Error && error.message.trim()) return error.message;
+    if (typeof error === "string" && error.trim()) return error;
+    return fallback;
+}
+
 function badgeClass(status: string) {
     const s = status.toUpperCase();
     if (s === "RESOLVED" || s === "CLOSED") return "bg-emerald-500/15 text-emerald-700 border-emerald-500/20";
@@ -14,10 +20,10 @@ function badgeClass(status: string) {
 
 export function TicketsModal({
                                  open,
-                                 onClose,
+                                   onCloseAction,
                              }: {
     open: boolean;
-    onClose: () => void;
+    onCloseAction: () => void;
 }) {
     const [tab, setTab] = useState<"list" | "new">("list");
     const [tickets, setTickets] = useState<SupportTicket[]>([]);
@@ -41,9 +47,9 @@ export function TicketsModal({
         try {
             const data = await fetchMyTickets();
             setTickets(data);
-        } catch (e: any) {
+        } catch (e: unknown) {
             // falls du GET noch nicht hast, kannst du die Liste erstmal ausblenden
-            setErr(e?.message || "Tickets konnten nicht geladen werden.");
+            setErr(errorMessage(e, "Tickets konnten nicht geladen werden."));
         } finally {
             setLoading(false);
         }
@@ -84,8 +90,8 @@ export function TicketsModal({
             if (created.githubIssueUrl) {
                 // nichts erzwingen, aber du könntest Toast zeigen
             }
-        } catch (e: any) {
-            setErr(e?.message || "TicketsUIProvider.tsx konnte nicht erstellt werden.");
+        } catch (e: unknown) {
+            setErr(errorMessage(e, "Ticket konnte nicht erstellt werden."));
         } finally {
             setLoading(false);
         }
@@ -98,7 +104,7 @@ export function TicketsModal({
             {/* Overlay */}
             <button
                 aria-label="Close"
-                onClick={onClose}
+                onClick={onCloseAction}
                 className="absolute inset-0 bg-black/40"
             />
 
@@ -110,7 +116,7 @@ export function TicketsModal({
                         <div className="text-xs text-brand-text2">Support-Anfragen an Techniker/Dev-Team</div>
                     </div>
                     <button
-                        onClick={onClose}
+                        onClick={onCloseAction}
                         className="h-10 w-10 rounded-xl border border-brand-border bg-white/80 hover:bg-brand-teal/15 transition grid place-items-center"
                     >
                         <X className="h-4 w-4" />

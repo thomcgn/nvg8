@@ -12,7 +12,7 @@ const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8080"
 
 async function apiFetch<T>(
     path: string,
-    options: Omit<RequestInit, "body"> & { body?: any } = {}
+    options: Omit<RequestInit, "body"> & { body?: unknown } = {}
 ): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
     ...options,
@@ -32,8 +32,14 @@ async function apiFetch<T>(
   if (!res.ok) {
     let message = `Request failed (${res.status})`;
     try {
-      const data = await res.json();
-      message = data?.detail || data?.message || message;
+      const data = await res.json() as unknown;
+      if (typeof data === "object" && data !== null) {
+        const rec = data as Record<string, unknown>;
+        message =
+          (typeof rec.detail === "string" && rec.detail) ||
+          (typeof rec.message === "string" && rec.message) ||
+          message;
+      }
     } catch {
       // ignore
     }

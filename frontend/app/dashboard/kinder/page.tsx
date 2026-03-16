@@ -34,6 +34,12 @@ function genderLabel(g: string | null) {
     return g;
 }
 
+function errorMessage(error: unknown, fallback: string): string {
+    if (error instanceof Error && error.message.trim()) return error.message;
+    if (typeof error === "string" && error.trim()) return error;
+    return fallback;
+}
+
 export default function KinderPage() {
     const router = useRouter();
 
@@ -62,8 +68,8 @@ export default function KinderPage() {
                     { method: "GET" }
                 );
                 setData(res);
-            } catch (e: any) {
-                setErr(e?.message || "Konnte Kinderliste nicht laden.");
+            } catch (e: unknown) {
+                setErr(errorMessage(e, "Konnte Kinderliste nicht laden."));
                 setData(null);
             } finally {
                 setLoading(false);
@@ -91,7 +97,7 @@ export default function KinderPage() {
     return (
         <AuthGate>
             <div className="min-h-screen bg-brand-bg overflow-x-hidden">
-                <Topbar title="Kinder" onSearch={(val) => setQ(val)} />
+                <Topbar title="Kinder" onSearchAction={(val) => setQ(val)} />
 
                 <div className="mx-auto w-full max-w-7xl px-3 sm:px-6 pb-12 pt-4 space-y-4">
                     {err ? (

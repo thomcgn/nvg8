@@ -47,7 +47,7 @@ function SeverityDot({ s }: { s: number | null | undefined }) {
                     : "bg-brand-border";
 
     return (
-        <span className="inline-flex min-w-[60px] items-center justify-end gap-1.5">
+        <span className="inline-flex min-w-15 items-center justify-end gap-1.5">
             <span className={`inline-block h-2.5 w-2.5 rounded-full ${cls}`} />
             <span className="text-xs tabular-nums text-brand-text2">{s}</span>
         </span>
@@ -65,6 +65,12 @@ type EditState = {
     enabled: boolean;
     defaultSeverity: number | null;
 };
+
+function errorMessage(error: unknown, fallback: string): string {
+    if (error instanceof Error && error.message.trim()) return error.message;
+    if (typeof error === "string" && error.trim()) return error;
+    return fallback;
+}
 
 function editFromIndicator(x: TraegerRiskIndicator): EditState {
     return {
@@ -222,8 +228,8 @@ export default function RiskConfigPage() {
 
             setCatalog(cat);
             setDbItems(indicators);
-        } catch (e: any) {
-            setErr(e?.message || "Fehler beim Laden");
+        } catch (e: unknown) {
+            setErr(errorMessage(e, "Fehler beim Laden"));
         } finally {
             setLoading(false);
         }
@@ -272,8 +278,8 @@ export default function RiskConfigPage() {
 
                 setDbItems((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
             }
-        } catch (e: any) {
-            setErr(e?.message || "Fehler");
+        } catch (e: unknown) {
+            setErr(errorMessage(e, "Fehler"));
         } finally {
             setBusy(false);
         }
@@ -301,8 +307,8 @@ export default function RiskConfigPage() {
 
             setDbItems((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
             setEditOpen(false);
-        } catch (e: any) {
-            setErr(e?.message || "Fehler beim Speichern");
+        } catch (e: unknown) {
+            setErr(errorMessage(e, "Fehler beim Speichern"));
         } finally {
             setBusy(false);
         }
@@ -319,8 +325,8 @@ export default function RiskConfigPage() {
         try {
             await riskIndicatorsApi.adminDelete(traegerId, x.id);
             setDbItems((prev) => prev.filter((p) => p.id !== x.id));
-        } catch (e: any) {
-            setErr(e?.message || "Fehler beim Löschen");
+        } catch (e: unknown) {
+            setErr(errorMessage(e, "Fehler beim Löschen"));
         } finally {
             setBusy(false);
         }
@@ -388,8 +394,8 @@ export default function RiskConfigPage() {
             setSimilar([]);
             setSimilarChecked(false);
             setExactMatch(false);
-        } catch (e: any) {
-            setErr(e?.message || "Fehler beim Anlegen");
+        } catch (e: unknown) {
+            setErr(errorMessage(e, "Fehler beim Anlegen"));
         } finally {
             setBusy(false);
         }
@@ -400,7 +406,7 @@ export default function RiskConfigPage() {
             <div className="min-h-screen bg-brand-bg overflow-x-hidden">
                 <Topbar
                     title="Risk-Konfiguration"
-                    onSearch={(val) => {
+                    onSearchAction={(val) => {
                         setQ(val);
                     }}
                 />
@@ -530,7 +536,7 @@ export default function RiskConfigPage() {
                                                 <div className="overflow-hidden rounded-2xl border border-brand-border/40 bg-white shadow-sm">
                                                     <CollapsibleTrigger asChild>
                                                         <button
-                                                            className="flex min-h-[72px] w-full items-center justify-between gap-3 bg-slate-50 px-4 py-4 text-left transition hover:bg-slate-100 active:bg-slate-100"
+                                                            className="flex min-h-18 w-full items-center justify-between gap-3 bg-slate-50 px-4 py-4 text-left transition hover:bg-slate-100 active:bg-slate-100"
                                                             aria-label={`Kategorie ${group.category} ${isOpen ? "schließen" : "öffnen"}`}
                                                         >
                                                             <div className="min-w-0 flex-1">
@@ -663,7 +669,7 @@ export default function RiskConfigPage() {
                                                                                     </button>
                                                                                 </div>
                                                                             ) : (
-                                                                                <div className="h-11 w-[94px]" />
+                                                                                <div className="h-11 w-23.5" />
                                                                             )}
                                                                         </div>
                                                                     </div>
@@ -682,7 +688,7 @@ export default function RiskConfigPage() {
                 </div>
 
                 <Dialog open={editOpen} onOpenChange={setEditOpen}>
-                    <DialogContent className="max-w-[640px] rounded-2xl">
+                    <DialogContent className="max-w-160 rounded-2xl">
                         <ShadDialogHeader>
                             <DialogTitle>Indikator anpassen</DialogTitle>
                         </ShadDialogHeader>
@@ -707,7 +713,7 @@ export default function RiskConfigPage() {
                                         Beschreibung (optional)
                                     </div>
                                     <textarea
-                                        className="min-h-[96px] w-full rounded-xl border border-brand-border px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-brand-teal/30"
+                                        className="min-h-24 w-full rounded-xl border border-brand-border px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-brand-teal/30"
                                         value={editor.description}
                                         onChange={(e) =>
                                             setEditor((s) => s && ({ ...s, description: e.target.value }))
@@ -773,7 +779,7 @@ export default function RiskConfigPage() {
                 </Dialog>
 
                 <Dialog open={newEntryOpen} onOpenChange={setNewEntryOpen}>
-                    <DialogContent className="max-w-[640px] rounded-2xl">
+                    <DialogContent className="max-w-160 rounded-2xl">
                         <ShadDialogHeader>
                             <DialogTitle>Neuen Anlass-Code anlegen</DialogTitle>
                         </ShadDialogHeader>

@@ -8,17 +8,17 @@ export type MeldungenFilter = "alle" | "aktuell" | "entwurf" | "abgeschlossen";
 
 export function MeldungenFilterBar(props: {
     value: MeldungenFilter;
-    onChange: (v: MeldungenFilter) => void;
+    onChangeAction: (v: MeldungenFilter) => void;
     counts?: { alle: number; aktuell: number; entwurf: number; abgeschlossen: number };
 }) {
-    const { value, onChange, counts } = props;
+    const { value, onChangeAction, counts } = props;
 
     const item = (v: MeldungenFilter, label: string) => (
         <Button
             type="button"
             variant={value === v ? "default" : "secondary"}
             className="h-10 px-4 whitespace-nowrap"
-            onClick={() => onChange(v)}
+            onClick={() => onChangeAction(v)}
         >
             <span className="mr-2">{label}</span>
             {counts ? <Badge tone="neutral">{counts[v]}</Badge> : null}

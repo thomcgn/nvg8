@@ -14,6 +14,12 @@ type AuthState = {
 
 const AuthContext = createContext<AuthState | null>(null);
 
+function errorMessage(error: unknown, fallback: string): string {
+    if (error instanceof Error && error.message.trim()) return error.message;
+    if (typeof error === "string" && error.trim()) return error;
+    return fallback;
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
     const [me, setMe] = useState<MeResponse | null>(null);
     const [loading, setLoading] = useState(true);
@@ -27,9 +33,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             setMe(data);
             // ✅ wenn nicht eingeloggt: kein "Fehler"
             if (!data) setError(null);
-        } catch (e: any) {
+        } catch (e: unknown) {
             setMe(null);
-            setError(e?.message || "Nicht eingeloggt.");
+            setError(errorMessage(e, "Nicht eingeloggt."));
         } finally {
             setLoading(false);
         }
@@ -46,7 +52,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     useEffect(() => {
         refresh();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     const value = useMemo<AuthState>(

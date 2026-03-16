@@ -17,16 +17,22 @@ import type { FalleroeffnungListResponse, FalleroeffnungListItem } from "@/lib/t
 /* ─── helpers ──────────────────────────────────────────────── */
 
 function getAkutFlag(i: FalleroeffnungListItem): boolean | null {
-  const a = i as any;
-  if (typeof a.akutGefahrImVerzug === "boolean") return a.akutGefahrImVerzug;
-  if (typeof a.akut === "boolean") return a.akut;
+  if (typeof i.akutGefahrImVerzug === "boolean") return i.akutGefahrImVerzug;
+  const legacy = (i as Record<string, unknown>).akut;
+  if (typeof legacy === "boolean") return legacy;
   return null;
 }
 
 function getDringlichkeit(i: FalleroeffnungListItem): string | null {
-  const a = i as any;
-  const v = a.dringlichkeit ?? a.prioritaet;
+  const prioritaet = (i as Record<string, unknown>).prioritaet;
+  const v = i.dringlichkeit ?? prioritaet;
   return typeof v === "string" ? v : null;
+}
+
+function errorMessage(error: unknown, fallback: string): string {
+  if (error instanceof Error && error.message.trim()) return error.message;
+  if (typeof error === "string" && error.trim()) return error;
+  return fallback;
 }
 
 function toneForStatus(s: string): "success" | "warning" | "danger" | "info" | "neutral" {
@@ -86,19 +92,19 @@ export default function DashboardHome() {
         { method: "GET" }
       );
       setItems(res.items || []);
-    } catch (e: any) {
+    } catch (e: unknown) {
       setItems([]);
-      setError(e?.message || "Backend nicht erreichbar.");
+      setError(errorMessage(e, "Backend nicht erreichbar."));
     } finally {
       setLoading(false);
     }
   }
 
-  useEffect(() => { load(""); }, []); // eslint-disable-line
+  useEffect(() => { load(""); }, []);
   useEffect(() => {
     const t = setTimeout(() => load(q), 250);
     return () => clearTimeout(t);
-  }, [q]); // eslint-disable-line
+  }, [q]);
 
   /* ─── stats ──────────────────────────────────────────────── */
   const stats = useMemo(() => ({
@@ -112,7 +118,7 @@ export default function DashboardHome() {
   const byDay = useMemo(() => {
     const map = new Map<string, FalleroeffnungListItem[]>();
     for (const item of items) {
-      const raw = (item as any).naechsteUeberpruefungAm as string | null;
+      const raw = item.naechsteUeberpruefungAm;
       if (!raw) continue;
       const k = raw.substring(0, 10);
       if (!map.has(k)) map.set(k, []);
@@ -151,7 +157,7 @@ export default function DashboardHome() {
   return (
     <AuthGate>
       <div className="min-h-screen bg-brand-bg">
-        <Topbar title="Übersicht" onSearch={(val) => setQ(val)} />
+        <Topbar title="Übersicht" onSearchAction={(val) => setQ(val)} />
 
         <div className="mx-auto w-full max-w-6xl px-4 pb-10 pt-5 sm:px-6">
 
@@ -358,7 +364,7 @@ export default function DashboardHome() {
                               <span className="font-medium text-brand-text min-w-0 flex-1 truncate">
                                 {item.aktenzeichen || `#${item.id}`}
                               </span>
-                              <span className="truncate text-brand-text2 max-w-[80px]">
+                              <span className="truncate text-brand-text2 max-w-20">
                                 {item.kindName || "—"}
                               </span>
                               {getAkutFlag(item) && (

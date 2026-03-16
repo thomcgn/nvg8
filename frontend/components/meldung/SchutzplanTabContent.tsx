@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Plus, Trash2 } from "lucide-react";
 import { MASSNAHME_STATUS_LABELS } from "@/lib/api/schutzplan";
 
-export interface SchutzplanState {
+export type SchutzplanState = {
     erstelltAm: string;
     gueltigBis: string;
     naechsterTermin: string;
@@ -42,15 +42,15 @@ export function defaultSchutzplanState(): SchutzplanState {
 
 const MASSNAHME_STATI = ["OFFEN", "IN_UMSETZUNG", "ERLEDIGT", "NICHT_ERLEDIGT"] as const;
 
-interface Props {
+type Props = {
     form: SchutzplanState;
     onChange: (form: SchutzplanState) => void;
     disabled?: boolean;
-}
+};
 
-export function SchutzplanTabContent({ form, onChange, disabled }: Props) {
+export function SchutzplanTabContent({ form, onChange: onChangeAction, disabled }: Props) {
     const addMassnahme = () =>
-        onChange({
+        onChangeAction({
             ...form,
             massnahmen: [...form.massnahmen, { massnahme: "", verantwortlich: "", bisDatum: "", status: "OFFEN" }],
         });
@@ -58,13 +58,13 @@ export function SchutzplanTabContent({ form, onChange, disabled }: Props) {
     const updateMassnahme = (idx: number, patch: Partial<(typeof form.massnahmen)[number]>) => {
         const next = [...form.massnahmen];
         next[idx] = { ...next[idx], ...patch };
-        onChange({ ...form, massnahmen: next });
+        onChangeAction({ ...form, massnahmen: next });
     };
 
     const removeMassnahme = (idx: number) => {
         const next = [...form.massnahmen];
         next.splice(idx, 1);
-        onChange({ ...form, massnahmen: next });
+        onChangeAction({ ...form, massnahmen: next });
     };
 
     return (
@@ -80,7 +80,7 @@ export function SchutzplanTabContent({ form, onChange, disabled }: Props) {
                             <input
                                 type="date"
                                 value={form.erstelltAm}
-                                onChange={(e) => onChange({ ...form, erstelltAm: e.target.value })}
+                                onChange={(e) => onChangeAction({ ...form, erstelltAm: e.target.value })}
                                 disabled={disabled}
                                 className="border border-brand-border/40 rounded-xl px-3 py-2 text-sm text-brand-text bg-white w-full focus:outline-none focus:ring-2 focus:ring-brand-primary/30"
                             />
@@ -90,7 +90,7 @@ export function SchutzplanTabContent({ form, onChange, disabled }: Props) {
                             <input
                                 type="date"
                                 value={form.gueltigBis}
-                                onChange={(e) => onChange({ ...form, gueltigBis: e.target.value })}
+                                onChange={(e) => onChangeAction({ ...form, gueltigBis: e.target.value })}
                                 disabled={disabled}
                                 className="border border-brand-border/40 rounded-xl px-3 py-2 text-sm text-brand-text bg-white w-full focus:outline-none focus:ring-2 focus:ring-brand-primary/30"
                             />
@@ -101,7 +101,7 @@ export function SchutzplanTabContent({ form, onChange, disabled }: Props) {
                         <input
                             type="date"
                             value={form.naechsterTermin}
-                            onChange={(e) => onChange({ ...form, naechsterTermin: e.target.value })}
+                            onChange={(e) => onChangeAction({ ...form, naechsterTermin: e.target.value })}
                             disabled={disabled}
                             className="border border-brand-border/40 rounded-xl px-3 py-2 text-sm text-brand-text bg-white focus:outline-none focus:ring-2 focus:ring-brand-primary/30"
                         />
@@ -126,7 +126,7 @@ export function SchutzplanTabContent({ form, onChange, disabled }: Props) {
                             <label className="text-xs font-semibold text-brand-text2 block mb-1">{label}</label>
                             <Textarea
                                 value={form[field]}
-                                onChange={(e) => onChange({ ...form, [field]: e.target.value })}
+                                onChange={(e) => onChangeAction({ ...form, [field]: e.target.value })}
                                 placeholder={placeholder}
                                 rows={rows}
                                 disabled={disabled}

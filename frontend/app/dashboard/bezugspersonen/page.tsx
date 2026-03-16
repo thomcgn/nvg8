@@ -37,6 +37,12 @@ function fmtGeb(d?: string | null) {
     return `geb. ${d}`;
 }
 
+function errorMessage(error: unknown, fallback: string): string {
+    if (error instanceof Error && error.message.trim()) return error.message;
+    if (typeof error === "string" && error.trim()) return error;
+    return fallback;
+}
+
 export default function BezugspersonenPage() {
     const router = useRouter();
 
@@ -65,8 +71,8 @@ export default function BezugspersonenPage() {
                     { method: "GET" }
                 );
                 setData(res);
-            } catch (e: any) {
-                setErr(e?.message || "Konnte Bezugspersonen nicht laden.");
+            } catch (e: unknown) {
+                setErr(errorMessage(e, "Konnte Bezugspersonen nicht laden."));
                 setData(null);
             } finally {
                 setLoading(false);
@@ -94,7 +100,7 @@ export default function BezugspersonenPage() {
     return (
         <AuthGate>
             <div className="min-h-screen bg-brand-bg overflow-x-hidden">
-                <Topbar title="Bezugspersonen" onSearch={(val) => setQ(val)} />
+                <Topbar title="Bezugspersonen" onSearchAction={(val) => setQ(val)} />
 
                 <div className="mx-auto w-full max-w-7xl px-3 sm:px-6 pb-12 pt-4 space-y-4">
                     {err ? (
