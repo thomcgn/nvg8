@@ -38,7 +38,6 @@ public class AktennummerService {
 
         long value = seq.getNextValue();
         seq.setNextValue(value + 1);
-        // save not strictly required because entity is managed, but ok:
         repo.save(seq);
 
         String number = String.format("%d-%06d", year, value);
