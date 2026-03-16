@@ -49,7 +49,65 @@ DELETE FROM meldung_extern WHERE meldung_id IN (
     JOIN kinder k ON k.id = d.kind_id
     WHERE k.traeger_id = (SELECT id FROM traeger WHERE slug = 'demo-traeger'));
 
+-- meldung_changes (V028, ON DELETE RESTRICT) → vor meldungen löschen
+DELETE FROM meldung_changes WHERE meldung_id IN (
+    SELECT m.id FROM meldungen m
+    JOIN falloeffnungen f ON f.id = m.falloeffnung_id
+    JOIN kind_dossiers d ON d.id = f.dossier_id
+    JOIN kinder k ON k.id = d.kind_id
+    WHERE k.traeger_id = (SELECT id FROM traeger WHERE slug = 'demo-traeger'));
+
 DELETE FROM meldungen WHERE falloeffnung_id IN (
+    SELECT f.id FROM falloeffnungen f
+    JOIN kind_dossiers d ON d.id = f.dossier_id
+    JOIN kinder k ON k.id = d.kind_id
+    WHERE k.traeger_id = (SELECT id FROM traeger WHERE slug = 'demo-traeger'));
+
+-- Weitere FK auf falloeffnungen ohne CASCADE (V008, V019, V040, V056–V060)
+DELETE FROM falloeffnung_notizen WHERE falloeffnung_id IN (
+    SELECT f.id FROM falloeffnungen f
+    JOIN kind_dossiers d ON d.id = f.dossier_id
+    JOIN kinder k ON k.id = d.kind_id
+    WHERE k.traeger_id = (SELECT id FROM traeger WHERE slug = 'demo-traeger'));
+
+DELETE FROM case_share_requests WHERE falloeffnung_id IN (
+    SELECT f.id FROM falloeffnungen f
+    JOIN kind_dossiers d ON d.id = f.dossier_id
+    JOIN kinder k ON k.id = d.kind_id
+    WHERE k.traeger_id = (SELECT id FROM traeger WHERE slug = 'demo-traeger'));
+
+DELETE FROM fall_meldung_version_seq WHERE falloeffnung_id IN (
+    SELECT f.id FROM falloeffnungen f
+    JOIN kind_dossiers d ON d.id = f.dossier_id
+    JOIN kinder k ON k.id = d.kind_id
+    WHERE k.traeger_id = (SELECT id FROM traeger WHERE slug = 'demo-traeger'));
+
+-- Bögen (V056–V060): FK auf falloeffnungen ohne CASCADE → vor falloeffnungen löschen
+DELETE FROM kinderschutzbogen_assessments WHERE falloeffnung_id IN (
+    SELECT f.id FROM falloeffnungen f
+    JOIN kind_dossiers d ON d.id = f.dossier_id
+    JOIN kinder k ON k.id = d.kind_id
+    WHERE k.traeger_id = (SELECT id FROM traeger WHERE slug = 'demo-traeger'));
+
+DELETE FROM dji_assessments WHERE falloeffnung_id IN (
+    SELECT f.id FROM falloeffnungen f
+    JOIN kind_dossiers d ON d.id = f.dossier_id
+    JOIN kinder k ON k.id = d.kind_id
+    WHERE k.traeger_id = (SELECT id FROM traeger WHERE slug = 'demo-traeger'));
+
+DELETE FROM meldeboegen WHERE falloeffnung_id IN (
+    SELECT f.id FROM falloeffnungen f
+    JOIN kind_dossiers d ON d.id = f.dossier_id
+    JOIN kinder k ON k.id = d.kind_id
+    WHERE k.traeger_id = (SELECT id FROM traeger WHERE slug = 'demo-traeger'));
+
+DELETE FROM schutzplaene WHERE falloeffnung_id IN (
+    SELECT f.id FROM falloeffnungen f
+    JOIN kind_dossiers d ON d.id = f.dossier_id
+    JOIN kinder k ON k.id = d.kind_id
+    WHERE k.traeger_id = (SELECT id FROM traeger WHERE slug = 'demo-traeger'));
+
+DELETE FROM hausbesuche WHERE falloeffnung_id IN (
     SELECT f.id FROM falloeffnungen f
     JOIN kind_dossiers d ON d.id = f.dossier_id
     JOIN kinder k ON k.id = d.kind_id
@@ -70,8 +128,18 @@ DELETE FROM kinder         WHERE traeger_id = (SELECT id FROM traeger WHERE slug
 DELETE FROM bezugspersonen WHERE traeger_id = (SELECT id FROM traeger WHERE slug = 'demo-traeger');
 
 DELETE FROM org_unit_memberships WHERE user_id IN (SELECT id FROM users WHERE email IN ('demo@kidoc.local','admin@kidoc.io'));
+
+-- Tabellen die FK auf users haben (V010 invites, V011 audit_events, V012 messages, V044 support_tickets)
+DELETE FROM audit_events   WHERE traeger_id = (SELECT id FROM traeger WHERE slug = 'demo-traeger');
+DELETE FROM invites        WHERE traeger_id = (SELECT id FROM traeger WHERE slug = 'demo-traeger');
+DELETE FROM messages       WHERE sender_id IN (SELECT id FROM users WHERE email IN ('demo@kidoc.local','admin@kidoc.io'));
+DELETE FROM support_tickets WHERE created_by_user_id IN (SELECT id FROM users WHERE email IN ('demo@kidoc.local','admin@kidoc.io'));
+
 DELETE FROM users          WHERE email IN ('demo@kidoc.local','admin@kidoc.io');
 DELETE FROM org_units      WHERE traeger_id = (SELECT id FROM traeger WHERE slug = 'demo-traeger');
+
+-- traeger_aktennummer_seq hat FK auf traeger (V009)
+DELETE FROM traeger_aktennummer_seq WHERE traeger_id = (SELECT id FROM traeger WHERE slug = 'demo-traeger');
 DELETE FROM traeger        WHERE slug = 'demo-traeger';
 
 -- ─── Demo-Träger ──────────────────────────────────────────────────────────────
