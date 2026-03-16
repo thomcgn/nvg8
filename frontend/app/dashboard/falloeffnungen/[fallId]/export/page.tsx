@@ -14,13 +14,7 @@ import {
 import { djiApi, type DjiAssessmentResponse, type DjiAssessmentListItem } from "@/lib/api/dji";
 import { schutzplanApi, type SchutzplanResponse, type SchutzplanListItem } from "@/lib/api/schutzplan";
 import { hausbesuchApi, type HausbesuchResponse, type HausbesuchListItem } from "@/lib/api/hausbesuch";
-import CaseWizardShell from "@/components/fall/CaseWizardShell";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Separator } from "@/components/ui/separator";
-import { Badge } from "@/components/ui/badge";
-import { Printer, FileOutput, ShieldCheck, Clock3, CheckCircle2 } from "lucide-react";
+import CaseExportShell from "@/components/fall/CaseExportShell";
 import { anlassLabel } from "@/lib/anlass/catalog";
 
 type ExportPayload = {
@@ -73,52 +67,34 @@ function valueText(value: unknown): string {
   return String(value);
 }
 
+/** Abschnitt mit Trennlinie-Überschrift */
 function Section({
-                   title,
-                   subtitle,
-                   children,
-                 }: {
+  title,
+  subtitle,
+  children,
+}: {
   title: string;
   subtitle?: string;
   children: React.ReactNode;
 }) {
   return (
-      <section className="print-section rounded-2xl border border-brand-border/40 bg-white p-4 sm:p-5">
-        <div className="mb-3">
-          <div className="text-base font-semibold text-brand-text">{title}</div>
-          {subtitle ? <div className="mt-1 text-sm text-brand-text2">{subtitle}</div> : null}
-        </div>
-        {children}
-      </section>
+    <section className="print-section">
+      <div className="border-b-2 border-gray-700 pb-1 mb-3">
+        <div className="text-[11px] font-bold uppercase tracking-widest text-gray-700">{title}</div>
+        {subtitle ? <div className="text-[10px] text-gray-500 mt-0.5">{subtitle}</div> : null}
+      </div>
+      {children}
+    </section>
   );
 }
 
+/** Schlüssel-Wert-Zeile */
 function Kv({ label, value }: { label: string; value: React.ReactNode }) {
   return (
-      <div className="grid gap-1 py-2 sm:grid-cols-[220px_1fr] sm:gap-4">
-        <div className="text-sm font-medium text-brand-text2">{label}</div>
-        <div className="whitespace-pre-wrap text-sm text-brand-text">{value}</div>
-      </div>
-  );
-}
-
-function FactCard({
-                    label,
-                    value,
-                    icon,
-                  }: {
-  label: string;
-  value: React.ReactNode;
-  icon?: React.ReactNode;
-}) {
-  return (
-      <div className="rounded-2xl border border-brand-border/30 bg-white p-4">
-        <div className="flex items-center gap-2 text-sm text-brand-text2">
-          {icon}
-          <span>{label}</span>
-        </div>
-        <div className="mt-2 text-2xl font-semibold text-brand-text">{value}</div>
-      </div>
+    <div className="grid grid-cols-[200px_1fr] gap-x-4 border-b border-gray-100 py-1.5 text-sm">
+      <div className="font-medium text-gray-500 shrink-0">{label}</div>
+      <div className="whitespace-pre-wrap text-gray-900">{value}</div>
+    </div>
   );
 }
 
@@ -133,8 +109,8 @@ function isDraftStatus(status?: string | null) {
 }
 
 async function loadByList<TList extends { id: number }, TDetail>(
-    listLoader: () => Promise<TList[]>,
-    detailLoader: (id: number) => Promise<TDetail>
+  listLoader: () => Promise<TList[]>,
+  detailLoader: (id: number) => Promise<TDetail>
 ) {
   const items = await listLoader();
   const details = await Promise.allSettled(items.map((item) => detailLoader(item.id)));
@@ -230,24 +206,25 @@ function buildTimeline(data: ExportPayload): TimelineEntry[] {
 
 function SignatureBlock() {
   return (
-      <Section title="Freigabe / Unterschrift" subtitle="Für Ausdruck oder PDF-Abnahme">
-        <div className="grid gap-6 sm:grid-cols-2">
-          <div>
-            <div className="h-20 rounded-xl border border-dashed border-brand-border/60" />
-            <div className="mt-2 text-sm text-brand-text2">Datum / Ort</div>
-          </div>
-          <div>
-            <div className="h-20 rounded-xl border border-dashed border-brand-border/60" />
-            <div className="mt-2 text-sm text-brand-text2">Unterschrift / Name</div>
-          </div>
+    <Section title="Freigabe / Unterschrift">
+      <div className="grid grid-cols-2 gap-10 mt-6">
+        <div>
+          <div className="h-14 border-b border-gray-500" />
+          <div className="mt-1 text-xs text-gray-500">Datum / Ort</div>
         </div>
-      </Section>
+        <div>
+          <div className="h-14 border-b border-gray-500" />
+          <div className="mt-1 text-xs text-gray-500">Unterschrift / Stempel</div>
+        </div>
+      </div>
+    </Section>
   );
 }
 
 export default function FallExportPage() {
   const params = useParams<{ fallId?: string | string[] }>();
   const fallId = parseId(params.fallId);
+  const shellFallId = fallId ?? "";
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
   const [data, setData] = React.useState<ExportPayload | null>(null);
@@ -262,28 +239,28 @@ export default function FallExportPage() {
       setError(null);
       try {
         const [fallRes, meldungenRes, meldeboegenRes, kinderschutzRes, djiRes, schutzplaeneRes, hausbesucheRes] =
-            await Promise.allSettled([
-              apiFetch<FalleroeffnungResponse>(`/falloeffnungen/${fid}`),
-              loadByList<MeldungListItemResponse, MeldungResponse>(() => meldungApi.list(fid), (id) =>
-                  meldungApi.get(fid, id)
-              ),
-              loadByList<MeldebogenListItem, MeldebogenResponse>(() => meldebogenApi.list(fid), (id) =>
-                  meldebogenApi.get(fid, id)
-              ),
-              loadByList<KinderschutzbogenListItem, KinderschutzbogenResponse>(
-                  () => kinderschutzbogenApi.list(fid),
-                  (id) => kinderschutzbogenApi.get(fid, id)
-              ),
-              loadByList<DjiAssessmentListItem, DjiAssessmentResponse>(() => djiApi.list(fid), (id) =>
-                  djiApi.get(fid, id)
-              ),
-              loadByList<SchutzplanListItem, SchutzplanResponse>(() => schutzplanApi.list(fid), (id) =>
-                  schutzplanApi.get(fid, id)
-              ),
-              loadByList<HausbesuchListItem, HausbesuchResponse>(() => hausbesuchApi.list(fid), (id) =>
-                  hausbesuchApi.get(fid, id)
-              ),
-            ]);
+          await Promise.allSettled([
+            apiFetch<FalleroeffnungResponse>(`/falloeffnungen/${fid}`),
+            loadByList<MeldungListItemResponse, MeldungResponse>(() => meldungApi.list(fid), (id) =>
+              meldungApi.get(fid, id)
+            ),
+            loadByList<MeldebogenListItem, MeldebogenResponse>(() => meldebogenApi.list(fid), (id) =>
+              meldebogenApi.get(fid, id)
+            ),
+            loadByList<KinderschutzbogenListItem, KinderschutzbogenResponse>(
+              () => kinderschutzbogenApi.list(fid),
+              (id) => kinderschutzbogenApi.get(fid, id)
+            ),
+            loadByList<DjiAssessmentListItem, DjiAssessmentResponse>(() => djiApi.list(fid), (id) =>
+              djiApi.get(fid, id)
+            ),
+            loadByList<SchutzplanListItem, SchutzplanResponse>(() => schutzplanApi.list(fid), (id) =>
+              schutzplanApi.get(fid, id)
+            ),
+            loadByList<HausbesuchListItem, HausbesuchResponse>(() => hausbesuchApi.list(fid), (id) =>
+              hausbesuchApi.get(fid, id)
+            ),
+          ]);
 
         if (cancelled) return;
 
@@ -312,257 +289,236 @@ export default function FallExportPage() {
   const timeline = React.useMemo(() => (data ? buildTimeline(data) : []), [data]);
 
   return (
-      <CaseWizardShell title="Fallakte als PDF" fallId={fallId ?? "—"} currentStep="export">
-        <div className="print:hidden flex justify-end">
-          <Button onClick={() => window.print()} className="gap-2">
-            <Printer className="h-4 w-4" />
-            Als PDF / drucken
-          </Button>
-        </div>
+    <CaseExportShell title="Fallakte als PDF" fallId={shellFallId} subtitle="DIN A4 Exportansicht">
+      {fallId == null ? (
+        <p className="text-sm text-gray-600 p-4">Ungültige Fall-ID – die URL enthält keine gültige fallId.</p>
+      ) : loading ? (
+        <p className="text-sm text-gray-500 p-4">Export wird vorbereitet…</p>
+      ) : error || !data ? (
+        <p className="text-sm text-gray-600 p-4">{error ?? "Die Daten konnten nicht geladen werden."}</p>
+      ) : (
+        <div className="print-root">
+          <div className="print-doc space-y-6">
 
-        {fallId == null ? (
-            <Alert>
-              <AlertTitle>Ungültige Fall-ID</AlertTitle>
-              <AlertDescription>Die URL enthält keine gültige fallId.</AlertDescription>
-            </Alert>
-        ) : loading ? (
-            <Card>
-              <CardHeader>
-                <div className="text-sm font-semibold">Export wird vorbereitet…</div>
-              </CardHeader>
-              <CardContent className="text-sm text-muted-foreground">Bitte einen Moment.</CardContent>
-            </Card>
-        ) : error || !data ? (
-            <Alert>
-              <AlertTitle>Export nicht verfügbar</AlertTitle>
-              <AlertDescription>{error ?? "Die Daten konnten nicht geladen werden."}</AlertDescription>
-            </Alert>
-        ) : (
-            <div className="print-root space-y-4">
-              <div className="print-doc space-y-4">
-                <section className="rounded-3xl border border-brand-border/40 bg-white p-6 sm:p-8">
-                  <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                    <div>
-                      <div className="inline-flex items-center gap-2 rounded-full border border-brand-border/40 px-3 py-1 text-xs font-medium text-brand-text2">
-                        <FileOutput className="h-3.5 w-3.5" />
-                        Vollständige Fallakte
-                      </div>
-                      <h1 className="mt-4 text-2xl font-bold text-brand-text sm:text-3xl">
-                        {data.fall?.titel ?? `Fall #${fallId}`}
-                      </h1>
-                      <div className="mt-2 text-sm text-brand-text2">Exportiert am {fmtDate(new Date().toISOString(), true)}</div>
-                    </div>
-
-                    <div className="grid gap-2 text-sm text-brand-text2">
-                      <div>
-                        <span className="font-medium text-brand-text">Fall-ID:</span> {data.fall?.id ?? fallId}
-                      </div>
-                      <div>
-                        <span className="font-medium text-brand-text">Aktenzeichen:</span> {data.fall?.aktenzeichen ?? "—"}
-                      </div>
-                      <div>
-                        <span className="font-medium text-brand-text">Status:</span> {data.fall?.status ?? "—"}
-                      </div>
-                      <div>
-                        <span className="font-medium text-brand-text">Kind:</span> {data.fall?.kindName ?? "—"}
-                      </div>
-                    </div>
+            {/* Dokumentkopf */}
+            <div className="border-b-2 border-gray-800 pb-4">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <div className="text-[10px] uppercase tracking-widest text-gray-500 mb-1">
+                    Fallakte · Vollständige Dokumentation
                   </div>
-
-                  <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                    <FactCard label="Meldungen" value={data.meldungen.length} icon={<CheckCircle2 className="h-4 w-4" />} />
-                    <FactCard
-                        label="Offene / Entwürfe"
-                        value={data.meldungen.filter((m) => !isClosedStatus(m.status)).length}
-                        icon={<Clock3 className="h-4 w-4" />}
-                    />
-                    <FactCard label="Schutzpläne" value={data.schutzplaene.length} icon={<ShieldCheck className="h-4 w-4" />} />
-                    <FactCard label="Chronologie-Einträge" value={timeline.length} icon={<FileOutput className="h-4 w-4" />} />
-                  </div>
-                </section>
-
-                <Section title="Management Summary" subtitle="Verdichteter Überblick für Fallakte und PDF">
-                  <Kv label="Kurzbeschreibung" value={data.fall?.kurzbeschreibung ?? "—"} />
-                  <Kv label="Meldungen abgeschlossen" value={data.meldungen.filter((m) => isClosedStatus(m.status)).length} />
-                  <Kv label="Meldungen als Entwurf" value={data.meldungen.filter((m) => isDraftStatus(m.status)).length} />
-                  <Kv
-                      label="Letzter Chronologie-Eintrag"
-                      value={
-                        timeline.length
-                            ? `${fmtDate(timeline[timeline.length - 1]?.date, true)} · ${timeline[timeline.length - 1]?.title}`
-                            : "—"
-                      }
-                  />
-                </Section>
-
-                <Section title="Fallübersicht" subtitle="Stammdaten des Falls">
-                  <Kv label="Fall-ID" value={data.fall?.id ?? fallId} />
-                  <Kv label="Aktenzeichen" value={data.fall?.aktenzeichen ?? "—"} />
-                  <Kv label="Status" value={data.fall?.status ?? "—"} />
-                  <Kv label="Titel" value={data.fall?.titel ?? "—"} />
-                  <Kv label="Kurzbeschreibung" value={data.fall?.kurzbeschreibung ?? "—"} />
-                  <Kv label="Kind" value={data.fall?.kindName ?? "—"} />
-                  <Kv label="Angelegt" value={fmtDate(data.fall?.createdAt ?? null, true)} />
-                </Section>
-
-                <Section title="Fallchronologie" subtitle="Zeitliche Übersicht über alle registrierten Module">
-                  {timeline.length === 0 ? (
-                      <div className="text-sm text-brand-text2">Keine Chronologie-Einträge vorhanden.</div>
-                  ) : (
-                      <div className="space-y-3">
-                        {timeline.map((entry, index) => (
-                            <div key={entry.key} className="print-avoid-break rounded-2xl border border-brand-border/30 p-4">
-                              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                                <div>
-                                  <div className="font-medium text-brand-text">{entry.title}</div>
-                                  <div className="mt-1 text-sm text-brand-text2">{entry.subtitle || "—"}</div>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                  <Badge variant="outline">{entry.section}</Badge>
-                                  <span className="text-sm text-brand-text2">{fmtDate(entry.date, true)}</span>
-                                </div>
-                              </div>
-                              {entry.body ? <div className="mt-3 whitespace-pre-wrap text-sm text-brand-text">{entry.body}</div> : null}
-                              {index < timeline.length - 1 ? <Separator className="mt-4" /> : null}
-                            </div>
-                        ))}
-                      </div>
-                  )}
-                </Section>
-
-                <Section title={`Meldungen (${data.meldungen.length})`}>
-                  {data.meldungen.length === 0 ? (
-                      <div className="text-sm text-brand-text2">Keine Meldungen vorhanden.</div>
-                  ) : (
-                      data.meldungen.map((item, index) => (
-                          <div key={item.id} className="print-avoid-break rounded-xl border border-brand-border/30 p-3">
-                            <div className="flex items-center justify-between gap-3">
-                              <div className="font-medium text-brand-text">
-                                Meldung #{item.id} · Version {item.versionNo}
-                              </div>
-                              <Badge variant="outline">{item.status ?? "—"}</Badge>
-                            </div>
-
-                            <Kv label="Angelegt von" value={item.createdByDisplayName ?? "—"} />
-                            <Kv label="Angelegt am" value={fmtDate(item.createdAt ?? null, true)} />
-                            <Kv
-                                label="Anlässe"
-                                value={
-                                  Array.isArray(item.anlassCodes)
-                                      ? item.anlassCodes.map((code) => anlassLabel(code)).join(", ")
-                                      : "—"
-                                }
-                            />
-                            <Kv label="Kurzbeschreibung" value={item.kurzbeschreibung ?? "—"} />
-                            <Kv label="Fachbewertung" value={item.fachText ?? "—"} />
-                            <Kv label="Zusammenfassung" value={item.zusammenfassung ?? "—"} />
-
-                            {index < data.meldungen.length - 1 ? <Separator className="mt-3" /> : null}
-                          </div>
-                      ))
-                  )}
-                </Section>
-
-                <Section title={`Meldebögen (${data.meldeboegen.length})`}>
-                  {data.meldeboegen.length === 0 ? (
-                      <div className="text-sm text-brand-text2">Keine Meldebögen vorhanden.</div>
-                  ) : (
-                      data.meldeboegen.map((item) => (
-                          <div key={item.id} className="print-avoid-break rounded-xl border border-brand-border/30 p-3">
-                            <div className="font-medium text-brand-text">Meldebogen #{item.id}</div>
-                            <Kv label="Eingangsdatum" value={fmtDate(item.eingangsdatum)} />
-                            <Kv label="Meldungsart" value={item.meldungart ?? "—"} />
-                            <Kv label="Ersteinschätzung" value={item.ersteinschaetzung ?? "—"} />
-                            <Kv label="Handlungsdringlichkeit" value={item.handlungsdringlichkeit ?? "—"} />
-                            <Kv label="Schilderung" value={item.schilderung ?? "—"} />
-                          </div>
-                      ))
-                  )}
-                </Section>
-
-                <Section title={`Kinderschutzbögen (${data.kinderschutzboegen.length})`}>
-                  {data.kinderschutzboegen.length === 0 ? (
-                      <div className="text-sm text-brand-text2">Keine Kinderschutzbögen vorhanden.</div>
-                  ) : (
-                      data.kinderschutzboegen.map((item) => (
-                          <div key={item.id} className="print-avoid-break rounded-xl border border-brand-border/30 p-3">
-                            <div className="font-medium text-brand-text">Assessment #{item.id}</div>
-                            <Kv label="Altersgruppe" value={item.altergruppeLabel ?? item.altersgruppe} />
-                            <Kv label="Bewertungsdatum" value={fmtDate(item.bewertungsdatum)} />
-                            <Kv label="Auto-Einschätzung" value={valueText(item.gesamteinschaetzungAuto)} />
-                            <Kv label="Manuelle Einschätzung" value={valueText(item.gesamteinschaetzungManuell)} />
-                            <Kv label="Freitext" value={item.gesamteinschaetzungFreitext ?? "—"} />
-                          </div>
-                      ))
-                  )}
-                </Section>
-
-                <Section title={`DJI-Prüfbögen (${data.dji.length})`}>
-                  {data.dji.length === 0 ? (
-                      <div className="text-sm text-brand-text2">Keine DJI-Prüfbögen vorhanden.</div>
-                  ) : (
-                      data.dji.map((item) => (
-                          <div key={item.id} className="print-avoid-break rounded-xl border border-brand-border/30 p-3">
-                            <div className="font-medium text-brand-text">
-                              {item.formTypLabel} #{item.id}
-                            </div>
-                            <Kv label="Bewertungsdatum" value={fmtDate(item.bewertungsdatum)} />
-                            <Kv label="Gesamteinschätzung" value={item.gesamteinschaetzungLabel ?? item.gesamteinschaetzung ?? "—"} />
-                            <Kv label="Freitext" value={item.gesamtfreitext ?? "—"} />
-                          </div>
-                      ))
-                  )}
-                </Section>
-
-                <Section title={`Schutzpläne (${data.schutzplaene.length})`}>
-                  {data.schutzplaene.length === 0 ? (
-                      <div className="text-sm text-brand-text2">Keine Schutzpläne vorhanden.</div>
-                  ) : (
-                      data.schutzplaene.map((item) => (
-                          <div key={item.id} className="print-avoid-break rounded-xl border border-brand-border/30 p-3">
-                            <div className="flex items-center justify-between gap-3">
-                              <div className="font-medium text-brand-text">Schutzplan #{item.id}</div>
-                              <Badge variant="outline">{item.status ?? "—"}</Badge>
-                            </div>
-                            <Kv label="Erstellt am" value={fmtDate(item.erstelltAm)} />
-                            <Kv label="Gültig bis" value={fmtDate(item.gueltigBis)} />
-                            <Kv label="Gefährdungssituation" value={item.gefaehrdungssituation ?? "—"} />
-                            <Kv label="Vereinbarungen" value={item.vereinbarungen ?? "—"} />
-                            <Kv label="Beteiligte" value={item.beteiligte ?? "—"} />
-                            <Kv
-                                label="Maßnahmen"
-                                value={
-                                  item.massnahmen.length
-                                      ? item.massnahmen.map((m) => `${m.position}. ${m.massnahme} (${m.status})`).join("\n")
-                                      : "—"
-                                }
-                            />
-                          </div>
-                      ))
-                  )}
-                </Section>
-
-                <Section title={`Hausbesuche (${data.hausbesuche.length})`}>
-                  {data.hausbesuche.length === 0 ? (
-                      <div className="text-sm text-brand-text2">Keine Hausbesuche vorhanden.</div>
-                  ) : (
-                      data.hausbesuche.map((item) => (
-                          <div key={item.id} className="print-avoid-break rounded-xl border border-brand-border/30 p-3">
-                            <div className="font-medium text-brand-text">Hausbesuch #{item.id}</div>
-                            <Kv label="Besuchsdatum" value={fmtDate(item.besuchsdatum)} />
-                            <Kv label="Anwesende" value={item.anwesende ?? "—"} />
-                            <Kv label="Ampel" value={item.einschaetzungAmpel ?? "—"} />
-                            <Kv label="Einschätzung" value={item.einschaetzungText ?? "—"} />
-                            <Kv label="Nächste Schritte" value={item.naechsteSchritte ?? "—"} />
-                          </div>
-                      ))
-                  )}
-                </Section>
-
-                <SignatureBlock />
+                  <h1 className="text-xl font-bold text-gray-900">
+                    {data.fall?.titel ?? `Fall #${fallId}`}
+                  </h1>
+                </div>
+                <div className="text-right text-xs text-gray-600 shrink-0 space-y-0.5">
+                  <div><span className="font-medium">Fall-ID:</span> {data.fall?.id ?? fallId}</div>
+                  <div><span className="font-medium">Aktenzeichen:</span> {data.fall?.aktenzeichen ?? "—"}</div>
+                  <div><span className="font-medium">Status:</span> {data.fall?.status ?? "—"}</div>
+                  <div><span className="font-medium">Kind:</span> {data.fall?.kindName ?? "—"}</div>
+                  <div className="pt-1 text-gray-400">Exportiert: {fmtDate(new Date().toISOString(), true)}</div>
+                </div>
               </div>
             </div>
-        )}
-      </CaseWizardShell>
+
+            {/* Zusammenfassung */}
+            <Section title="Zusammenfassung">
+              <Kv label="Kurzbeschreibung" value={data.fall?.kurzbeschreibung ?? "—"} />
+              <Kv label="Meldungen gesamt" value={data.meldungen.length} />
+              <Kv label="davon abgeschlossen" value={data.meldungen.filter((m) => isClosedStatus(m.status)).length} />
+              <Kv label="davon als Entwurf" value={data.meldungen.filter((m) => isDraftStatus(m.status)).length} />
+              <Kv label="Schutzpläne" value={data.schutzplaene.length} />
+              <Kv label="Chronologie-Einträge" value={timeline.length} />
+              <Kv
+                label="Letzter Eintrag"
+                value={
+                  timeline.length
+                    ? `${fmtDate(timeline[timeline.length - 1]?.date, true)} · ${timeline[timeline.length - 1]?.title}`
+                    : "—"
+                }
+              />
+            </Section>
+
+            {/* Stammdaten */}
+            <Section title="Fallübersicht" subtitle="Stammdaten des Falls">
+              <Kv label="Fall-ID" value={data.fall?.id ?? fallId} />
+              <Kv label="Aktenzeichen" value={data.fall?.aktenzeichen ?? "—"} />
+              <Kv label="Status" value={data.fall?.status ?? "—"} />
+              <Kv label="Titel" value={data.fall?.titel ?? "—"} />
+              <Kv label="Kurzbeschreibung" value={data.fall?.kurzbeschreibung ?? "—"} />
+              <Kv label="Kind" value={data.fall?.kindName ?? "—"} />
+              <Kv label="Angelegt" value={fmtDate(data.fall?.createdAt ?? null, true)} />
+            </Section>
+
+            {/* Chronologie */}
+            <Section title="Fallchronologie" subtitle="Zeitliche Übersicht über alle registrierten Module">
+              {timeline.length === 0 ? (
+                <p className="text-sm text-gray-500">Keine Chronologie-Einträge vorhanden.</p>
+              ) : (
+                <div>
+                  {timeline.map((entry) => (
+                    <div key={entry.key} className="print-avoid-break border-b border-gray-100 py-2">
+                      <div className="flex items-start justify-between gap-4 text-sm">
+                        <div>
+                          <span className="font-medium text-gray-900">{entry.title}</span>
+                          {entry.subtitle ? (
+                            <span className="ml-2 text-gray-500">· {entry.subtitle}</span>
+                          ) : null}
+                        </div>
+                        <div className="shrink-0 text-right text-xs text-gray-500">
+                          <span className="mr-2 font-medium">[{entry.section}]</span>
+                          {fmtDate(entry.date, true)}
+                        </div>
+                      </div>
+                      {entry.body ? (
+                        <div className="mt-1 whitespace-pre-wrap text-sm text-gray-700">{entry.body}</div>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </Section>
+
+            {/* Meldungen */}
+            <Section title={`Meldungen (${data.meldungen.length})`}>
+              {data.meldungen.length === 0 ? (
+                <p className="text-sm text-gray-500">Keine Meldungen vorhanden.</p>
+              ) : (
+                data.meldungen.map((item) => (
+                  <div key={item.id} className="print-avoid-break border border-gray-200 p-3 mb-3">
+                    <div className="flex items-center justify-between border-b border-gray-200 pb-1 mb-2 text-sm font-medium text-gray-900">
+                      <span>Meldung #{item.id} · Version {item.versionNo}</span>
+                      <span className="text-gray-500">{item.status ?? "—"}</span>
+                    </div>
+                    <Kv label="Angelegt von" value={item.createdByDisplayName ?? "—"} />
+                    <Kv label="Angelegt am" value={fmtDate(item.createdAt ?? null, true)} />
+                    <Kv
+                      label="Anlässe"
+                      value={
+                        Array.isArray(item.anlassCodes)
+                          ? item.anlassCodes.map((code) => anlassLabel(code)).join(", ")
+                          : "—"
+                      }
+                    />
+                    <Kv label="Kurzbeschreibung" value={item.kurzbeschreibung ?? "—"} />
+                    <Kv label="Fachbewertung" value={item.fachText ?? "—"} />
+                    <Kv label="Zusammenfassung" value={item.zusammenfassung ?? "—"} />
+                  </div>
+                ))
+              )}
+            </Section>
+
+            {/* Meldebögen */}
+            <Section title={`Meldebögen (${data.meldeboegen.length})`}>
+              {data.meldeboegen.length === 0 ? (
+                <p className="text-sm text-gray-500">Keine Meldebögen vorhanden.</p>
+              ) : (
+                data.meldeboegen.map((item) => (
+                  <div key={item.id} className="print-avoid-break border border-gray-200 p-3 mb-3">
+                    <div className="border-b border-gray-200 pb-1 mb-2 text-sm font-medium text-gray-900">
+                      Meldebogen #{item.id}
+                    </div>
+                    <Kv label="Eingangsdatum" value={fmtDate(item.eingangsdatum)} />
+                    <Kv label="Meldungsart" value={item.meldungart ?? "—"} />
+                    <Kv label="Ersteinschätzung" value={item.ersteinschaetzung ?? "—"} />
+                    <Kv label="Handlungsdringlichkeit" value={item.handlungsdringlichkeit ?? "—"} />
+                    <Kv label="Schilderung" value={item.schilderung ?? "—"} />
+                  </div>
+                ))
+              )}
+            </Section>
+
+            {/* Kinderschutzbögen */}
+            <Section title={`Kinderschutzbögen (${data.kinderschutzboegen.length})`}>
+              {data.kinderschutzboegen.length === 0 ? (
+                <p className="text-sm text-gray-500">Keine Kinderschutzbögen vorhanden.</p>
+              ) : (
+                data.kinderschutzboegen.map((item) => (
+                  <div key={item.id} className="print-avoid-break border border-gray-200 p-3 mb-3">
+                    <div className="border-b border-gray-200 pb-1 mb-2 text-sm font-medium text-gray-900">
+                      Assessment #{item.id}
+                    </div>
+                    <Kv label="Altersgruppe" value={item.altergruppeLabel ?? item.altersgruppe} />
+                    <Kv label="Bewertungsdatum" value={fmtDate(item.bewertungsdatum)} />
+                    <Kv label="Auto-Einschätzung" value={valueText(item.gesamteinschaetzungAuto)} />
+                    <Kv label="Manuelle Einschätzung" value={valueText(item.gesamteinschaetzungManuell)} />
+                    <Kv label="Freitext" value={item.gesamteinschaetzungFreitext ?? "—"} />
+                  </div>
+                ))
+              )}
+            </Section>
+
+            {/* DJI */}
+            <Section title={`DJI-Prüfbögen (${data.dji.length})`}>
+              {data.dji.length === 0 ? (
+                <p className="text-sm text-gray-500">Keine DJI-Prüfbögen vorhanden.</p>
+              ) : (
+                data.dji.map((item) => (
+                  <div key={item.id} className="print-avoid-break border border-gray-200 p-3 mb-3">
+                    <div className="border-b border-gray-200 pb-1 mb-2 text-sm font-medium text-gray-900">
+                      {item.formTypLabel} #{item.id}
+                    </div>
+                    <Kv label="Bewertungsdatum" value={fmtDate(item.bewertungsdatum)} />
+                    <Kv label="Gesamteinschätzung" value={item.gesamteinschaetzungLabel ?? item.gesamteinschaetzung ?? "—"} />
+                    <Kv label="Freitext" value={item.gesamtfreitext ?? "—"} />
+                  </div>
+                ))
+              )}
+            </Section>
+
+            {/* Schutzpläne */}
+            <Section title={`Schutzpläne (${data.schutzplaene.length})`}>
+              {data.schutzplaene.length === 0 ? (
+                <p className="text-sm text-gray-500">Keine Schutzpläne vorhanden.</p>
+              ) : (
+                data.schutzplaene.map((item) => (
+                  <div key={item.id} className="print-avoid-break border border-gray-200 p-3 mb-3">
+                    <div className="flex items-center justify-between border-b border-gray-200 pb-1 mb-2 text-sm font-medium text-gray-900">
+                      <span>Schutzplan #{item.id}</span>
+                      <span className="text-gray-500">{item.status ?? "—"}</span>
+                    </div>
+                    <Kv label="Erstellt am" value={fmtDate(item.erstelltAm)} />
+                    <Kv label="Gültig bis" value={fmtDate(item.gueltigBis)} />
+                    <Kv label="Gefährdungssituation" value={item.gefaehrdungssituation ?? "—"} />
+                    <Kv label="Vereinbarungen" value={item.vereinbarungen ?? "—"} />
+                    <Kv label="Beteiligte" value={item.beteiligte ?? "—"} />
+                    <Kv
+                      label="Maßnahmen"
+                      value={
+                        item.massnahmen.length
+                          ? item.massnahmen.map((m) => `${m.position}. ${m.massnahme} (${m.status})`).join("\n")
+                          : "—"
+                      }
+                    />
+                  </div>
+                ))
+              )}
+            </Section>
+
+            {/* Hausbesuche */}
+            <Section title={`Hausbesuche (${data.hausbesuche.length})`}>
+              {data.hausbesuche.length === 0 ? (
+                <p className="text-sm text-gray-500">Keine Hausbesuche vorhanden.</p>
+              ) : (
+                data.hausbesuche.map((item) => (
+                  <div key={item.id} className="print-avoid-break border border-gray-200 p-3 mb-3">
+                    <div className="border-b border-gray-200 pb-1 mb-2 text-sm font-medium text-gray-900">
+                      Hausbesuch #{item.id}
+                    </div>
+                    <Kv label="Besuchsdatum" value={fmtDate(item.besuchsdatum)} />
+                    <Kv label="Anwesende" value={item.anwesende ?? "—"} />
+                    <Kv label="Ampel" value={item.einschaetzungAmpel ?? "—"} />
+                    <Kv label="Einschätzung" value={item.einschaetzungText ?? "—"} />
+                    <Kv label="Nächste Schritte" value={item.naechsteSchritte ?? "—"} />
+                  </div>
+                ))
+              )}
+            </Section>
+
+            <SignatureBlock />
+          </div>
+        </div>
+      )}
+    </CaseExportShell>
   );
 }
