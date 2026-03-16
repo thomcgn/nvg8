@@ -6,15 +6,15 @@ import { X } from "lucide-react";
 
 type Props = {
     files: File[];
-    onUploadClick: () => void;
-    onRemoveAt: (idx: number) => void;
+    onUploadClickAction: () => void;
+    onRemoveAtAction: (idx: number) => void;
     disabled?: boolean;
 };
 
 export function UploadInfoList({
                                    files,
-                                   onUploadClick,
-                                   onRemoveAt,
+                                   onUploadClickAction,
+                                   onRemoveAtAction,
                                    disabled = false,
                                }: Props) {
     return (
@@ -24,7 +24,7 @@ export function UploadInfoList({
                     type="button"
                     variant="outline"
                     size="sm"
-                    onClick={onUploadClick}
+                    onClick={onUploadClickAction}
                     disabled={disabled}
                 >
                     Unterlagen hochladen
@@ -52,7 +52,7 @@ export function UploadInfoList({
                                 type="button"
                                 variant="ghost"
                                 size="icon"
-                                onClick={() => onRemoveAt(idx)}
+                                onClick={() => onRemoveAtAction(idx)}
                                 disabled={disabled}
                                 className="h-6 w-6 text-destructive hover:text-destructive"
                             >

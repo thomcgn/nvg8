@@ -5,6 +5,12 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/useAuth";
 import { selectContext } from "@/lib/auth";
 
+function errorMessage(error: unknown, fallback: string): string {
+  if (error instanceof Error && error.message.trim()) return error.message;
+  if (typeof error === "string" && error.trim()) return error;
+  return fallback;
+}
+
 export function AuthGate({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const { me, loading, refresh } = useAuth();
@@ -43,8 +49,8 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
 
         await selectContext(einrichtungOrgUnitId);
         await refresh(); // /auth/me neu holen -> contextActive sollte true werden
-      } catch (e: any) {
-        setSwitchErr(e?.message || "Kontext konnte nicht gesetzt werden.");
+      } catch (e: unknown) {
+        setSwitchErr(errorMessage(e, "Kontext konnte nicht gesetzt werden."));
         router.replace("/login");
       } finally {
         setSwitching(false);

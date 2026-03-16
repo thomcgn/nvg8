@@ -6,7 +6,6 @@ import {
     CalendarDays,
     ClipboardList,
     UserCog,
-    UsersRound,
     UserRoundIcon,
     ShieldCheck,
     Menu,
@@ -18,19 +17,17 @@ import {
     LayoutDashboard,
     Baby,
     Users,
-    FolderOpen,
     AlertTriangle,
-    LifeBuoy,
     Briefcase,
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { BrandMark } from "@/components/BrandMark";
 import { useAuth } from "@/lib/useAuth";
 import { apiFetch } from "@/lib/api";
 import type { AvailableContextDto } from "@/lib/types";
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Button } from "@/components/ui/button";
 
-type NavItemDef = { href: string; label: string; icon: any; description?: string };
+type NavItemDef = { href: string; label: string; icon: LucideIcon; description?: string };
 type NavSection = { title: string; items: NavItemDef[] };
 
 const navSections: NavSection[] = [
@@ -74,7 +71,7 @@ function NavItem({
     href: string;
     label: string;
     description?: string;
-    icon: any;
+    icon: LucideIcon;
     onNavigate?: () => void;
 }) {
     const pathname = usePathname();
@@ -87,7 +84,7 @@ function NavItem({
             className={
                 "group relative flex items-center gap-3 rounded-xl px-3 py-2.5 transition-all duration-150 " +
                 (active
-                    ? "bg-brand-blue/5 text-brand-blue border-l-2 border-brand-blue pl-[10px]"
+                    ? "bg-brand-blue/5 text-brand-blue border-l-2 border-brand-blue pl-2.5"
                     : "text-brand-text2 border-l-2 border-transparent hover:bg-white hover:text-brand-text hover:border-brand-border")
             }
         >
@@ -132,7 +129,7 @@ type AuthContextsResponse = { contexts: AvailableContextDto[] };
 
 /* ── Sidebar content ───────────────────────────────────────── */
 
-function SidebarContent({ onClose, className = "" }: { onClose?: () => void; className?: string }) {
+function SidebarContent({ onClose: onCloseAction, className = "" }: { onClose?: () => void; className?: string }) {
     const router = useRouter();
     const { me, loading, signOut } = useAuth();
 
@@ -174,7 +171,7 @@ function SidebarContent({ onClose, className = "" }: { onClose?: () => void; cla
         if (!me || remainingSeconds > 0) return;
         (async () => {
             try { await signOut(); } finally {
-                onClose?.();
+                onCloseAction?.();
                 router.replace("/login");
             }
         })();
@@ -207,9 +204,9 @@ function SidebarContent({ onClose, className = "" }: { onClose?: () => void; cla
             {/* Logo bar */}
             <div className="flex items-center justify-between px-4 py-4 border-b border-brand-border/40">
                 <BrandMark />
-                {onClose ? (
+                {onCloseAction ? (
                     <button
-                        onClick={onClose}
+                        onClick={onCloseAction}
                         className="rounded-lg p-1.5 text-brand-text2 transition hover:bg-brand-bg hover:text-brand-text focus:outline-none"
                         aria-label="Menü schließen"
                     >
@@ -264,7 +261,7 @@ function SidebarContent({ onClose, className = "" }: { onClose?: () => void; cla
                             <div className="flex gap-2 pt-0.5">
                                 <Link
                                     href="/dashboard/account"
-                                    onClick={onClose}
+                                    onClick={onCloseAction}
                                     className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-lg border border-brand-border/60 bg-white px-3 py-2 text-xs font-medium text-brand-text2 transition hover:bg-brand-bg hover:text-brand-text"
                                 >
                                     <Settings className="h-3.5 w-3.5" />
@@ -273,7 +270,7 @@ function SidebarContent({ onClose, className = "" }: { onClose?: () => void; cla
                                 <button
                                     onClick={async () => {
                                         await signOut();
-                                        onClose?.();
+                                        onCloseAction?.();
                                         router.push("/login");
                                     }}
                                     className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-lg border border-brand-border/60 bg-white px-3 py-2 text-xs font-medium text-brand-text2 transition hover:bg-red-50 hover:border-red-200 hover:text-red-600"
@@ -290,7 +287,7 @@ function SidebarContent({ onClose, className = "" }: { onClose?: () => void; cla
             {/* Navigation */}
             <nav className="flex flex-1 flex-col gap-5 overflow-y-auto px-3 py-4">
                 {/* Dashboard */}
-                <NavItem href="/dashboard" label="Übersicht" icon={LayoutDashboard} description="Start & Kennzahlen" onNavigate={onClose} />
+                <NavItem href="/dashboard" label="Übersicht" icon={LayoutDashboard} description="Start & Kennzahlen" onNavigate={onCloseAction} />
 
                 {/* Sections */}
                 {navSections.map((sec) => (
@@ -300,7 +297,7 @@ function SidebarContent({ onClose, className = "" }: { onClose?: () => void; cla
                         </div>
                         <div className="flex flex-col gap-0.5">
                             {sec.items.map((i) => (
-                                <NavItem key={i.href} {...i} onNavigate={onClose} />
+                                <NavItem key={i.href} {...i} onNavigate={onCloseAction} />
                             ))}
                         </div>
                     </div>

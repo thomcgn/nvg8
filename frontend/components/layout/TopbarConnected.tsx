@@ -5,7 +5,7 @@ import { useTicketsUIOptional } from "@/components/support/TicketsUIProvider";
 
 type TopbarConnectedProps = Omit<
   TopbarProps,
-  "onTickets" | "ticketsCount" | "notificationsCount"
+  "onTicketsAction" | "ticketsCount" | "notificationsCount"
 >;
 
 export function TopbarConnected(props: TopbarConnectedProps) {
@@ -14,8 +14,8 @@ export function TopbarConnected(props: TopbarConnectedProps) {
   return (
     <Topbar
       {...props}
-      onNotifications={props.onNotifications ?? ctx?.openMessenger}
-      onTickets={ctx?.openTickets}
+      onNotificationsAction={props.onNotificationsAction ?? ctx?.openMessenger}
+      onTicketsAction={ctx?.openTickets}
       notificationsCount={ctx?.notificationsCount ?? 0}
       ticketsCount={ctx?.ticketsCount ?? 0}
     />

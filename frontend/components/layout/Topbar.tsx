@@ -6,9 +6,9 @@ import { useEffect, useMemo, useState } from "react";
 export type TopbarProps = {
   title: string;
 
-  onSearch?: (q: string) => void;
-  onNotifications?: () => void;
-  onTickets?: () => void;
+  onSearchAction?: (q: string) => void;
+  onNotificationsAction?: () => void;
+  onTicketsAction?: () => void;
 
   notificationsCount?: number;
   ticketsCount?: number;
@@ -27,9 +27,9 @@ function clampBadge(n: number) {
 
 export function Topbar({
   title,
-  onSearch,
-  onNotifications,
-  onTickets,
+  onSearchAction,
+  onNotificationsAction,
+  onTicketsAction,
   notificationsCount = 0,
   ticketsCount = 0,
   initialQuery = "",
@@ -45,8 +45,8 @@ export function Topbar({
   const notifBadge = useMemo(() => clampBadge(notificationsCount), [notificationsCount]);
   const ticketsBadge = useMemo(() => clampBadge(ticketsCount), [ticketsCount]);
 
-  const notifDisabled = disableWhenNoHandler && !onNotifications;
-  const ticketsDisabled = disableWhenNoHandler && !onTickets;
+  const notifDisabled = disableWhenNoHandler && !onNotificationsAction;
+  const ticketsDisabled = disableWhenNoHandler && !onTicketsAction;
 
   return (
     <div
@@ -71,7 +71,7 @@ export function Topbar({
 
           <button
             type="button"
-            onClick={onNotifications}
+            onClick={onNotificationsAction}
             disabled={notifDisabled}
             className={[
               "group relative inline-flex items-center gap-2",
@@ -97,7 +97,7 @@ export function Topbar({
 
           <button
             type="button"
-            onClick={onTickets}
+            onClick={onTicketsAction}
             disabled={ticketsDisabled}
             className={[
               "group relative inline-flex items-center gap-2",
@@ -134,7 +134,7 @@ export function Topbar({
               onChange={(e) => {
                 const next = e.target.value;
                 setQ(next);
-                onSearch?.(next);
+                onSearchAction?.(next);
               }}
               placeholder="Suchen…"
               className="h-11 w-full rounded-xl border border-brand-border bg-white/80 pl-9 pr-3 text-sm shadow-sm"

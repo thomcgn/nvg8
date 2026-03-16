@@ -5,7 +5,6 @@ import { useParams, useRouter } from "next/navigation";
 import {
     ArrowLeft,
     ArrowRight,
-    Plus,
     Link2,
     UserPlus,
     XCircle,
@@ -15,7 +14,7 @@ import {
 } from "lucide-react";
 
 import { AuthGate } from "@/components/AuthGate";
-import { TopbarConnected as Topbar } from "@/components/layout/TopbarConnected";;
+import { TopbarConnected as Topbar } from "@/components/layout/TopbarConnected";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -45,7 +44,6 @@ import {
 } from "@/components/ui/accordion";
 
 import { apiFetch } from "@/lib/api";
-import { useAuth } from "@/lib/useAuth";
 import type {
     AddKindBezugspersonRequest,
     CreateBezugspersonRequest,
@@ -87,6 +85,19 @@ function errorMessage(e: unknown, fallback: string) {
     return fallback;
 }
 
+function asRecord(value: unknown): Record<string, unknown> | null {
+    return typeof value === "object" && value !== null ? (value as Record<string, unknown>) : null;
+}
+
+function getProp(value: unknown, key: string): unknown {
+    const rec = asRecord(value);
+    return rec ? rec[key] : undefined;
+}
+
+function asStringOrNull(value: unknown): string | null {
+    return typeof value === "string" ? value : null;
+}
+
 /** Robust: Backend kann linkId statt id liefern. */
 function getLinkId(l: unknown): number | null {
     const obj = l as Record<string, unknown> | null;
@@ -111,22 +122,22 @@ type CreateFallResponse = {
 
 // robust: 404 detection
 function isNotFound(e: unknown): boolean {
-    if (!e || typeof e !== "object") return false;
-    const anyE: any = e;
+    const statusCandidates = [
+        getProp(e, "status"),
+        getProp(getProp(e, "response"), "status"),
+        getProp(getProp(e, "data"), "status"),
+        getProp(getProp(e, "error"), "status"),
+    ];
 
-    const status =
-        (typeof anyE.status === "number" && anyE.status) ||
-        (typeof anyE?.response?.status === "number" && anyE.response.status) ||
-        (typeof anyE?.data?.status === "number" && anyE.data.status) ||
-        (typeof anyE?.error?.status === "number" && anyE.error.status);
+    const status = statusCandidates.find((x) => typeof x === "number");
 
     if (status === 404) return true;
 
     const msg =
-        typeof anyE.message === "string"
-            ? anyE.message
-            : typeof anyE?.error?.message === "string"
-                ? anyE.error.message
+        typeof getProp(e, "message") === "string"
+            ? String(getProp(e, "message"))
+            : typeof getProp(getProp(e, "error"), "message") === "string"
+                ? String(getProp(getProp(e, "error"), "message"))
                 : "";
 
     return msg.includes("404") || msg.toLowerCase().includes("not found");
@@ -200,73 +211,74 @@ function formatAddress(parts: {
 
 function getKindAddress(kind: KindResponse | null): string | null {
     if (!kind) return null;
-    const k = kind as any;
+    const k = kind as Record<string, unknown>;
+    const address = asRecord(k.address);
 
     const strasse =
-        k.strasse ??
-        k.street ??
-        k.adresseStrasse ??
-        k.addressStreet ??
-        k.address?.strasse ??
-        k.address?.street ??
+        asStringOrNull(k.strasse) ??
+        asStringOrNull(k.street) ??
+        asStringOrNull(k.adresseStrasse) ??
+        asStringOrNull(k.addressStreet) ??
+        asStringOrNull(address?.strasse) ??
+        asStringOrNull(address?.street) ??
         null;
 
     const hausnummer =
-        k.hausnummer ??
-        k.houseNumber ??
-        k.adresseHausnummer ??
-        k.addressHouseNumber ??
-        k.address?.hausnummer ??
-        k.address?.houseNumber ??
+        asStringOrNull(k.hausnummer) ??
+        asStringOrNull(k.houseNumber) ??
+        asStringOrNull(k.adresseHausnummer) ??
+        asStringOrNull(k.addressHouseNumber) ??
+        asStringOrNull(address?.hausnummer) ??
+        asStringOrNull(address?.houseNumber) ??
         null;
 
     const plz =
-        k.plz ??
-        k.postleitzahl ??
-        k.zip ??
-        k.addressZip ??
-        k.address?.plz ??
-        k.address?.zip ??
+        asStringOrNull(k.plz) ??
+        asStringOrNull(k.postleitzahl) ??
+        asStringOrNull(k.zip) ??
+        asStringOrNull(k.addressZip) ??
+        asStringOrNull(address?.plz) ??
+        asStringOrNull(address?.zip) ??
         null;
 
     const ort =
-        k.ort ??
-        k.city ??
-        k.addressCity ??
-        k.address?.ort ??
-        k.address?.city ??
+        asStringOrNull(k.ort) ??
+        asStringOrNull(k.city) ??
+        asStringOrNull(k.addressCity) ??
+        asStringOrNull(address?.ort) ??
+        asStringOrNull(address?.city) ??
         null;
 
     return formatAddress({ strasse, hausnummer, plz, ort });
 }
 
 function getBezugspersonAddress(l: KindBezugspersonResponse): string | null {
-    const anyL = l as any;
+    const rec = l as unknown as Record<string, unknown>;
 
     const direct = formatAddress({
-        strasse: anyL.strasse ?? anyL.street ?? null,
-        hausnummer: anyL.hausnummer ?? anyL.houseNumber ?? null,
-        plz: anyL.plz ?? anyL.postleitzahl ?? anyL.zip ?? null,
-        ort: anyL.ort ?? anyL.city ?? null,
+        strasse: asStringOrNull(rec.strasse) ?? asStringOrNull(rec.street) ?? null,
+        hausnummer: asStringOrNull(rec.hausnummer) ?? asStringOrNull(rec.houseNumber) ?? null,
+        plz: asStringOrNull(rec.plz) ?? asStringOrNull(rec.postleitzahl) ?? asStringOrNull(rec.zip) ?? null,
+        ort: asStringOrNull(rec.ort) ?? asStringOrNull(rec.city) ?? null,
     });
     if (direct) return direct;
 
-    const nested = anyL.bezugsperson ?? anyL.person ?? anyL.bp ?? null;
+    const nested = asRecord(rec.bezugsperson ?? rec.person ?? rec.bp ?? null);
     if (nested) {
         const nestedAddr = formatAddress({
-            strasse: nested.strasse ?? nested.street ?? null,
-            hausnummer: nested.hausnummer ?? nested.houseNumber ?? null,
-            plz: nested.plz ?? nested.postleitzahl ?? nested.zip ?? null,
-            ort: nested.ort ?? nested.city ?? null,
+            strasse: asStringOrNull(nested.strasse) ?? asStringOrNull(nested.street) ?? null,
+            hausnummer: asStringOrNull(nested.hausnummer) ?? asStringOrNull(nested.houseNumber) ?? null,
+            plz: asStringOrNull(nested.plz) ?? asStringOrNull(nested.postleitzahl) ?? asStringOrNull(nested.zip) ?? null,
+            ort: asStringOrNull(nested.ort) ?? asStringOrNull(nested.city) ?? null,
         });
         if (nestedAddr) return nestedAddr;
     }
 
     return formatAddress({
-        strasse: anyL.bezugspersonStrasse ?? anyL.bpStrasse ?? null,
-        hausnummer: anyL.bezugspersonHausnummer ?? anyL.bpHausnummer ?? null,
-        plz: anyL.bezugspersonPlz ?? anyL.bpPlz ?? null,
-        ort: anyL.bezugspersonOrt ?? anyL.bpOrt ?? null,
+        strasse: asStringOrNull(rec.bezugspersonStrasse) ?? asStringOrNull(rec.bpStrasse) ?? null,
+        hausnummer: asStringOrNull(rec.bezugspersonHausnummer) ?? asStringOrNull(rec.bpHausnummer) ?? null,
+        plz: asStringOrNull(rec.bezugspersonPlz) ?? asStringOrNull(rec.bpPlz) ?? null,
+        ort: asStringOrNull(rec.bezugspersonOrt) ?? asStringOrNull(rec.bpOrt) ?? null,
     });
 }
 
@@ -322,22 +334,21 @@ const GENDER_OPTIONS: Array<{ value: string; label: string }> = [
 function BezugspersonCardBody({
                                   l,
                                   idx,
-                                  onTemplate,
                                   onEnd,
                                   setErr,
                               }: {
     l: KindBezugspersonResponse;
     idx: number;
-    onTemplate: () => void;
     onEnd: () => void;
     setErr: (v: string) => void;
 }) {
     const linkId = getLinkId(l);
-    const isEnabled = Boolean((l as any)?.enabled);
-    const isHaupt = Boolean((l as any)?.hauptkontakt);
-    const isHaushalt = Boolean((l as any)?.lebtImHaushalt);
-    const sorgerechtRaw = String((l as any)?.sorgerecht ?? "UNGEKLAERT");
-    const sorgerechtLabel = formatSorgerechtLabel((l as any)?.sorgerecht);
+    const rec = l as unknown as Record<string, unknown>;
+    const isEnabled = Boolean(rec.enabled);
+    const isHaupt = Boolean(rec.hauptkontakt);
+    const isHaushalt = Boolean(rec.lebtImHaushalt);
+    const sorgerechtRaw = String(rec.sorgerecht ?? "UNGEKLAERT");
+    const sorgerechtLabel = formatSorgerechtLabel(typeof rec.sorgerecht === "string" ? rec.sorgerecht : null);
     const addr = getBezugspersonAddress(l);
 
     return (
@@ -345,7 +356,7 @@ function BezugspersonCardBody({
             <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                 <div className="min-w-0">
                     <div className="flex flex-col gap-2">
-                        <div className="text-sm font-extrabold break-words">
+                        <div className="text-sm font-extrabold wrap-break-word">
                             {l.bezugspersonName || `Bezugsperson ${idx + 1}`}
                         </div>
 
@@ -369,22 +380,22 @@ function BezugspersonCardBody({
 
                         <div className="flex items-start gap-2 text-sm text-muted-foreground">
                             <MapPin className="mt-0.5 h-4 w-4 shrink-0" />
-                            <span className="break-words">{addr ?? "—"}</span>
+                            <span className="wrap-break-word">{addr ?? "—"}</span>
                         </div>
                     </div>
 
                     <div className="mt-3 grid grid-cols-1 gap-2 text-xs text-muted-foreground sm:grid-cols-3">
                         <div className="flex items-center gap-2">
                             <Link2 className="h-3.5 w-3.5" />
-                            <span className="break-words">Beziehung: {l.beziehung || "—"}</span>
+                            <span className="wrap-break-word">Beziehung: {l.beziehung || "—"}</span>
                         </div>
                         <div className="flex items-center gap-2">
                             <CalendarDays className="h-3.5 w-3.5" />
-                            <span className="break-words">
+                            <span className="wrap-break-word">
                 gültig: {l.validFrom || "—"} → {l.validTo || "offen"}
               </span>
                         </div>
-                        <div className="break-words">
+                        <div className="wrap-break-word">
                             BP-ID: {l.bezugspersonId ?? "—"} · Link-ID: {linkId ?? "—"}
                         </div>
                     </div>
@@ -416,9 +427,8 @@ function BezugspersonCardBody({
 export default function KindDetailPage() {
     const router = useRouter();
     const params = useParams();
-    const kindId = useMemo(() => safeIdFromParams((params as any)?.id), [params]);
+    const kindId = useMemo(() => safeIdFromParams(getProp(params, "id")), [params]);
 
-    const { me } = useAuth(); // falls du es später brauchst
 
     const [kind, setKind] = useState<KindResponse | null>(null);
     const [links, setLinks] = useState<KindBezugspersonResponse[]>([]);
@@ -642,7 +652,7 @@ export default function KindDetailPage() {
                 body: null,
             });
 
-            const fallId = Number((fall as any)?.id);
+            const fallId = Number((fall as { id?: unknown })?.id);
             if (!Number.isFinite(fallId) || fallId <= 0) {
                 setErr("Fall-ID konnte nicht ermittelt werden.");
                 return;
@@ -751,29 +761,29 @@ export default function KindDetailPage() {
                                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                                     <div className="rounded-2xl border border-border bg-card p-3">
                                         <div className="text-xs font-semibold text-muted-foreground">Name</div>
-                                        <div className="mt-1 text-sm font-extrabold break-words">
+                                        <div className="mt-1 text-sm font-extrabold wrap-break-word">
                                             {kind.vorname} {kind.nachname}
                                         </div>
                                     </div>
 
                                     <div className="rounded-2xl border border-border bg-card p-3">
                                         <div className="text-xs font-semibold text-muted-foreground">Geburtsdatum</div>
-                                        <div className="mt-1 text-sm font-semibold break-words">
+                                        <div className="mt-1 text-sm font-semibold wrap-break-word">
                                             {kind.geburtsdatum || "—"}
                                         </div>
                                     </div>
 
                                     <div className="rounded-2xl border border-border bg-card p-3">
                                         <div className="text-xs font-semibold text-muted-foreground">Gender</div>
-                                        <div className="mt-1 text-sm font-semibold break-words">{(kind as any).gender || "—"}</div>
+                                        <div className="mt-1 text-sm font-semibold wrap-break-word">{kind.gender || "—"}</div>
                                     </div>
 
                                     <div className="rounded-2xl border border-border bg-card p-3">
                                         <div className="text-xs font-semibold text-muted-foreground">Förderbedarf</div>
-                                        <div className="mt-1 text-sm font-semibold">{(kind as any).foerderbedarf ? "Ja" : "Nein"}</div>
-                                        {(kind as any).foerderbedarfDetails ? (
-                                            <div className="mt-1 text-xs text-muted-foreground break-words">
-                                                {(kind as any).foerderbedarfDetails}
+                                        <div className="mt-1 text-sm font-semibold">{kind.foerderbedarf ? "Ja" : "Nein"}</div>
+                                        {kind.foerderbedarfDetails ? (
+                                            <div className="mt-1 text-xs text-muted-foreground wrap-break-word">
+                                                {kind.foerderbedarfDetails}
                                             </div>
                                         ) : null}
                                     </div>
@@ -782,14 +792,14 @@ export default function KindDetailPage() {
                                         <div className="text-xs font-semibold text-muted-foreground">Adresse</div>
                                         <div className="mt-1 flex items-start gap-2 text-sm text-muted-foreground">
                                             <MapPin className="mt-0.5 h-4 w-4 shrink-0" />
-                                            <span className="break-words">{kindAddress ?? "—"}</span>
+                                            <span className="wrap-break-word">{kindAddress ?? "—"}</span>
                                         </div>
                                     </div>
 
-                                    {(kind as any).gesundheitsHinweise ? (
+                                    {kind.gesundheitsHinweise ? (
                                         <div className="sm:col-span-2 rounded-2xl border border-border bg-card p-3">
                                             <div className="text-xs font-semibold text-muted-foreground">Gesundheitshinweise</div>
-                                            <div className="mt-1 text-sm break-words">{(kind as any).gesundheitsHinweise}</div>
+                                            <div className="mt-1 text-sm wrap-break-word">{kind.gesundheitsHinweise}</div>
                                         </div>
                                     ) : null}
                                 </div>
@@ -815,16 +825,6 @@ export default function KindDetailPage() {
                                     l={links[0]}
                                     idx={0}
                                     setErr={(v) => setErr(v)}
-                                    onTemplate={() => {
-                                        const l = links[0];
-                                        setAddOpen(true);
-                                        setAddMode("existing");
-                                        setExistingId(l.bezugspersonId ? String(l.bezugspersonId) : "");
-                                        setBeziehung(l.beziehung || "SONSTIGE");
-                                        setSorgerecht(((l as any).sorgerecht as SorgerechtTyp) || "UNGEKLAERT");
-                                        setHauptkontakt(Boolean((l as any).hauptkontakt));
-                                        setLebtImHaushalt(Boolean((l as any).lebtImHaushalt));
-                                    }}
                                     onEnd={() => {
                                         const lid = getLinkId(links[0]);
                                         if (!lid) {
@@ -840,12 +840,12 @@ export default function KindDetailPage() {
                                         const linkId = getLinkId(l);
                                         const key = linkId
                                             ? `link-${linkId}`
-                                            : `bp-${String((l as any)?.bezugspersonId ?? "na")}-${String((l as any)?.validFrom ?? "na")}-${idx}`;
+                                            : `bp-${String(l.bezugspersonId ?? "na")}-${String(l.validFrom ?? "na")}-${idx}`;
 
                                         const title = l.bezugspersonName || `Bezugsperson ${idx + 1}`;
                                         const sub = [
                                             l.beziehung ? `Beziehung: ${l.beziehung}` : null,
-                                            (l as any)?.sorgerecht ? `Sorgerecht: ${formatSorgerechtLabel((l as any)?.sorgerecht)}` : null,
+                                            l.sorgerecht ? `Sorgerecht: ${formatSorgerechtLabel(l.sorgerecht)}` : null,
                                         ]
                                             .filter(Boolean)
                                             .join(" · ");
@@ -867,15 +867,6 @@ export default function KindDetailPage() {
                                                             l={l}
                                                             idx={idx}
                                                             setErr={(v) => setErr(v)}
-                                                            onTemplate={() => {
-                                                                setAddOpen(true);
-                                                                setAddMode("existing");
-                                                                setExistingId(l.bezugspersonId ? String(l.bezugspersonId) : "");
-                                                                setBeziehung(l.beziehung || "SONSTIGE");
-                                                                setSorgerecht(((l as any).sorgerecht as SorgerechtTyp) || "UNGEKLAERT");
-                                                                setHauptkontakt(Boolean((l as any).hauptkontakt));
-                                                                setLebtImHaushalt(Boolean((l as any).lebtImHaushalt));
-                                                            }}
                                                             onEnd={() => {
                                                                 const lid = getLinkId(l);
                                                                 if (!lid) {
@@ -944,7 +935,7 @@ export default function KindDetailPage() {
                                     <Field label="Sorgerecht">
                                         <Select
                                             value={String(sorgerecht)}
-                                            onValueChange={(v) => setSorgerecht(v as SorgerechtTyp)}
+                                            onValueChange={setSorgerecht}
                                         >
                                             <SelectTrigger>
                                                 <SelectValue placeholder="Bitte wählen" />
@@ -1027,7 +1018,7 @@ export default function KindDetailPage() {
                                         <Field label="Gender (optional)">
                                             <Select
                                                 value={String(createBp.gender ?? "UNBEKANNT")}
-                                                onValueChange={(v) => setCreateBp((p) => ({ ...p, gender: v as any }))}
+                                                onValueChange={(v) => setCreateBp((p) => ({ ...p, gender: v as CreateBezugspersonRequest["gender"] }))}
                                             >
                                                 <SelectTrigger>
                                                     <SelectValue placeholder="Bitte wählen" />

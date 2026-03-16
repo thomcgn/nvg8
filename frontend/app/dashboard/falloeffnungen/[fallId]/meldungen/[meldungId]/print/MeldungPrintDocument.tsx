@@ -45,7 +45,7 @@ function PrintField({
             <div className="text-[9pt] font-semibold uppercase tracking-[0.08em] text-slate-500">
                 {label}
             </div>
-            <div className="mt-1 whitespace-pre-wrap break-words text-[10.5pt] text-slate-900">
+            <div className="mt-1 whitespace-pre-wrap wrap-break-word text-[10.5pt] text-slate-900">
                 {value ?? "—"}
             </div>
         </div>

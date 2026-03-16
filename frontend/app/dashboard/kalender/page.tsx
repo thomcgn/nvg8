@@ -20,9 +20,6 @@ function formatDate(d: Date): string {
   return d.toLocaleDateString("de-DE", { weekday: "short", day: "2-digit", month: "2-digit", year: "numeric" });
 }
 
-function monthKey(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-}
 
 function daysInMonth(year: number, month: number): number {
   return new Date(year, month + 1, 0).getDate();
@@ -32,28 +29,30 @@ function dayKey(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
+function errorMessage(error: unknown, fallback: string): string {
+  if (error instanceof Error && error.message.trim()) return error.message;
+  if (typeof error === "string" && error.trim()) return error;
+  return fallback;
+}
+
 export default function KalenderPage() {
   const router = useRouter();
   const [items, setItems] = useState<FalleroeffnungListItem[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [{ loading, error }, setFetchState] = useState<{ loading: boolean; error: string | null }>({ loading: true, error: null });
 
-  const today = new Date();
+  const today = useMemo(() => new Date(), []);
   const [viewYear, setViewYear] = useState(today.getFullYear());
   const [viewMonth, setViewMonth] = useState(today.getMonth());
 
   useEffect(() => {
-    setLoading(true);
-    setError(null);
     apiFetch<FalleroeffnungListResponse>(`/falloeffnungen?size=200`, { method: "GET" })
-      .then((res) => setItems(res.items || []))
-      .catch((e: any) => setError(e?.message || "Fehler beim Laden."))
-      .finally(() => setLoading(false));
+      .then((res) => { setItems(res.items || []); setFetchState({ loading: false, error: null }); })
+      .catch((e: unknown) => setFetchState({ loading: false, error: errorMessage(e, "Fehler beim Laden.") }));
   }, []);
 
   // Items with a review date
   const withDate = useMemo(
-    () => items.filter((i) => (i as any).naechsteUeberpruefungAm),
+    () => items.filter((i) => !!i.naechsteUeberpruefungAm),
     [items]
   );
 
@@ -61,7 +60,7 @@ export default function KalenderPage() {
   const byDay = useMemo(() => {
     const map = new Map<string, FalleroeffnungListItem[]>();
     for (const item of withDate) {
-      const raw = (item as any).naechsteUeberpruefungAm as string;
+      const raw = String(item.naechsteUeberpruefungAm ?? "");
       const key = raw.substring(0, 10); // YYYY-MM-DD
       if (!map.has(key)) map.set(key, []);
       map.get(key)!.push(item);
@@ -75,7 +74,7 @@ export default function KalenderPage() {
     return Array.from(byDay.entries())
       .filter(([k]) => k >= todayKey)
       .sort(([a], [b]) => a.localeCompare(b));
-  }, [byDay]);
+  }, [byDay, today]);
 
   // Calendar grid
   const firstDayOfMonth = new Date(viewYear, viewMonth, 1).getDay(); // 0=Sun
@@ -145,7 +144,7 @@ export default function KalenderPage() {
                     const entries = byDay.get(key) || [];
                     const isToday = key === dayKey(today);
                     const hasEntries = entries.length > 0;
-                    const hasAkut = entries.some((e) => (e as any).akutGefahrImVerzug === true);
+                    const hasAkut = entries.some((e) => e.akutGefahrImVerzug === true);
 
                     return (
                       <div
@@ -205,7 +204,7 @@ export default function KalenderPage() {
                             <div className="font-semibold text-brand-blue">{item.aktenzeichen || `#${item.id}`}</div>
                             <div className="text-brand-text2">{item.kindName || "—"}</div>
                           </div>
-                          {(item as any).akutGefahrImVerzug && (
+                          {item.akutGefahrImVerzug && (
                             <Siren className="h-3.5 w-3.5 text-brand-danger shrink-0" />
                           )}
                         </div>
@@ -261,7 +260,7 @@ export default function KalenderPage() {
                                   <Badge tone="neutral">{item.status}</Badge>
                                 </td>
                                 <td className="py-3 pr-0">
-                                  {(item as any).akutGefahrImVerzug ? (
+                                  {item.akutGefahrImVerzug ? (
                                     <Badge tone="danger">AKUT</Badge>
                                   ) : (
                                     <span className="text-brand-text2">—</span>

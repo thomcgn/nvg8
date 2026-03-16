@@ -13,7 +13,7 @@ export type MeldungDetail = {
         infoEffectiveAt?: string | null;
         reasonText?: string | null;
         finalizedAt?: string | null;
-        data: any;
+        data: unknown;
         changeSummary?: string | null;
     };
     draft: null | {
@@ -48,8 +48,8 @@ export type MeldungVersion = {
     createdByName: string;
     finalizedAt?: string | null;
     finalizedByName?: string | null;
-    data: any;
-    changedFields?: any; // list/array from backend (JsonNode)
+    data: unknown;
+    changedFields?: unknown; // list/array from backend (JsonNode)
     changeSummary?: string | null;
 };
 
@@ -58,9 +58,9 @@ export type CompareResponse = {
     toVersionId: string;
     changedFields: string[];
     diff: {
-        updated: Array<{ path: string; before: any; after: any }>;
-        added: Array<{ path: string; value: any }>;
-        removed: Array<{ path: string; value: any }>;
+        updated: Array<{ path: string; before: unknown; after: unknown }>;
+        added: Array<{ path: string; value: unknown }>;
+        removed: Array<{ path: string; value: unknown }>;
     };
 };
 
@@ -80,7 +80,7 @@ export const MeldungenApi = {
     getVersion: (versionId: string) =>
         apiFetch<MeldungVersion>(`/meldungen/versions/${versionId}`),
 
-    patchDraft: (versionId: string, patch: { data?: any; changeReason?: ChangeReason | null; infoEffectiveAt?: string | null; reasonText?: string | null }) =>
+    patchDraft: (versionId: string, patch: { data?: unknown; changeReason?: ChangeReason | null; infoEffectiveAt?: string | null; reasonText?: string | null }) =>
         apiFetch<void>(`/meldungen/versions/${versionId}`, {
             method: "PATCH",
             body: patch,

@@ -35,7 +35,7 @@ export const akteApi = {
         apiFetch<AkteResponse>(`/akten/${akteId}`, { method: "GET" }),
 
     createFall: (akteId: number, req?: CreateFallInAkteRequest | null) =>
-        apiFetch<{ id: number } & Record<string, any>>(`/akten/${akteId}/faelle`, {
+        apiFetch<{ id: number } & Record<string, unknown>>(`/akten/${akteId}/faelle`, {
             method: "POST",
             body: req ?? null,
         }),

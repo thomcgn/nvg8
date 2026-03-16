@@ -4,13 +4,24 @@
     import { useParams, useRouter } from "next/navigation";
 
     import { AuthGate } from "@/components/AuthGate";
-    import { TopbarConnected as Topbar } from "@/components/layout/TopbarConnected";;
+    import { TopbarConnected as Topbar } from "@/components/layout/TopbarConnected";
     import { Card, CardContent, CardHeader } from "@/components/ui/card";
     import { Button } from "@/components/ui/button";
     import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
     import { MeldungEditor } from "@/components/meldung/MeldungEditor";
     import { meldungApi, type MeldungDraftRequest, type MeldungResponse } from "@/lib/api/meldung";
+
+    type UnknownRecord = Record<string, unknown>;
+
+    function asRecord(value: unknown): UnknownRecord | null {
+        return typeof value === "object" && value !== null ? (value as UnknownRecord) : null;
+    }
+
+    function getProp(value: unknown, key: string): unknown {
+        const rec = asRecord(value);
+        return rec ? rec[key] : undefined;
+    }
 
     function parseId(param: unknown): number | null {
         if (typeof param === "number") return Number.isFinite(param) && param > 0 ? param : null;
@@ -36,17 +47,29 @@
         );
     }
 
-    function getStatus(e: any): number | undefined {
-        return e?.status ?? e?.response?.status ?? e?.data?.status ?? e?.error?.status;
+    function getStatus(error: unknown): number | undefined {
+        const candidates = [
+            getProp(error, "status"),
+            getProp(getProp(error, "response"), "status"),
+            getProp(getProp(error, "data"), "status"),
+            getProp(getProp(error, "error"), "status"),
+        ];
+
+        for (const candidate of candidates) {
+            const parsed = parseId(candidate);
+            if (parsed !== null) return parsed;
+        }
+
+        return undefined;
     }
 
     // 👇 versucht aktenId aus params oder meldung zu ziehen
-    function getAktenId(params: any, meldung: any, fallId: number | null) {
+    function getAktenId(params: unknown, meldung: unknown, fallId: number | null) {
         return (
-            parseId(params?.aktenId) ||
-            parseId(meldung?.aktenId) ||
-            parseId(meldung?.akteId) ||
-            parseId(meldung?.akte?.id) ||
+            parseId(getProp(params, "aktenId")) ||
+            parseId(getProp(meldung, "aktenId")) ||
+            parseId(getProp(meldung, "akteId")) ||
+            parseId(getProp(getProp(meldung, "akte"), "id")) ||
             // Fallback, falls bei euch Akte == Fall (wenn nicht, nimm diese Zeile raus)
             fallId
         );
@@ -55,7 +78,7 @@
     export default function MeldungCurrentPage() {
         const params = useParams();
         const router = useRouter();
-        const fallId = parseId((params as any)?.fallId);
+        const fallId = parseId(getProp(params, "fallId"));
 
         const [loading, setLoading] = React.useState(true);
         const [err, setErr] = React.useState<string | null>(null);
@@ -72,7 +95,7 @@
             try {
                 const m = await meldungApi.current(fallId);
                 setMeldung(m);
-            } catch (e: any) {
+            } catch (e: unknown) {
                 const status = getStatus(e);
 
                 if (status === 404) {
@@ -94,7 +117,7 @@
 
         const goToAkte = React.useCallback(
             (m?: MeldungResponse | null) => {
-                const aktenId = getAktenId(params as any, m ?? meldung, fallId);
+                const aktenId = getAktenId(params, m ?? meldung, fallId);
                 if (!aktenId) return;
                 router.replace(`/dashboard/akten/${aktenId}`);
             },
@@ -174,7 +197,7 @@
                                 <CardContent className="text-sm text-muted-foreground">Bitte einen Moment…</CardContent>
                             </Card>
                         ) : meldung ? (
-                            <MeldungEditor fallId={fallId ?? 0} value={meldung} disabled={disabled} onSaveDraft={onSaveDraft} onSubmit={onSubmit} />
+                            <MeldungEditor fallId={fallId ?? 0} value={meldung} disabled={disabled} onSaveDraftAction={onSaveDraft} onSubmitAction={onSubmit} />
                         ) : null}
                     </div>
                 </div>

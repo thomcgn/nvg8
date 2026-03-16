@@ -15,7 +15,7 @@ import {
     autoScoreTone,
 } from "@/lib/api/kinderschutzbogen";
 
-export interface KinderschutzbogenState {
+export type KinderschutzbogenState = {
     bewertungsdatum: string;
     bewertungen: Record<string, { rating: number | null; notiz: string }>;
     gesamteinschaetzungManuell: number | null;
@@ -31,15 +31,15 @@ export function defaultKinderschutzbogenState(): KinderschutzbogenState {
     };
 }
 
-interface Props {
+type Props = {
     katalog: KatalogResponse | null;
     katalogLoading: boolean;
     form: KinderschutzbogenState;
     onChange: (form: KinderschutzbogenState) => void;
     disabled?: boolean;
-}
+};
 
-export function KinderschutzbogenTabContent({ katalog, katalogLoading, form, onChange, disabled }: Props) {
+export function KinderschutzbogenTabContent({ katalog, katalogLoading, form, onChange: onChangeAction, disabled }: Props) {
     const bereiche = useMemo(() => {
         if (!katalog) return [];
         const map = new Map<string, { label: string; items: KatalogItem[] }>();
@@ -76,7 +76,7 @@ export function KinderschutzbogenTabContent({ katalog, katalogLoading, form, onC
                         <input
                             type="date"
                             value={form.bewertungsdatum}
-                            onChange={(e) => onChange({ ...form, bewertungsdatum: e.target.value })}
+                            onChange={(e) => onChangeAction({ ...form, bewertungsdatum: e.target.value })}
                             disabled={disabled}
                             className="border border-brand-border/40 rounded-xl px-3 py-2 text-sm text-brand-text bg-white focus:outline-none focus:ring-2 focus:ring-brand-primary/30"
                         />
@@ -101,13 +101,13 @@ export function KinderschutzbogenTabContent({ katalog, katalogLoading, form, onC
                                 rating={form.bewertungen[item.code]?.rating ?? null}
                                 notiz={form.bewertungen[item.code]?.notiz ?? ""}
                                 onRating={(r) =>
-                                    onChange({
+                                    onChangeAction({
                                         ...form,
                                         bewertungen: { ...form.bewertungen, [item.code]: { ...form.bewertungen[item.code], rating: r } },
                                     })
                                 }
                                 onNotiz={(n) =>
-                                    onChange({
+                                    onChangeAction({
                                         ...form,
                                         bewertungen: { ...form.bewertungen, [item.code]: { ...form.bewertungen[item.code], notiz: n } },
                                     })
@@ -152,7 +152,7 @@ export function KinderschutzbogenTabContent({ katalog, katalogLoading, form, onC
                                         type="button"
                                         title={RATING_LABELS[r]}
                                         disabled={disabled}
-                                        onClick={() => onChange({ ...form, gesamteinschaetzungManuell: active ? null : r })}
+                                        onClick={() => onChangeAction({ ...form, gesamteinschaetzungManuell: active ? null : r })}
                                         className={`rounded-lg border px-2.5 py-1 text-xs font-semibold transition-all disabled:opacity-50 ${
                                             active ? RATING_ACTIVE[r] : RATING_INACTIVE[r]
                                         }`}
@@ -168,7 +168,7 @@ export function KinderschutzbogenTabContent({ katalog, katalogLoading, form, onC
                         <div className="text-xs font-semibold text-brand-text2 mb-2">Begründung / Freitext</div>
                         <Textarea
                             value={form.gesamteinschaetzungFreitext}
-                            onChange={(e) => onChange({ ...form, gesamteinschaetzungFreitext: e.target.value })}
+                            onChange={(e) => onChangeAction({ ...form, gesamteinschaetzungFreitext: e.target.value })}
                             placeholder="Fachliche Einschätzung, Begründung, Besonderheiten…"
                             rows={4}
                             disabled={disabled}
@@ -201,7 +201,7 @@ function ItemRow({
         <div className="space-y-2">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                 <div className="text-sm text-brand-text min-w-0 sm:max-w-[55%]">{item.label}</div>
-                <div className="flex items-center gap-1 flex-shrink-0">
+                <div className="flex items-center gap-1 shrink-0">
                     <div className="flex gap-1">
                         {RATINGS.map((r) => {
                             const active = rating === r;

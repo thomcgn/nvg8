@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { TicketsModal } from "@/components/support/TicketsModal";
 import { MessengerModal } from "@/components/messenger/MessengerModal";
 import { apiFetch, ApiError } from "@/lib/api";
@@ -28,9 +28,9 @@ export function TicketsUIProvider({ children }: { children: React.ReactNode }) {
 
   const refreshingRef = useRef(false);
 
-  const canFetch = !loading && !!me && !!me.contextActive;
+  const canFetch = !loading && !!me && me.contextActive;
 
-  const refreshCounts = () => {
+  const refreshCounts = useCallback(() => {
     if (!canFetch) return;
     if (refreshingRef.current) return;
     refreshingRef.current = true;
@@ -47,12 +47,7 @@ export function TicketsUIProvider({ children }: { children: React.ReactNode }) {
 
     // solange du keinen Ticket-Count Endpoint hast
     setTicketsCount(0);
-
-    // später:
-    // apiFetch<{ count: number }>("/support/tickets/my/count?status=OPEN")
-    //   .then((r) => setTicketsCount(r.count ?? 0))
-    //   .catch((e) => { if (e instanceof ApiError && (e.status===401 || e.status===403)) return; });
-  };
+  }, [canFetch]);
 
   // ✅ initial einmal laden, sobald Auth+Context bereit sind
   useEffect(() => {
@@ -77,16 +72,16 @@ export function TicketsUIProvider({ children }: { children: React.ReactNode }) {
       notificationsCount,
       ticketsCount,
     };
-  }, [notificationsCount, ticketsCount]); // refreshCounts ist stabil genug hier
+  }, [notificationsCount, ticketsCount, refreshCounts]);
 
   return (
       <TicketsUIContext.Provider value={value}>
         {children}
-        <TicketsModal open={ticketsModalOpen} onClose={value.closeTickets} />
+        <TicketsModal open={ticketsModalOpen} onCloseAction={value.closeTickets} />
         <MessengerModal
           open={messengerOpen}
-          onClose={value.closeMessenger}
-          onUnreadChange={refreshCounts}
+          onCloseAction={value.closeMessenger}
+          onUnreadChangeAction={refreshCounts}
         />
       </TicketsUIContext.Provider>
   );

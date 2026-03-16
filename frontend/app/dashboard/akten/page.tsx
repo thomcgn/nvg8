@@ -39,6 +39,12 @@ function formatDateTimeDE(value: string | null) {
   return new Intl.DateTimeFormat("de-DE", { dateStyle: "medium", timeStyle: "short" }).format(d);
 }
 
+function errorMessage(error: unknown, fallback: string): string {
+  if (error instanceof Error && error.message.trim()) return error.message;
+  if (typeof error === "string" && error.trim()) return error;
+  return fallback;
+}
+
 export default function AktenPage() {
   const router = useRouter();
 
@@ -66,8 +72,8 @@ export default function AktenPage() {
 
           const res = await apiFetch<AkteListResponse>(`/api/akten?${params.toString()}`, { method: "GET" });
           setData(res);
-        } catch (e: any) {
-          setErr(e?.message || "Konnte Aktenliste nicht laden.");
+        } catch (e: unknown) {
+          setErr(errorMessage(e, "Konnte Aktenliste nicht laden."));
           setData(null);
         } finally {
           setLoading(false);
@@ -100,7 +106,7 @@ export default function AktenPage() {
         <div className="min-h-screen bg-brand-bg overflow-x-hidden">
           <Topbar
               title="Akten"
-              onSearch={(val) => {
+              onSearchAction={(val) => {
                 setQ(val);
               }}
           />

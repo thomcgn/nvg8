@@ -221,6 +221,7 @@ export type FalleroeffnungResponse = {
   // ✅ optional: aus current Meldung gespiegelt (für Detail/Dashboard nützlich)
   akutGefahrImVerzug?: boolean | null;
   dringlichkeit?: string | null;
+  anlass?: string | null;
 };
 
 export type FalleroeffnungListItem = {

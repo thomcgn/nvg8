@@ -13,14 +13,14 @@ import {
 } from "@/lib/api/dji";
 import { ChevronDown, ChevronUp } from "lucide-react";
 
-export interface DjiPositionState {
+export type DjiPositionState = {
     belege: string;
     bewertungBool: boolean | null;
     bewertungStufe: number | null;
     open: boolean;
 }
 
-export interface DjiFormState {
+export type DjiFormState = {
     bewertungsdatum: string;
     positionen: Record<string, DjiPositionState>;
     gesamteinschaetzung: string | null;
@@ -44,15 +44,15 @@ export function initDjiPositionen(katalog: DjiKatalogResponse): Record<string, D
     return init;
 }
 
-interface Props {
+type Props = {
     katalog: DjiKatalogResponse | null;
     katalogLoading: boolean;
     form: DjiFormState;
     onChange: (form: DjiFormState) => void;
     disabled?: boolean;
-}
+};
 
-export function DjiTabContent({ katalog, katalogLoading, form, onChange, disabled }: Props) {
+export function DjiTabContent({ katalog, katalogLoading, form, onChange: onChangeAction, disabled }: Props) {
     const gruppiertNachBereich = katalog
         ? katalog.positionen.reduce<Record<string, DjiKatalogItem[]>>((acc, item) => {
               const key = item.bereich ?? "Kriterien";
@@ -64,7 +64,7 @@ export function DjiTabContent({ katalog, katalogLoading, form, onChange, disable
 
     const updatePosition = (code: string, patch: Partial<DjiPositionState>) => {
         const prev = form.positionen[code] ?? { belege: "", bewertungBool: null, bewertungStufe: null, open: true };
-        onChange({ ...form, positionen: { ...form.positionen, [code]: { ...prev, ...patch } } });
+        onChangeAction({ ...form, positionen: { ...form.positionen, [code]: { ...prev, ...patch } } });
     };
 
     if (katalogLoading) {
@@ -86,7 +86,7 @@ export function DjiTabContent({ katalog, katalogLoading, form, onChange, disable
                     <input
                         type="date"
                         value={form.bewertungsdatum}
-                        onChange={(e) => onChange({ ...form, bewertungsdatum: e.target.value })}
+                        onChange={(e) => onChangeAction({ ...form, bewertungsdatum: e.target.value })}
                         disabled={disabled}
                         className="rounded-xl border border-brand-border/40 bg-white px-3 py-2 text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-primary/30"
                     />
@@ -137,7 +137,7 @@ export function DjiTabContent({ katalog, katalogLoading, form, onChange, disable
                                         key={opt.code}
                                         disabled={disabled}
                                         onClick={() =>
-                                            onChange({ ...form, gesamteinschaetzung: active ? null : opt.code })
+                                            onChangeAction({ ...form, gesamteinschaetzung: active ? null : opt.code })
                                         }
                                         className={`rounded-xl border px-3 py-1.5 text-sm font-medium transition-colors disabled:opacity-50 ${
                                             active
@@ -153,7 +153,7 @@ export function DjiTabContent({ katalog, katalogLoading, form, onChange, disable
                     )}
                     <Textarea
                         value={form.gesamtfreitext}
-                        onChange={(e) => onChange({ ...form, gesamtfreitext: e.target.value })}
+                        onChange={(e) => onChangeAction({ ...form, gesamtfreitext: e.target.value })}
                         placeholder="Zusammenfassende fachliche Einschätzung…"
                         rows={4}
                         className="text-sm"
@@ -184,9 +184,9 @@ function DjiPositionRow({
             >
                 <span className="text-sm text-brand-text font-medium leading-snug">{item.label}</span>
                 {state.open ? (
-                    <ChevronUp className="h-4 w-4 text-brand-text2 flex-shrink-0 mt-0.5" />
+                    <ChevronUp className="h-4 w-4 text-brand-text2 shrink-0 mt-0.5" />
                 ) : (
-                    <ChevronDown className="h-4 w-4 text-brand-text2 flex-shrink-0 mt-0.5" />
+                    <ChevronDown className="h-4 w-4 text-brand-text2 shrink-0 mt-0.5" />
                 )}
             </button>
 

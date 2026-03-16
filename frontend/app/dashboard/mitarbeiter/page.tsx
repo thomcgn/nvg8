@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api";
 import { AuthGate } from "@/components/AuthGate";
@@ -179,6 +179,12 @@ const TEAM_MEMBERSHIP_TYPE_OPTIONS = [
 function emptyToNull(v: string | null | undefined): string | null {
     const value = (v ?? "").trim();
     return value.length > 0 ? value : null;
+}
+
+function errorMessage(error: unknown, fallback: string): string {
+    if (error instanceof Error && error.message.trim()) return error.message;
+    if (typeof error === "string" && error.trim()) return error;
+    return fallback;
 }
 
 function labelForOrgUnitType(type: string) {
@@ -386,8 +392,8 @@ function UserRoleRow({
         try {
             await apiFetch(`/admin/users/${user.id}/roles/${assignment.id}`, { method: "DELETE" });
             onChanged();
-        } catch (e: any) {
-            alert(e?.message ?? "Fehler beim Entfernen.");
+        } catch (e: unknown) {
+            alert(errorMessage(e, "Fehler beim Entfernen."));
         } finally {
             setBusy(false);
         }
@@ -403,8 +409,8 @@ function UserRoleRow({
             });
             setChangeRoleId(null);
             onChanged();
-        } catch (e: any) {
-            alert(e?.message ?? "Fehler beim Ändern.");
+        } catch (e: unknown) {
+            alert(errorMessage(e, "Fehler beim Ändern."));
         } finally {
             setBusy(false);
         }
@@ -534,8 +540,8 @@ function CreateTraegerDialog(props: {
                 },
             });
             onCreated(name.trim());
-        } catch (e: any) {
-            setError(e?.message ?? "Unbekannter Fehler.");
+        } catch (e: unknown) {
+            setError(errorMessage(e, "Unbekannter Fehler."));
         } finally {
             setSubmitting(false);
         }
@@ -628,8 +634,8 @@ function CreateOrgUnitDialog(props: {
                 },
             });
             onCreated(name.trim());
-        } catch (e: any) {
-            setError(e?.message ?? "Unbekannter Fehler.");
+        } catch (e: unknown) {
+            setError(errorMessage(e, "Unbekannter Fehler."));
         } finally {
             setSubmitting(false);
         }
@@ -653,7 +659,7 @@ function CreateOrgUnitDialog(props: {
                     <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                         <Field label="Bezeichnung *"><Input value={name} onChange={(e) => setName(e.target.value)} /></Field>
                         <Field label="Typ">
-                            <Select value={type} onValueChange={(v) => setType(v as any)}>
+                            <Select value={type} onValueChange={(v) => setType(v as (typeof ORG_UNIT_TYPE_OPTIONS)[number]["value"])}>
                                 <SelectTrigger><SelectValue /></SelectTrigger>
                                 <SelectContent>
                                     {allowedChildTypes(parentOrgUnitType).map((o) => (
@@ -737,8 +743,8 @@ function RenameOrgUnitDialog(props: {
                 },
             });
             onSaved(name.trim());
-        } catch (e: any) {
-            setError(e?.message ?? "Unbekannter Fehler.");
+        } catch (e: unknown) {
+            setError(errorMessage(e, "Unbekannter Fehler."));
         } finally {
             setSubmitting(false);
         }
@@ -803,8 +809,8 @@ function AssignMembershipDialog(props: {
                 body: { userId: Number(userId), teamOrgUnitId, membershipType, primary },
             });
             onAssigned();
-        } catch (e: any) {
-            setError(e?.message ?? "Unbekannter Fehler.");
+        } catch (e: unknown) {
+            setError(errorMessage(e, "Unbekannter Fehler."));
         } finally {
             setSubmitting(false);
         }
@@ -834,7 +840,7 @@ function AssignMembershipDialog(props: {
                     </Field>
 
                     <Field label="Mitgliedschaft">
-                        <Select value={membershipType} onValueChange={(v) => setMembershipType(v as any)}>
+                        <Select value={membershipType} onValueChange={(v) => setMembershipType(v as (typeof TEAM_MEMBERSHIP_TYPE_OPTIONS)[number]["value"])}>
                             <SelectTrigger><SelectValue /></SelectTrigger>
                             <SelectContent>
                                 {TEAM_MEMBERSHIP_TYPE_OPTIONS.map((o) => (
@@ -892,8 +898,8 @@ function AssignRoleDialog(props: {
                 body: { orgUnitId, role },
             });
             onAssigned();
-        } catch (e: any) {
-            setError(e?.message ?? "Unbekannter Fehler.");
+        } catch (e: unknown) {
+            setError(errorMessage(e, "Unbekannter Fehler."));
         } finally {
             setSubmitting(false);
         }
@@ -923,7 +929,7 @@ function AssignRoleDialog(props: {
                     </Field>
 
                     <Field label="Rolle">
-                        <Select value={role} onValueChange={(v) => setRole(v as any)}>
+                        <Select value={role} onValueChange={(v) => setRole(v as (typeof ROLE_OPTIONS)[number]["value"])}>
                             <SelectTrigger><SelectValue /></SelectTrigger>
                             <SelectContent>
                                 {ROLE_OPTIONS.map((o) => (
@@ -1043,6 +1049,8 @@ function CreateEmployeeWizard(props: {
             return;
         }
 
+        const currentOrgUnitId = orgUnitId;
+
         if (selectedRoles.length === 0) {
             setError("Bitte mindestens eine Rolle auswählen.");
             return;
@@ -1083,8 +1091,8 @@ function CreateEmployeeWizard(props: {
                     kannBezugspersonenDolmetschen,
                     hinweise: emptyToNull(mitarbeiterHinweise),
                 },
-                defaultOrgUnitId: orgUnitId,
-                roles: selectedRoles.map((role) => ({ orgUnitId: orgUnitId!, role })),
+                defaultOrgUnitId: currentOrgUnitId,
+                roles: selectedRoles.map((role) => ({ orgUnitId: currentOrgUnitId, role })),
             };
 
             const created = await apiFetch<{ id: number } | number>("/admin/users", {
@@ -1093,8 +1101,8 @@ function CreateEmployeeWizard(props: {
             });
 
             const userId = typeof created === "object" && created !== null
-                ? (created as { id: number }).id
-                : (created as unknown as number);
+                ? created.id
+                : created;
 
             for (const ta of teamAssignments) {
                 try {
@@ -1113,8 +1121,8 @@ function CreateEmployeeWizard(props: {
             }
 
             await onCreated();
-        } catch (e: any) {
-            setError(e?.message ?? "Unbekannter Fehler.");
+        } catch (e: unknown) {
+            setError(errorMessage(e, "Unbekannter Fehler."));
         } finally {
             setSubmitting(false);
         }
@@ -1211,7 +1219,7 @@ function CreateEmployeeWizard(props: {
                                     <Input placeholder="z. B. de" value={bevorzugteSpracheCode} onChange={(e) => setBevorzugteSpracheCode(e.target.value)} />
                                 </Field>
                                 <Field label="Dolmetschbedarf">
-                                    <Select value={dolmetschBedarf} onValueChange={(v) => setDolmetschBedarf(v as any)}>
+                                    <Select value={dolmetschBedarf} onValueChange={(v) => setDolmetschBedarf(v as (typeof DOLMETSCH_BEDARF_OPTIONS)[number]["value"])}>
                                         <SelectTrigger><SelectValue /></SelectTrigger>
                                         <SelectContent>
                                             {DOLMETSCH_BEDARF_OPTIONS.map((o) => (
@@ -1224,7 +1232,7 @@ function CreateEmployeeWizard(props: {
                                     <Input placeholder="z. B. tr" value={dolmetschSpracheCode} onChange={(e) => setDolmetschSpracheCode(e.target.value)} />
                                 </Field>
                                 <Field label="Hörstatus">
-                                    <Select value={hoerStatus} onValueChange={(v) => setHoerStatus(v as any)}>
+                                    <Select value={hoerStatus} onValueChange={(v) => setHoerStatus(v as (typeof HOER_STATUS_OPTIONS)[number]["value"])}>
                                         <SelectTrigger><SelectValue /></SelectTrigger>
                                         <SelectContent>
                                             {HOER_STATUS_OPTIONS.map((o) => (
@@ -1234,7 +1242,7 @@ function CreateEmployeeWizard(props: {
                                     </Select>
                                 </Field>
                                 <Field label="CODA-Status">
-                                    <Select value={codaStatus} onValueChange={(v) => setCodaStatus(v as any)}>
+                                    <Select value={codaStatus} onValueChange={(v) => setCodaStatus(v as (typeof CODA_STATUS_OPTIONS)[number]["value"])}>
                                         <SelectTrigger><SelectValue /></SelectTrigger>
                                         <SelectContent>
                                             {CODA_STATUS_OPTIONS.map((o) => (
@@ -1549,6 +1557,8 @@ function StrukturTab() {
     const [assignMembershipOpen, setAssignMembershipOpen] = useState(false);
     const [assignRoleOpen,       setAssignRoleOpen]       = useState(false);
 
+    const selectedNodeIdRef = useRef<number | null>(null);
+
     const canManage = useMemo(() => {
         const roles = me?.roles ?? [];
         return roles.includes("TRAEGER_ADMIN") || roles.includes("EINRICHTUNG_ADMIN");
@@ -1560,7 +1570,33 @@ function StrukturTab() {
     const selectedIsTraegerRoot = selectedNodeType === "TRAEGER";
     const canCreateChildOrgUnit = canManage && !!selectedNodeId;
 
-    async function loadAll() {
+    useEffect(() => {
+        selectedNodeIdRef.current = selectedNodeId;
+    }, [selectedNodeId]);
+
+    const loadDetails = useCallback(async (nodeId: number, nodeType: string | null) => {
+        setDetailsLoading(true);
+        try {
+            const users = await apiFetch<OrgUnitUserResponse[]>(`/admin/org-units/${nodeId}/users`);
+            setOrgUsers(Array.isArray(users) ? users : []);
+
+            if (nodeType === "TEAM") {
+                const members = await apiFetch<TeamMemberListItem>(
+                    `/admin/team-memberships/teams/${nodeId}/members`
+                );
+                setTeamMembers(Array.isArray(members) ? members : []);
+            } else {
+                setTeamMembers([]);
+            }
+        } catch {
+            setOrgUsers([]);
+            setTeamMembers([]);
+        } finally {
+            setDetailsLoading(false);
+        }
+    }, []);
+
+    const loadAll = useCallback(async () => {
         setLoading(true);
         setPageError(null);
 
@@ -1580,7 +1616,7 @@ function StrukturTab() {
                 setTraegerUsers(Array.isArray(users) ? users : []);
             } catch { /* ignorieren */ }
 
-            const initialId = selectedNodeId ?? meRes.orgUnitId ?? findFirstUsefulNodeId(safeTree);
+            const initialId = selectedNodeIdRef.current ?? meRes.orgUnitId ?? findFirstUsefulNodeId(safeTree);
             if (initialId) {
                 const node = findNodeById(safeTree, initialId);
                 setSelectedNodeId(initialId);
@@ -1594,36 +1630,16 @@ function StrukturTab() {
                 setOrgUsers([]);
                 setTeamMembers([]);
             }
-        } catch (e: any) {
-            setPageError(e?.message ?? "Die Organisationsstruktur konnte nicht geladen werden.");
+        } catch (e: unknown) {
+            setPageError(errorMessage(e, "Die Organisationsstruktur konnte nicht geladen werden."));
         } finally {
             setLoading(false);
         }
-    }
+    }, [loadDetails]);
 
-    async function loadDetails(nodeId: number, nodeType: string | null) {
-        setDetailsLoading(true);
-        try {
-            const users = await apiFetch<OrgUnitUserResponse[]>(`/admin/org-units/${nodeId}/users`);
-            setOrgUsers(Array.isArray(users) ? users : []);
-
-            if (nodeType === "TEAM") {
-                const members = await apiFetch<TeamMemberListItem[]>(
-                    `/admin/team-memberships/teams/${nodeId}/members`
-                );
-                setTeamMembers(Array.isArray(members) ? members : []);
-            } else {
-                setTeamMembers([]);
-            }
-        } catch {
-            setOrgUsers([]);
-            setTeamMembers([]);
-        } finally {
-            setDetailsLoading(false);
-        }
-    }
-
-    useEffect(() => { loadAll(); }, []);
+    useEffect(() => {
+        void loadAll();
+    }, [loadAll]);
 
     async function onSelectNode(node: OrgUnitTreeNode) {
         setSelectedNodeId(node.id);
@@ -1643,8 +1659,8 @@ function StrukturTab() {
             setSelectedNodeType(null);
             setSelectedNodeName("");
             await loadAll();
-        } catch (e: any) {
-            setPageError(e?.message ?? "Deaktivieren fehlgeschlagen.");
+        } catch (e: unknown) {
+            setPageError(errorMessage(e, "Deaktivieren fehlgeschlagen."));
         }
     }
 
@@ -1654,8 +1670,8 @@ function StrukturTab() {
             await apiFetch(`/admin/team-memberships/${membershipId}`, { method: "DELETE" });
             setPageMessage(`„${displayName}" wurde aus dem Team entfernt.`);
             if (selectedNodeId && selectedNodeType) await loadDetails(selectedNodeId, selectedNodeType);
-        } catch (e: any) {
-            setPageError(e?.message ?? "Entfernen fehlgeschlagen.");
+        } catch (e: unknown) {
+            setPageError(errorMessage(e, "Entfernen fehlgeschlagen."));
         }
     }
 

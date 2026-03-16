@@ -111,7 +111,7 @@ export default function ErstmeldungPage() {
                         const m = await meldungApi.get(id, meldungIdFromQuery);
                         if (!cancelled) setMeldung(m);
                         return;
-                    } catch (e: unknown) {
+                    } catch {
                         // wenn die gezielte Meldung nicht geht: klare Meldung + fallback auf current
                         if (!cancelled) {
                             setErr("Die angeforderte Meldung konnte nicht geladen werden (Fallback auf aktuelle Meldung).");
@@ -255,8 +255,8 @@ export default function ErstmeldungPage() {
                             fallId={fallId}
                             value={meldung}
                             disabled={disabled}
-                            onSaveDraft={onSaveDraft}
-                            onSubmit={onSubmit}
+                            onSaveDraftAction={onSaveDraft}
+                            onSubmitAction={onSubmit}
                         />
                     ) : null}
                 </div>
