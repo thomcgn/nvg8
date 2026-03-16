@@ -16,6 +16,7 @@ export interface SchutzplanState {
     vereinbarungen: string;
     beteiligte: string;
     gesamtfreitext: string;
+    status: string;
     massnahmen: Array<{
         massnahme: string;
         verantwortlich: string;
@@ -34,6 +35,7 @@ export function defaultSchutzplanState(): SchutzplanState {
         vereinbarungen: "",
         beteiligte: "",
         gesamtfreitext: "",
+        status: "AKTIV",
         massnahmen: [],
     };
 }

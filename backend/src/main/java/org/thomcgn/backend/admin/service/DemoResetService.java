@@ -27,7 +27,7 @@ public class DemoResetService {
     public void reset() {
         var principal = SecurityUtils.principalOptional();
         if (principal == null || !principal.isSystem()) {
-            throw DomainException.forbidden(ErrorCode.ACCESS_DENIED, "Only SYSTEM_ADMIN can reset demo data.");
+            throw DomainException.forbidden(ErrorCode.ACCESS_DENIED, "Nur der System Admin kann die Demo resetten!");
         }
         executeReset();
     }
