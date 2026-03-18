@@ -48,7 +48,10 @@
       "Bash(npx tsc:*)",
       "Bash(ls /home/tom/Schreibtisch/nvg8/frontend/app/dashboard/akten/\\\\[akteId\\\\]/ 2>/dev/null)",
       "Bash(ls /home/tom/Schreibtisch/nvg8/frontend/app/dashboard/akten/\\\\[akteId\\\\]/\\\\[fallId\\\\]/ 2>/dev/null)",
-      "Bash(ls /home/tom/Schreibtisch/nvg8/frontend/app/dashboard/akten/\\\\[akteId\\\\]/\\\\[fallId\\\\]/meldung/ 2>/dev/null)"
+      "Bash(ls /home/tom/Schreibtisch/nvg8/frontend/app/dashboard/akten/\\\\[akteId\\\\]/\\\\[fallId\\\\]/meldung/ 2>/dev/null)",
+      "Bash(find:*)",
+      "Bash(ls:*)",
+      "Bash(wc:*)"
     ]
   },
   "hooks": {

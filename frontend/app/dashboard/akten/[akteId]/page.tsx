@@ -279,7 +279,7 @@ export default function AkteDetailPage() {
             });
 
             if (!created?.id) throw new Error("Fall konnte nicht erstellt werden (keine id).");
-            router.push(`/dashboard/falloeffnungen/${created.id}/meldung`);
+            router.push(`/dashboard/falloeffnungen/${created.id}/meldung?mode=create`);
         };
 
         try {
@@ -485,7 +485,7 @@ export default function AkteDetailPage() {
                                                             variant="secondary"
                                                             size="sm"
                                                             className="gap-2"
-                                                            onClick={() => router.push(`/dashboard/falloeffnungen/${f.id}?autostart=meldungen`)}
+                                                            onClick={() => router.push(`/dashboard/falloeffnungen/${f.id}`)}
                                                         >
                                                             Meldungen
                                                             <ArrowRight className="h-4 w-4" />

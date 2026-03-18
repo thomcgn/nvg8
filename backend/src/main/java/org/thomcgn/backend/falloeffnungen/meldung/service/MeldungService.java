@@ -149,24 +149,26 @@ public class MeldungService {
             if (currentOpt.isPresent()) {
                 Meldung current = currentOpt.get();
 
-                if (req == null || req.supersedesId() == null) {
+                if (current.getStatus() == MeldungStatus.ENTWURF) {
                     throw DomainException.conflict(
                             ErrorCode.CONFLICT,
-                            "Current Meldung exists; update draft instead"
+                            "Current draft exists; update draft instead"
                     );
                 }
 
-                if (!Objects.equals(req.supersedesId(), current.getId())) {
+                if (req != null && req.supersedesId() != null && !Objects.equals(req.supersedesId(), current.getId())) {
                     throw DomainException.badRequest(
                             ErrorCode.VALIDATION_FAILED,
                             "supersedesId must reference the current Meldung"
                     );
                 }
 
-                current.setCurrent(false);
-                meldungRepo.saveAndFlush(current);
-
                 int nextVersion = meldungRepo.getMaxVersionNo(fall.getId()) + 1;
+
+                // Wichtig wegen uq_meldung_current_per_fall:
+                // zuerst alte aktuelle Meldung deaktivieren, dann neue current=true anlegen
+                meldungRepo.clearCurrentByFallIdExcept(fall.getId(), -1L);
+                em.flush();
 
                 Meldung m = new Meldung();
                 m.setFalleroeffnung(fall);
@@ -358,17 +360,7 @@ public class MeldungService {
         User user = currentUser();
 
         if (isCorrection) {
-            Optional<Meldung> currentOpt = meldungRepo.findCurrentByFallIdForUpdate(fall.getId());
-
-            if (currentOpt.isPresent()) {
-                Meldung current = currentOpt.get();
-
-                if (!Objects.equals(current.getId(), m.getId())) {
-                    current.setCurrent(false);
-                    meldungRepo.saveAndFlush(current);
-                }
-            }
-
+            meldungRepo.findCurrentByFallIdForUpdate(fall.getId());
             m.setCurrent(true);
         }
 
@@ -378,6 +370,10 @@ public class MeldungService {
         m.setSubmittedByDisplayName(user.getDisplayName());
 
         Meldung saved = meldungRepo.saveAndFlush(m);
+
+        if (isCorrection) {
+            meldungRepo.clearCurrentByFallIdExcept(fall.getId(), saved.getId());
+        }
 
         if (req != null && req.sectionReasons() != null && !req.sectionReasons().isEmpty()) {
             writeSectionReasons(saved, req.sectionReasons());

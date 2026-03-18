@@ -222,6 +222,7 @@ export type FalleroeffnungResponse = {
   akutGefahrImVerzug?: boolean | null;
   dringlichkeit?: string | null;
   anlass?: string | null;
+  anlassCodes?: string[] | null;
 };
 
 export type FalleroeffnungListItem = {

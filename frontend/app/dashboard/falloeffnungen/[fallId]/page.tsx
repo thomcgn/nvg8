@@ -1,15 +1,12 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import Link from "next/link";
 import { useParams } from "next/navigation";
 
 import { AuthGate } from "@/components/AuthGate";
 import { TopbarConnected as Topbar } from "@/components/layout/TopbarConnected";
 import { CaseOverview } from "@/components/fall/CaseOverview";
 
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 import { apiFetch } from "@/lib/api";
@@ -18,8 +15,6 @@ import {
     meldungApi,
     type MeldungListItemResponse,
 } from "@/lib/meldungApi";
-
-import { FileText, FileOutput } from "lucide-react";
 
 function safeNumber(v: unknown): number | null {
     if (typeof v === "number") return Number.isFinite(v) ? v : null;
@@ -96,7 +91,7 @@ export default function FallPage() {
             <div className="min-h-screen bg-background text-foreground">
                 <Topbar title="Fallübersicht" />
 
-                <div className="mx-auto w-full max-w-6xl space-y-4 px-4 pb-10 pt-4 sm:px-6">
+                <div className="mx-auto w-full max-w-screen-2xl 2xl:max-w-[1800px] space-y-6 px-4 pb-12 pt-6 sm:px-6 lg:px-8">
                     {fallId == null ? (
                         <Alert>
                             <AlertTitle>Ungültige Fall-ID</AlertTitle>
@@ -118,27 +113,7 @@ export default function FallPage() {
                                 loading={loading}
                             />
 
-                            <Card>
-                                <CardHeader>
-                                    <div className="text-lg font-semibold">Fall bearbeiten</div>
-                                </CardHeader>
-
-                                <CardContent className="flex flex-col gap-3 sm:flex-row">
-                                    <Button asChild className="gap-2">
-                                        <Link href={`/dashboard/falloeffnungen/${fallId}/meldung`}>
-                                            <FileText className="h-4 w-4" />
-                                            MeldungsWizard öffnen
-                                        </Link>
-                                    </Button>
-
-                                    <Button asChild variant="outline" className="gap-2">
-                                        <Link href={`/dashboard/falloeffnungen/${fallId}/export`}>
-                                            <FileOutput className="h-4 w-4" />
-                                            Fallakte als PDF
-                                        </Link>
-                                    </Button>
-                                </CardContent>
-                            </Card>
+                            
                         </>
                     )}
                 </div>

@@ -16,6 +16,7 @@ import {
     type MeldungResponse,
 } from "@/lib/api/meldung";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { FilePen } from "lucide-react";
 
 type ParamValue = string | string[] | undefined;
 
@@ -42,6 +43,11 @@ function isLockedStatus(status: string | null | undefined) {
         s.includes("freigabe") ||
         s.includes("freigegeben")
     );
+}
+
+function isDraftStatus(status: string | null | undefined) {
+    const s = (status ?? "").toLowerCase();
+    return s.includes("entwurf") || s.includes("draft");
 }
 
 function asRecord(v: unknown): Record<string, unknown> | null {
@@ -82,10 +88,18 @@ export default function ErstmeldungPage() {
         return parseQueryId(searchParams?.get("meldungId") ?? null);
     }, [searchParams]);
 
+    const modeFromQuery = React.useMemo(() => (searchParams?.get("mode") ?? "").toLowerCase(), [searchParams]);
+
     // ✅ optional: readonly mode erzwingen (auch wenn Draft)
     const readonlyFromQuery = React.useMemo(() => {
-        const m = (searchParams?.get("mode") ?? "").toLowerCase();
-        return m === "readonly" || m === "view";
+        return modeFromQuery === "readonly" || modeFromQuery === "view";
+    }, [modeFromQuery]);
+
+    const isCreateMode = React.useMemo(() => modeFromQuery === "create", [modeFromQuery]);
+
+    // ✅ optional: Korrektur direkt starten nach dem Laden
+    const autoStartCorrection = React.useMemo(() => {
+        return searchParams?.get("startCorrection") === "1";
     }, [searchParams]);
 
     const [loading, setLoading] = React.useState(true);
@@ -93,6 +107,9 @@ export default function ErstmeldungPage() {
     const [meldung, setMeldung] = React.useState<MeldungResponse | null>(null);
     const [confirmOpen, setConfirmOpen] = React.useState(false);
     const [creating, setCreating] = React.useState(false);
+    const [startingCorrection, setStartingCorrection] = React.useState(false);
+    const [correctionErr, setCorrectionErr] = React.useState<string | null>(null);
+    const [createHint, setCreateHint] = React.useState<string | null>(null);
 
     React.useEffect(() => {
         if (fallId == null) return;
@@ -102,14 +119,59 @@ export default function ErstmeldungPage() {
 
         async function load() {
             setErr(null);
+            setCorrectionErr(null);
+            setCreateHint(null);
             setLoading(true);
 
             try {
-                // ✅ 0) Wenn meldungId explizit mitgegeben → genau diese laden
+                if (isCreateMode) {
+                    let existingCurrent: MeldungResponse | null = null;
+                    try {
+                        existingCurrent = await meldungApi.current(id);
+                    } catch (inner) {
+                        if (getStatus(inner) !== 404) throw inner;
+                    }
+
+                    if (existingCurrent && isDraftStatus(existingCurrent.status)) {
+                        if (!cancelled) {
+                            setMeldung(existingCurrent);
+                            setCreateHint("Es existiert bereits eine Meldung im Entwurf. Bitte führen Sie diesen Entwurf fort, bevor Sie eine neue Meldung starten.");
+                            router.replace(`/dashboard/falloeffnungen/${id}/meldung?meldungId=${existingCurrent.id}`);
+                        }
+                        return;
+                    }
+
+                    const created = await meldungApi.createNew(id);
+                    if (cancelled) return;
+                    setMeldung(created);
+                    setConfirmOpen(false);
+                    router.replace(`/dashboard/falloeffnungen/${id}/meldung?meldungId=${created.id}`);
+                    return;
+                }
+
+                // ✅ 0) Wenn meldungId explizit mitgegeben → genau diese laden (z.B. aus Liste/Audit)
                 if (meldungIdFromQuery != null) {
                     try {
                         const m = await meldungApi.get(id, meldungIdFromQuery);
-                        if (!cancelled) setMeldung(m);
+                        if (cancelled) return;
+
+                        // autoStartCorrection: wenn Meldung gesperrt ist, direkt Korrektur starten
+                        if (autoStartCorrection && isLockedStatus(m.status) && m.current) {
+                            try {
+                                const correction = await meldungApi.startCorrection(id, {
+                                    targetMeldungId: m.id,
+                                });
+                                if (!cancelled) setMeldung(correction);
+                            } catch {
+                                // Korrektur fehlgeschlagen → Meldung im read-only Modus zeigen
+                                if (!cancelled) {
+                                    setCorrectionErr("Korrektur konnte nicht gestartet werden.");
+                                    setMeldung(m);
+                                }
+                            }
+                        } else {
+                            if (!cancelled) setMeldung(m);
+                        }
                         return;
                     } catch {
                         // wenn die gezielte Meldung nicht geht: klare Meldung + fallback auf current
@@ -124,6 +186,17 @@ export default function ErstmeldungPage() {
                 if (!cancelled) setMeldung(current);
             } catch (e: unknown) {
                 const status = getStatus(e);
+
+                if (isCreateMode) {
+                    if (!cancelled) {
+                        setErr(
+                            status === 409
+                                ? "Es existiert bereits eine aktive Meldung. Bitte schließen oder korrigieren Sie sie zuerst."
+                                : "Neue Meldung konnte nicht erstellt werden."
+                        );
+                    }
+                    return;
+                }
 
                 if (status === 404) {
                     // 2️⃣ Keine Meldung vorhanden → Bestätigung einholen
@@ -141,7 +214,7 @@ export default function ErstmeldungPage() {
         return () => {
             cancelled = true;
         };
-    }, [fallId, meldungIdFromQuery]);
+    }, [fallId, meldungIdFromQuery, autoStartCorrection, isCreateMode, router]);
 
     const onConfirmCreate = React.useCallback(async () => {
         if (fallId == null) return;
@@ -194,8 +267,31 @@ export default function ErstmeldungPage() {
         [fallId, meldung, router, readonlyFromQuery]
     );
 
+    const onStartCorrection = React.useCallback(async () => {
+        if (fallId == null || !meldung) return;
+        setCorrectionErr(null);
+        setStartingCorrection(true);
+        try {
+            const correction = await meldungApi.startCorrection(fallId, {
+                targetMeldungId: meldung.id,
+            });
+            setMeldung(correction);
+        } catch {
+            setCorrectionErr("Korrektur konnte nicht gestartet werden. Bitte erneut versuchen.");
+        } finally {
+            setStartingCorrection(false);
+        }
+    }, [fallId, meldung]);
+
     // ✅ disabled wenn Status locked ODER mode=readonly
     const disabled = readonlyFromQuery || isLockedStatus(meldung?.status);
+
+    // Korrektur-Button zeigen wenn Meldung gesperrt ist (nicht wegen readonly-Query)
+    // und die Meldung die aktuelle Version ist (current=true)
+    const showCorrectionButton =
+        !readonlyFromQuery &&
+        isLockedStatus(meldung?.status) &&
+        meldung?.current === true;
 
     if (fallId == null) {
         return (
@@ -223,13 +319,41 @@ export default function ErstmeldungPage() {
                             Zurück
                         </Button>
 
-                        <div className="text-xs text-muted-foreground">
-                            Fall #{fallId}
-                            {meldung ? ` · Meldung #${meldung.id} · v${meldung.versionNo}` : ""}
-                            {readonlyFromQuery ? " · read-only" : ""}
-                            {meldungIdFromQuery ? ` · requested=${meldungIdFromQuery}` : ""}
+                        <div className="flex items-center gap-3">
+                            {showCorrectionButton ? (
+                                <Button
+                                    variant="outline"
+                                    className="gap-2 border-amber-400 text-amber-700 hover:bg-amber-50"
+                                    onClick={onStartCorrection}
+                                    disabled={startingCorrection}
+                                >
+                                    <FilePen className="h-4 w-4" />
+                                    {startingCorrection ? "Wird vorbereitet…" : "Korrektur starten"}
+                                </Button>
+                            ) : null}
+
+                            <div className="text-xs text-muted-foreground">
+                                Fall #{fallId}
+                                {meldung ? ` · Meldung #${meldung.id} · v${meldung.versionNo}` : ""}
+                                {readonlyFromQuery ? " · read-only" : ""}
+                                {meldungIdFromQuery ? ` · requested=${meldungIdFromQuery}` : ""}
+                            </div>
                         </div>
                     </div>
+
+                    {correctionErr ? (
+                        <Alert>
+                            <AlertTitle>Fehler</AlertTitle>
+                            <AlertDescription>{correctionErr}</AlertDescription>
+                        </Alert>
+                    ) : null}
+
+                    {createHint ? (
+                        <Alert>
+                            <AlertTitle>Hinweis</AlertTitle>
+                            <AlertDescription>{createHint}</AlertDescription>
+                        </Alert>
+                    ) : null}
 
                     {err ? (
                         <Alert>
@@ -252,6 +376,7 @@ export default function ErstmeldungPage() {
                         </Card>
                     ) : meldung ? (
                         <MeldungEditor
+                            key={meldung.id}
                             fallId={fallId}
                             value={meldung}
                             disabled={disabled}
