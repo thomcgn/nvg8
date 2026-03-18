@@ -11,6 +11,7 @@ import org.springframework.data.repository.query.Param;
 import org.thomcgn.backend.falloeffnungen.model.Falleroeffnung;
 import org.thomcgn.backend.falloeffnungen.model.FalleroeffnungStatus;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -78,17 +79,16 @@ public interface FalleroeffnungRepository extends JpaRepository<Falleroeffnung, 
 
     // -----------------------------------------------------
     // Fall-Liste: scoped Suche (Status optional, q optional) + Paging
+    // Phase 1: liefert nur IDs (kein join fetch → Pageable-kompatibel)
     // -----------------------------------------------------
     @Query(
             value = """
-                select f
+                select f.id
                   from Falleroeffnung f
-                  join fetch f.einrichtungOrgUnit e
-                  join fetch f.traeger t
-                  join fetch f.dossier d
-                  join fetch d.kind k
-                  left join fetch f.teamOrgUnit team
-                  left join fetch f.createdBy cb
+                  join f.einrichtungOrgUnit e
+                  join f.traeger t
+                  join f.dossier d
+                  join d.kind k
                  where t.id = :traegerId
                    and e.id in :allowedEinrichtungen
                    and (:status is null or f.status = :status)
@@ -121,13 +121,27 @@ public interface FalleroeffnungRepository extends JpaRepository<Falleroeffnung, 
                    )
             """
     )
-    Page<Falleroeffnung> searchScoped(
+    Page<Long> searchScopedIds(
             @Param("traegerId") Long traegerId,
             @Param("allowedEinrichtungen") Set<Long> allowedEinrichtungen,
             @Param("status") FalleroeffnungStatus status,
             @Param("q") String q,
             Pageable pageable
     );
+
+    // Phase 2: lädt Entities mit allen Refs per join fetch (kein Pageable)
+    @Query("""
+        select f
+          from Falleroeffnung f
+          join fetch f.einrichtungOrgUnit
+          join fetch f.traeger
+          join fetch f.dossier d
+          join fetch d.kind
+          left join fetch f.teamOrgUnit
+          left join fetch f.createdBy
+         where f.id in :ids
+    """)
+    List<Falleroeffnung> findAllWithRefsByIds(@Param("ids") Collection<Long> ids);
 
     // -----------------------------------------------------
     // KindDossierService.listFaelle(): paging by dossier
