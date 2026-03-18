@@ -658,7 +658,7 @@ export default function KindDetailPage() {
                 return;
             }
 
-            router.push(`/dashboard/falloeffnungen/${fallId}/meldung`);
+            router.push(`/dashboard/falloeffnungen/${fallId}/meldung?mode=create`);
         } catch (e: unknown) {
             setErr(errorMessage(e, "Akte/Fall konnte nicht erstellt werden."));
         } finally {
@@ -1149,3 +1149,4 @@ export default function KindDetailPage() {
         </AuthGate>
     );
 }
+

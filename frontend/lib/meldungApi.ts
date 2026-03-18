@@ -6,13 +6,16 @@ export type MeldungListItemResponse = {
     current: boolean;
     status: string;
     type: string;
+    kurzbeschreibung?: string | null;
     createdAt: string | null;
     updatedAt?: string | null;
     createdByDisplayName: string | null;
     supersedesId: number | null;
     correctsId: number | null;
+    anlassCodes?: string[] | null;
     detail?: {
         kurzbeschreibung?: string | null;
+        anlassCodes?: string[] | null;
     } | null;
 };
 

@@ -1,9 +1,5 @@
 import { apiFetch } from "@/lib/api";
 
-/**
- * Backend: /falloeffnungen/{fallId}/meldungen
- */
-
 export type MeldungListItemResponse = {
     id: number;
     versionNo: number;
@@ -15,8 +11,10 @@ export type MeldungListItemResponse = {
     createdByDisplayName: string | null;
     supersedesId: number | null;
     correctsId: number | null;
+    anlassCodes?: string[] | null;
     detail?: {
         kurzbeschreibung?: string | null;
+        anlassCodes?: string[] | null;
     } | null;
 };
 

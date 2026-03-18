@@ -42,7 +42,7 @@ public class DemoResetService {
 
     private void executeReset() {
         var populator = new ResourceDatabasePopulator();
-        populator.addScript(new ClassPathResource("db/migration/R__insert_demo_admin.sql"));
+        populator.addScript(new ClassPathResource("db/migration/R__refresh_demo_seed.sql"));
         populator.setSeparator(";");
         populator.execute(dataSource);
     }
