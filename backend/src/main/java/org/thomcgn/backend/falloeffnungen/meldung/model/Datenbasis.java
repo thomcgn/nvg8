@@ -4,6 +4,7 @@ public enum Datenbasis {
     BEOBACHTUNG,
     ERZAEHLUNG,
     DRITTE,
+    KIND,
     DOKUMENT,
     UNKLAR
 }
