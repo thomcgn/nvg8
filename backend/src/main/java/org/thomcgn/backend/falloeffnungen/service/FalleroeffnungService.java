@@ -282,7 +282,8 @@ public class FalleroeffnungService {
 
         String query = (q == null || q.isBlank()) ? null : q.trim();
 
-        Page<Falleroeffnung> page = repo.searchScoped(
+        // Phase 1: Paginierte ID-Liste (kein join fetch → kein Hibernate-Pagination-Problem)
+        Page<Long> idPage = repo.searchScopedIds(
                 traegerId,
                 Set.of(activeEinrichtungId),
                 st,
@@ -290,11 +291,19 @@ public class FalleroeffnungService {
                 pageable
         );
 
+        List<Long> fallIds = idPage.getContent();
+
+        // Phase 2: Entities mit allen Refs per join fetch (nur für die aktuelle Seite)
+        final Map<Long, Falleroeffnung> fallMap;
+        if (fallIds.isEmpty()) {
+            fallMap = Map.of();
+        } else {
+            fallMap = repo.findAllWithRefsByIds(fallIds).stream()
+                    // (a, b) -> a als Sicherheitsnetz; findAllWithRefsByIds liefert keine Duplikate
+                    .collect(Collectors.toMap(Falleroeffnung::getId, f -> f, (a, b) -> a));
+        }
+
         // ✅ Batch: current Meldung Info (akut/dringlichkeit) holen
-        List<Long> fallIds = page.getContent().stream()
-                .map(Falleroeffnung::getId)
-                .filter(Objects::nonNull)
-                .toList();
 
         final Map<Long, Meldung> currentMeldungByFallId;
         if (fallIds.isEmpty()) {
@@ -309,7 +318,10 @@ public class FalleroeffnungService {
                     ));
         }
 
-        List<FalleroeffnungListItemResponse> items = page.getContent().stream()
+        // Reihenfolge aus idPage beibehalten
+        List<FalleroeffnungListItemResponse> items = fallIds.stream()
+                .map(fallMap::get)
+                .filter(Objects::nonNull)
                 .map(f -> {
                     var k = f.getDossier().getKind();
                     String kindName = ((k.getVorname() != null ? k.getVorname() : "") + " " + (k.getNachname() != null ? k.getNachname() : "")).trim();
@@ -340,7 +352,7 @@ public class FalleroeffnungService {
                 })
                 .toList();
 
-        return new FalleroeffnungListResponse(items, page.getNumber(), page.getSize(), page.getTotalElements());
+        return new FalleroeffnungListResponse(items, idPage.getNumber(), idPage.getSize(), idPage.getTotalElements());
     }
 
     // =========================================================
