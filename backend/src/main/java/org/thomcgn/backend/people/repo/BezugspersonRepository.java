@@ -15,17 +15,29 @@ public interface BezugspersonRepository extends JpaRepository<Bezugsperson, Long
     // ---------------------------------------------------------
     // Pro Träger (alle Bezugspersonen im Tenant)
     // ---------------------------------------------------------
-    @Query("""
-      select b from Bezugsperson b
-      where b.traegerId = :traegerId
-        and (:q is null or :q = '' 
-             or lower(b.vorname) like lower(concat('%', :q, '%'))
-             or lower(b.nachname) like lower(concat('%', :q, '%'))
-             or lower(b.kontaktEmail) like lower(concat('%', :q, '%'))
-             or lower(b.telefon) like lower(concat('%', :q, '%'))
-        )
-      order by b.nachname asc, b.vorname asc
-    """)
+    @Query(
+        value = """
+          select b from Bezugsperson b
+          where b.traegerId = :traegerId
+            and (:q is null or :q = ''
+                 or lower(b.vorname) like lower(concat('%', :q, '%'))
+                 or lower(b.nachname) like lower(concat('%', :q, '%'))
+                 or lower(b.kontaktEmail) like lower(concat('%', :q, '%'))
+                 or lower(b.telefon) like lower(concat('%', :q, '%'))
+             )
+          order by b.nachname asc, b.vorname asc
+        """,
+        countQuery = """
+          select count(b) from Bezugsperson b
+          where b.traegerId = :traegerId
+            and (:q is null or :q = ''
+                 or lower(b.vorname) like lower(concat('%', :q, '%'))
+                 or lower(b.nachname) like lower(concat('%', :q, '%'))
+                 or lower(b.kontaktEmail) like lower(concat('%', :q, '%'))
+                 or lower(b.telefon) like lower(concat('%', :q, '%'))
+             )
+        """
+    )
     Page<Bezugsperson> searchByTraeger(
             @Param("traegerId") Long traegerId,
             @Param("q") String q,
@@ -35,18 +47,31 @@ public interface BezugspersonRepository extends JpaRepository<Bezugsperson, Long
     // ---------------------------------------------------------
     // Optional: Pro Einrichtung (wenn du den Wizard enger scopen willst)
     // ---------------------------------------------------------
-    @Query("""
-      select b from Bezugsperson b
-      where b.traegerId = :traegerId
-        and b.ownerEinrichtungOrgUnitId = :einrichtungId
-        and (:q is null or :q = '' 
-             or lower(b.vorname) like lower(concat('%', :q, '%'))
-             or lower(b.nachname) like lower(concat('%', :q, '%'))
-             or lower(b.kontaktEmail) like lower(concat('%', :q, '%'))
-             or lower(b.telefon) like lower(concat('%', :q, '%'))
-        )
-      order by b.nachname asc, b.vorname asc
-    """)
+    @Query(
+        value = """
+          select b from Bezugsperson b
+          where b.traegerId = :traegerId
+            and b.ownerEinrichtungOrgUnitId = :einrichtungId
+            and (:q is null or :q = ''
+                 or lower(b.vorname) like lower(concat('%', :q, '%'))
+                 or lower(b.nachname) like lower(concat('%', :q, '%'))
+                 or lower(b.kontaktEmail) like lower(concat('%', :q, '%'))
+                 or lower(b.telefon) like lower(concat('%', :q, '%'))
+             )
+          order by b.nachname asc, b.vorname asc
+        """,
+        countQuery = """
+          select count(b) from Bezugsperson b
+          where b.traegerId = :traegerId
+            and b.ownerEinrichtungOrgUnitId = :einrichtungId
+            and (:q is null or :q = ''
+                 or lower(b.vorname) like lower(concat('%', :q, '%'))
+                 or lower(b.nachname) like lower(concat('%', :q, '%'))
+                 or lower(b.kontaktEmail) like lower(concat('%', :q, '%'))
+                 or lower(b.telefon) like lower(concat('%', :q, '%'))
+             )
+        """
+    )
     Page<Bezugsperson> searchByTraegerAndEinrichtung(
             @Param("traegerId") Long traegerId,
             @Param("einrichtungId") Long einrichtungId,
