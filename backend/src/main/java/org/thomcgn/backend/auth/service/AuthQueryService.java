@@ -8,22 +8,29 @@ import org.thomcgn.backend.common.errors.ErrorCode;
 import org.thomcgn.backend.common.security.JwtService;
 import org.thomcgn.backend.common.security.SecurityUtils;
 import org.thomcgn.backend.orgunits.model.OrgUnit;
+import org.thomcgn.backend.orgunits.model.OrgUnitMembership;
+import org.thomcgn.backend.orgunits.model.OrgUnitType;
 import org.thomcgn.backend.orgunits.repo.OrgUnitMembershipRepository;
+import org.thomcgn.backend.orgunits.repo.OrgUnitRepository;
 import org.thomcgn.backend.users.model.User;
 import org.thomcgn.backend.users.repo.UserRepository;
 
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 @Service
 public class AuthQueryService {
 
     private final UserRepository userRepository;
     private final OrgUnitMembershipRepository membershipRepository;
+    private final OrgUnitRepository orgUnitRepository;
 
-    public AuthQueryService(UserRepository userRepository, OrgUnitMembershipRepository membershipRepository) {
+    public AuthQueryService(UserRepository userRepository, OrgUnitMembershipRepository membershipRepository, OrgUnitRepository orgUnitRepository) {
         this.userRepository = userRepository;
         this.membershipRepository = membershipRepository;
+        this.orgUnitRepository = orgUnitRepository;
     }
 
     public MeResponse me() {
@@ -64,21 +71,47 @@ public class AuthQueryService {
     public ContextsResponse contexts() {
         Long userId = SecurityUtils.currentUserId();
 
-        List<AvailableContextDto> contexts = membershipRepository.findDistinctActiveRoleOrgUnitsForUser(userId)
-                .stream()
-                .map(this::toDto)
-                .toList();
+        List<OrgUnitMembership> memberships = membershipRepository.findAllActiveRolesByUserId(userId);
+        Map<Long, AvailableContextDto> seen = new LinkedHashMap<>();
 
-        return new ContextsResponse(contexts);
+        for (OrgUnitMembership m : memberships) {
+            OrgUnit ou = m.getOrgUnit();
+            if (ou == null || !ou.isEnabled()) continue;
+            if (ou.getTraeger() == null || !ou.getTraeger().isEnabled()) continue;
+
+            // TRAEGER-level roles grant access to all Einrichtungen under that Träger
+            if (ou.getType() == OrgUnitType.TRAEGER) {
+                orgUnitRepository.findAllEnabledByTraegerId(ou.getTraeger().getId()).stream()
+                        .filter(e -> e.getType() == OrgUnitType.EINRICHTUNG)
+                        .forEach(einr -> seen.putIfAbsent(einr.getId(), toDto(einr)));
+                continue;
+            }
+
+            OrgUnit einr = findEinrichtungAncestor(ou);
+            if (einr == null) continue;
+            seen.putIfAbsent(einr.getId(), toDto(einr));
+        }
+
+        return new ContextsResponse(List.copyOf(seen.values()));
     }
 
-    private AvailableContextDto toDto(OrgUnit ou) {
+    private AvailableContextDto toDto(OrgUnit einr) {
         return new AvailableContextDto(
-                ou.getTraeger().getId(),
-                ou.getTraeger().getName(),
-                ou.getId(),
-                ou.getType().name(),
-                ou.getName()
+                einr.getTraeger().getId(),
+                einr.getTraeger().getName(),
+                einr.getId(),
+                einr.getType().name(),
+                einr.getName()
         );
+    }
+
+    private OrgUnit findEinrichtungAncestor(OrgUnit start) {
+        OrgUnit current = start;
+        int guard = 0;
+        while (current != null && guard++ < 50) {
+            if (current.getType() == OrgUnitType.EINRICHTUNG) return current;
+            current = current.getParent();
+        }
+        return null;
     }
 }
