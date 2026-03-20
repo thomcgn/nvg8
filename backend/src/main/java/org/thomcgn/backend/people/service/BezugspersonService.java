@@ -12,6 +12,7 @@ import org.thomcgn.backend.common.errors.ErrorCode;
 import org.thomcgn.backend.common.security.SecurityUtils;
 import org.thomcgn.backend.people.dto.*;
 import org.thomcgn.backend.people.model.Bezugsperson;
+import org.thomcgn.backend.people.model.BezugspersonBeziehung;
 import org.thomcgn.backend.people.model.Gender;
 import org.thomcgn.backend.people.repo.BezugspersonRepository;
 import org.thomcgn.backend.people.repo.KindBezugspersonRepository;
@@ -65,6 +66,11 @@ public class BezugspersonService {
         b.setHausnummer(req.hausnummer());
         b.setPlz(req.plz());
         b.setOrt(req.ort());
+
+        // beziehung is optional on Bezugsperson; use fromStringOrSonstige only when
+        // processing raw string input (e.g. bulk imports). For typed API requests the
+        // enum value is already validated by Jackson deserialization.
+        b.setBeziehung(req.beziehung());
 
         return repo.save(b);
     }
@@ -186,7 +192,7 @@ public class BezugspersonService {
                 b.getHausnummer(),
                 b.getPlz(),
                 b.getOrt(),
-                null
+                b.getBeziehung()
         );
     }
 

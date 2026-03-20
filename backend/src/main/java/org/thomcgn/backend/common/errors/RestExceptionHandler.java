@@ -81,7 +81,17 @@ public class RestExceptionHandler {
 
     @ExceptionHandler(Exception.class)
     public ProblemDetail handleGeneric(Exception ex) {
-        log.error("Unhandled exception: {}", ex.getMessage(), ex);
+        // Log the full exception including root cause and stacktrace.
+        // ex.getMessage() alone may be null or unhelpful (e.g. for wrapped JPA exceptions);
+        // passing `ex` as the last argument ensures SLF4J logs the complete stacktrace.
+        Throwable rootCause = ex;
+        while (rootCause.getCause() != null) {
+            rootCause = rootCause.getCause();
+        }
+        log.error("Unhandled exception [{}]: {} | root cause [{}]: {}",
+                ex.getClass().getName(), ex.getMessage(),
+                rootCause.getClass().getName(), rootCause.getMessage(),
+                ex);
         return handleDomain(DomainException.withMeta(
                 HttpStatus.INTERNAL_SERVER_ERROR,
                 ErrorCode.INTERNAL_ERROR,
