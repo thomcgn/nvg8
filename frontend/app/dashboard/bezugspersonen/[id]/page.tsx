@@ -410,7 +410,7 @@ export default function BezugspersonDetailPage() {
                     <DialogHeader>
                         <DialogTitle>Bezugsperson löschen</DialogTitle>
                         <DialogDescription>
-                            Soll <strong>{displayName}</strong> wirklich gelöscht werden? Diese Aktion wird in der Akte protokolliert und kann nicht rückgängig gemacht werden.
+                            Soll <strong>{displayName}</strong> wirklich gelöscht werden? Die Bezugsperson wird als gelöscht markiert (Soft-Delete) und in der Akte protokolliert. Eine Wiederherstellung ist über den Administrator möglich.
                         </DialogDescription>
                     </DialogHeader>
                     {deleteErr && (
@@ -432,7 +432,7 @@ export default function BezugspersonDetailPage() {
                             className="gap-2 bg-brand-danger text-white hover:bg-brand-danger/90"
                         >
                             <Trash2 className="h-4 w-4" />
-                            {deleting ? "Löschen…" : "Endgültig löschen"}
+                            {deleting ? "Löschen…" : "Löschen"}
                         </Button>
                     </DialogFooter>
                 </DialogContent>

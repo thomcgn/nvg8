@@ -19,6 +19,7 @@ import org.thomcgn.backend.people.model.Gender;
 import org.thomcgn.backend.people.repo.BezugspersonRepository;
 import org.thomcgn.backend.people.repo.KindBezugspersonRepository;
 
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -159,7 +160,7 @@ public class BezugspersonService {
     public BezugspersonResponse get(Long id) {
         access.requireAny(Role.LESEN, Role.FACHKRAFT, Role.TEAMLEITUNG, Role.EINRICHTUNG_ADMIN, Role.TRAEGER_ADMIN);
 
-        Bezugsperson b = repo.findById(id)
+        Bezugsperson b = repo.findActiveById(id)
                 .orElseThrow(() -> DomainException.notFound(ErrorCode.NOT_FOUND, "Bezugsperson not found"));
 
         Long traegerId = SecurityUtils.currentTraegerIdRequired();
@@ -209,7 +210,7 @@ public class BezugspersonService {
     }
 
     // ---------------------------------------------------------
-    // DELETE
+    // DELETE (soft-delete – setzt deleted_at, löscht nicht aus DB)
     // ---------------------------------------------------------
     @Transactional
     public void delete(Long id) {
@@ -223,21 +224,63 @@ public class BezugspersonService {
             throw DomainException.forbidden(ErrorCode.ACCESS_DENIED, "No access.");
         }
 
+        if (b.isDeleted()) {
+            throw DomainException.conflict(ErrorCode.CONFLICT, "Bezugsperson ist bereits gelöscht.");
+        }
+
         if (kindBezugRepo.existsByBezugspersonId(id)) {
             throw DomainException.conflict(ErrorCode.CONFLICT,
                     "Bezugsperson kann nicht gelöscht werden, da sie mit Kindern verknüpft ist.");
         }
 
-        String name = b.getDisplayName();
+        b.setDeletedAt(Instant.now());
+        repo.save(b);
+
         auditService.log(
                 AuditEventAction.BEZUGSPERSON_DELETED,
                 "Bezugsperson",
                 id,
                 b.getOwnerEinrichtungOrgUnitId(),
-                String.format("Bezugsperson gelöscht: %s (ID %d)", name, id)
+                String.format("Bezugsperson gelöscht: %s (ID %d)", b.getDisplayName(), id)
+        );
+    }
+
+    // ---------------------------------------------------------
+    // RESTORE (Rollback eines Soft-Deletes)
+    // ---------------------------------------------------------
+    @Transactional
+    public BezugspersonResponse restore(Long id) {
+        access.requireAny(Role.FACHKRAFT, Role.TEAMLEITUNG, Role.EINRICHTUNG_ADMIN, Role.TRAEGER_ADMIN);
+
+        Bezugsperson b = repo.findById(id)
+                .orElseThrow(() -> DomainException.notFound(ErrorCode.NOT_FOUND, "Bezugsperson not found"));
+
+        Long traegerId = SecurityUtils.currentTraegerIdRequired();
+        if (!traegerId.equals(b.getTraegerId())) {
+            throw DomainException.forbidden(ErrorCode.ACCESS_DENIED, "No access.");
+        }
+
+        if (!b.isDeleted()) {
+            throw DomainException.conflict(ErrorCode.CONFLICT, "Bezugsperson ist nicht gelöscht.");
+        }
+
+        b.setDeletedAt(null);
+        repo.save(b);
+
+        auditService.log(
+                AuditEventAction.BEZUGSPERSON_RESTORED,
+                "Bezugsperson",
+                id,
+                b.getOwnerEinrichtungOrgUnitId(),
+                String.format("Bezugsperson wiederhergestellt: %s (ID %d)", b.getDisplayName(), id)
         );
 
-        repo.delete(b);
+        List<KindMini> kinder = kindBezugRepo.findAllKinderForBezugspersonen(List.of(id))
+                .stream()
+                .map(r -> new KindMini(r.kindId(), r.kindVorname(), r.kindNachname(), r.kindGeburtsdatum(), r.sorgerecht()))
+                .toList();
+
+        return toDto(b, kinder);
     }
 
     // ---------------------------------------------------------

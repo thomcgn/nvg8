@@ -9,16 +9,18 @@ import org.thomcgn.backend.people.model.Bezugsperson;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 
 public interface BezugspersonRepository extends JpaRepository<Bezugsperson, Long> {
 
     // ---------------------------------------------------------
-    // Pro Träger (alle Bezugspersonen im Tenant)
+    // Pro Träger (alle nicht-gelöschten Bezugspersonen im Tenant)
     // ---------------------------------------------------------
     @Query(
         value = """
           select b from Bezugsperson b
           where b.traegerId = :traegerId
+            and b.deletedAt is null
             and (:q is null or :q = ''
                  or lower(b.vorname) like lower(concat('%', :q, '%'))
                  or lower(b.nachname) like lower(concat('%', :q, '%'))
@@ -30,6 +32,7 @@ public interface BezugspersonRepository extends JpaRepository<Bezugsperson, Long
         countQuery = """
           select count(b) from Bezugsperson b
           where b.traegerId = :traegerId
+            and b.deletedAt is null
             and (:q is null or :q = ''
                  or lower(b.vorname) like lower(concat('%', :q, '%'))
                  or lower(b.nachname) like lower(concat('%', :q, '%'))
@@ -52,6 +55,7 @@ public interface BezugspersonRepository extends JpaRepository<Bezugsperson, Long
           select b from Bezugsperson b
           where b.traegerId = :traegerId
             and b.ownerEinrichtungOrgUnitId = :einrichtungId
+            and b.deletedAt is null
             and (:q is null or :q = ''
                  or lower(b.vorname) like lower(concat('%', :q, '%'))
                  or lower(b.nachname) like lower(concat('%', :q, '%'))
@@ -64,6 +68,7 @@ public interface BezugspersonRepository extends JpaRepository<Bezugsperson, Long
           select count(b) from Bezugsperson b
           where b.traegerId = :traegerId
             and b.ownerEinrichtungOrgUnitId = :einrichtungId
+            and b.deletedAt is null
             and (:q is null or :q = ''
                  or lower(b.vorname) like lower(concat('%', :q, '%'))
                  or lower(b.nachname) like lower(concat('%', :q, '%'))
@@ -85,10 +90,17 @@ public interface BezugspersonRepository extends JpaRepository<Bezugsperson, Long
   where lower(bp.vorname) = lower(:vorname)
     and lower(bp.nachname) = lower(:nachname)
     and bp.geburtsdatum = :geburtsdatum
+    and bp.deletedAt is null
 """)
     List<Bezugsperson> findDuplicates(
             @Param("vorname") String vorname,
             @Param("nachname") String nachname,
             @Param("geburtsdatum") LocalDate geburtsdatum
     );
+
+    /**
+     * Loads by id only if not soft-deleted (for normal read operations).
+     */
+    @Query("select b from Bezugsperson b where b.id = :id and b.deletedAt is null")
+    Optional<Bezugsperson> findActiveById(@Param("id") Long id);
 }

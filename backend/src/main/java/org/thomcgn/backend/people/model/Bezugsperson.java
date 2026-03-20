@@ -3,6 +3,8 @@ package org.thomcgn.backend.people.model;
 
 import jakarta.persistence.*;
 
+import java.time.Instant;
+
 @Entity
 @Table(name = "bezugspersonen")
 public class Bezugsperson extends BasePerson {
@@ -22,6 +24,9 @@ public class Bezugsperson extends BasePerson {
     @Column(name = "aufenthaltsstatus", length = 50)
     private String aufenthaltsstatus;
 
+    @Column(name = "deleted_at")
+    private Instant deletedAt;
+
     public Long getId() {
         return id;
     }
@@ -40,5 +45,17 @@ public class Bezugsperson extends BasePerson {
 
     public void setAufenthaltsstatus(String aufenthaltsstatus) {
         this.aufenthaltsstatus = aufenthaltsstatus;
+    }
+
+    public Instant getDeletedAt() {
+        return deletedAt;
+    }
+
+    public void setDeletedAt(Instant deletedAt) {
+        this.deletedAt = deletedAt;
+    }
+
+    public boolean isDeleted() {
+        return deletedAt != null;
     }
 }
