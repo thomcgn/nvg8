@@ -19,6 +19,9 @@ public class Bezugsperson extends BasePerson {
     @Column(name = "beziehung", length = 50)
     private BezugspersonBeziehung beziehung;
 
+    @Column(name = "aufenthaltsstatus", length = 50)
+    private String aufenthaltsstatus;
+
     public Long getId() {
         return id;
     }
@@ -29,5 +32,13 @@ public class Bezugsperson extends BasePerson {
 
     public void setBeziehung(BezugspersonBeziehung beziehung) {
         this.beziehung = beziehung;
+    }
+
+    public String getAufenthaltsstatus() {
+        return aufenthaltsstatus;
+    }
+
+    public void setAufenthaltsstatus(String aufenthaltsstatus) {
+        this.aufenthaltsstatus = aufenthaltsstatus;
     }
 }

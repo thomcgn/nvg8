@@ -122,10 +122,12 @@ export type BezugspersonResponse = {
   plz: string | null;
   ort: string | null;
   beziehung: BezugspersonBeziehung | null;
+  aufenthaltsstatus: string | null;
   kinder: Array<{
     id: number;
     displayName: string;
     geburtsdatum: string | null;
+    sorgerecht: SorgerechtTyp | null;
   }> | null;
 };
 

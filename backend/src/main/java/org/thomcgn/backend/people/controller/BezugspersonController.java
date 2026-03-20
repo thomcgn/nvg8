@@ -45,4 +45,10 @@ public class BezugspersonController {
     ) {
         return ResponseEntity.ok(service.findDuplicates(vorname, nachname, geburtsdatum, einrichtungId));
     }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> delete(@PathVariable Long id) {
+        service.delete(id);
+        return ResponseEntity.noContent().build();
+    }
 }

@@ -13,14 +13,24 @@ import {
     Baby,
     CalendarDays,
     UserCircle,
+    Trash2,
+    ShieldCheck,
 } from "lucide-react";
 
 import { AuthGate } from "@/components/AuthGate";
 import { TopbarConnected as Topbar } from "@/components/layout/TopbarConnected";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog";
 import { apiFetch } from "@/lib/api";
-import type { BezugspersonResponse, BezugspersonBeziehung, Gender } from "@/lib/types";
+import type { BezugspersonResponse, BezugspersonBeziehung, Gender, SorgerechtTyp } from "@/lib/types";
 
 // ---- helpers ----
 function safeIdFromParams(v: unknown): number | null {
@@ -70,6 +80,19 @@ function formatGender(g: Gender | null | undefined): string {
     return map[g] ?? g;
 }
 
+function formatSorgerecht(s: SorgerechtTyp | null | undefined): string {
+    if (!s) return "—";
+    const map: Record<string, string> = {
+        ALLEIN: "Alleinsorge",
+        GEMEINSAM: "Gemeinsames Sorgerecht",
+        KEIN: "Kein Sorgerecht",
+        AMTSPFLEGSCHAFT: "Amtspflegschaft",
+        VORMUNDSCHAFT: "Vormundschaft",
+        UNGEKLAERT: "Ungeklärt",
+    };
+    return map[s] ?? String(s).charAt(0) + String(s).slice(1).toLowerCase();
+}
+
 function formatAddress(bp: BezugspersonResponse | null): string | null {
     if (!bp) return null;
     const street = [bp.strasse, bp.hausnummer].filter(Boolean).join(" ");
@@ -96,6 +119,9 @@ export default function BezugspersonDetailPage() {
     const [bp, setBp] = React.useState<BezugspersonResponse | null>(null);
     const [loading, setLoading] = React.useState(true);
     const [err, setErr] = React.useState<string | null>(null);
+    const [deleteOpen, setDeleteOpen] = React.useState(false);
+    const [deleting, setDeleting] = React.useState(false);
+    const [deleteErr, setDeleteErr] = React.useState<string | null>(null);
 
     async function load() {
         if (!id) {
@@ -116,6 +142,21 @@ export default function BezugspersonDetailPage() {
         }
     }
 
+    async function handleDelete() {
+        if (!id) return;
+        setDeleting(true);
+        setDeleteErr(null);
+        try {
+            await apiFetch(`/bezugspersonen/${id}`, { method: "DELETE" });
+            setDeleteOpen(false);
+            router.back();
+        } catch (e: unknown) {
+            setDeleteErr(errorMessage(e, "Bezugsperson konnte nicht gelöscht werden."));
+        } finally {
+            setDeleting(false);
+        }
+    }
+
     React.useEffect(() => {
         load();
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -132,7 +173,7 @@ export default function BezugspersonDetailPage() {
 
                 <div className="mx-auto w-full max-w-6xl px-3 sm:px-6 pb-12 pt-4 space-y-4">
 
-                    {/* Back + Refresh */}
+                    {/* Back + Refresh + Delete */}
                     <div className="flex items-center justify-between gap-3">
                         <Button
                             variant="secondary"
@@ -142,15 +183,28 @@ export default function BezugspersonDetailPage() {
                             <ArrowLeft className="h-4 w-4" />
                             Zurück
                         </Button>
-                        <Button
-                            variant="secondary"
-                            onClick={() => load()}
-                            disabled={loading}
-                            className="gap-2 h-11"
-                        >
-                            <RefreshCw className="h-4 w-4" />
-                            Aktualisieren
-                        </Button>
+                        <div className="flex items-center gap-2">
+                            <Button
+                                variant="secondary"
+                                onClick={() => load()}
+                                disabled={loading}
+                                className="gap-2 h-11"
+                            >
+                                <RefreshCw className="h-4 w-4" />
+                                Aktualisieren
+                            </Button>
+                            {bp && (
+                                <Button
+                                    variant="secondary"
+                                    onClick={() => { setDeleteErr(null); setDeleteOpen(true); }}
+                                    disabled={loading}
+                                    className="gap-2 h-11 border-brand-danger/30 text-brand-danger hover:bg-brand-danger/10"
+                                >
+                                    <Trash2 className="h-4 w-4" />
+                                    Löschen
+                                </Button>
+                            )}
+                        </div>
                     </div>
 
                     {err && (
@@ -203,6 +257,14 @@ export default function BezugspersonDetailPage() {
                                     <InfoTile label="Geschlecht">{formatGender(bp.gender)}</InfoTile>
                                     <div className="sm:col-span-2">
                                         <InfoTile label="Beziehung">{formatBeziehung(bp.beziehung)}</InfoTile>
+                                    </div>
+                                    <div className="sm:col-span-2">
+                                        <InfoTile label="Aufenthaltsstatus">
+                                            <span className="flex items-center gap-1.5">
+                                                <ShieldCheck className="h-3.5 w-3.5 text-brand-text2 shrink-0" />
+                                                {bp.aufenthaltsstatus || "—"}
+                                            </span>
+                                        </InfoTile>
                                     </div>
                                 </div>
                             )}
@@ -328,6 +390,9 @@ export default function BezugspersonDetailPage() {
                                                         geb. {k.geburtsdatum}
                                                     </div>
                                                 )}
+                                                <div className="mt-0.5 text-xs text-brand-text2">
+                                                    Sorgerecht: {formatSorgerecht(k.sorgerecht)}
+                                                </div>
                                             </div>
                                         </Link>
                                     ))}
@@ -338,6 +403,40 @@ export default function BezugspersonDetailPage() {
 
                 </div>
             </div>
+
+            {/* Delete confirmation dialog */}
+            <Dialog open={deleteOpen} onOpenChange={(v) => (deleting ? null : setDeleteOpen(v))}>
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>Bezugsperson löschen</DialogTitle>
+                        <DialogDescription>
+                            Soll <strong>{displayName}</strong> wirklich gelöscht werden? Diese Aktion wird in der Akte protokolliert und kann nicht rückgängig gemacht werden.
+                        </DialogDescription>
+                    </DialogHeader>
+                    {deleteErr && (
+                        <div className="rounded-xl border border-brand-danger/20 bg-brand-danger/10 p-3 text-sm text-brand-danger">
+                            {deleteErr}
+                        </div>
+                    )}
+                    <DialogFooter>
+                        <Button
+                            variant="secondary"
+                            onClick={() => setDeleteOpen(false)}
+                            disabled={deleting}
+                        >
+                            Abbrechen
+                        </Button>
+                        <Button
+                            onClick={handleDelete}
+                            disabled={deleting}
+                            className="gap-2 bg-brand-danger text-white hover:bg-brand-danger/90"
+                        >
+                            <Trash2 className="h-4 w-4" />
+                            {deleting ? "Löschen…" : "Endgültig löschen"}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </AuthGate>
     );
 }

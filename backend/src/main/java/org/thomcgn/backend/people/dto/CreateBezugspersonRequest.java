@@ -16,5 +16,6 @@ public record CreateBezugspersonRequest(
         String hausnummer,
         String plz,
         String ort,
-        BezugspersonBeziehung beziehung
+        BezugspersonBeziehung beziehung,
+        String aufenthaltsstatus
 ) {}

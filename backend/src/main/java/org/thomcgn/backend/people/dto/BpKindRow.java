@@ -1,5 +1,7 @@
 package org.thomcgn.backend.people.dto;
 
+import org.thomcgn.backend.people.model.SorgerechtTyp;
+
 import java.time.LocalDate;
 
 public record BpKindRow(
@@ -7,5 +9,6 @@ public record BpKindRow(
         Long kindId,
         String kindVorname,
         String kindNachname,
-        LocalDate kindGeburtsdatum
+        LocalDate kindGeburtsdatum,
+        SorgerechtTyp sorgerecht
 ) {}

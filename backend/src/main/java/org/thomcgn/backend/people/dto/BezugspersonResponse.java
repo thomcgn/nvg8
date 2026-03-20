@@ -20,5 +20,6 @@ public record BezugspersonResponse(
         String plz,
         String ort,
         BezugspersonBeziehung beziehung,
+        String aufenthaltsstatus,
         List<KindMini> kinder
 ) {}

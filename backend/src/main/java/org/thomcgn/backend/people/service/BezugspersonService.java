@@ -5,6 +5,8 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.thomcgn.backend.audit.model.AuditEventAction;
+import org.thomcgn.backend.audit.service.AuditService;
 import org.thomcgn.backend.auth.model.Role;
 import org.thomcgn.backend.auth.service.AccessControlService;
 import org.thomcgn.backend.common.errors.DomainException;
@@ -27,11 +29,13 @@ public class BezugspersonService {
     private final BezugspersonRepository repo;
     private final KindBezugspersonRepository kindBezugRepo;
     private final AccessControlService access;
+    private final AuditService auditService;
 
-    public BezugspersonService(BezugspersonRepository repo, KindBezugspersonRepository kindBezugRepo, AccessControlService access) {
+    public BezugspersonService(BezugspersonRepository repo, KindBezugspersonRepository kindBezugRepo, AccessControlService access, AuditService auditService) {
         this.repo = repo;
         this.kindBezugRepo = kindBezugRepo;
         this.access = access;
+        this.auditService = auditService;
     }
 
     // ---------------------------------------------------------
@@ -71,6 +75,7 @@ public class BezugspersonService {
         // processing raw string input (e.g. bulk imports). For typed API requests the
         // enum value is already validated by Jackson deserialization.
         b.setBeziehung(req.beziehung());
+        b.setAufenthaltsstatus(req.aufenthaltsstatus());
 
         return repo.save(b);
     }
@@ -129,7 +134,7 @@ public class BezugspersonService {
                                 // LinkedHashMap ist optional; hilft wenn dein Repo-Query ein order by hat
                                 LinkedHashMap::new,
                                 Collectors.mapping(
-                                        r -> new KindMini(r.kindId(), r.kindVorname(),r.kindNachname(), r.kindGeburtsdatum()),
+                                        r -> new KindMini(r.kindId(), r.kindVorname(), r.kindNachname(), r.kindGeburtsdatum(), r.sorgerecht()),
                                         Collectors.toList()
                                 )
                         ));
@@ -164,7 +169,7 @@ public class BezugspersonService {
 
         List<KindMini> kinder = kindBezugRepo.findAllKinderForBezugspersonen(List.of(id))
                 .stream()
-                .map(r -> new KindMini(r.kindId(), r.kindVorname(), r.kindNachname(), r.kindGeburtsdatum()))
+                .map(r -> new KindMini(r.kindId(), r.kindVorname(), r.kindNachname(), r.kindGeburtsdatum(), r.sorgerecht()))
                 .toList();
 
         return toDto(b, kinder);
@@ -198,8 +203,41 @@ public class BezugspersonService {
                 b.getPlz(),
                 b.getOrt(),
                 b.getBeziehung(),
+                b.getAufenthaltsstatus(),
                 kinder
         );
+    }
+
+    // ---------------------------------------------------------
+    // DELETE
+    // ---------------------------------------------------------
+    @Transactional
+    public void delete(Long id) {
+        access.requireAny(Role.FACHKRAFT, Role.TEAMLEITUNG, Role.EINRICHTUNG_ADMIN, Role.TRAEGER_ADMIN);
+
+        Bezugsperson b = repo.findById(id)
+                .orElseThrow(() -> DomainException.notFound(ErrorCode.NOT_FOUND, "Bezugsperson not found"));
+
+        Long traegerId = SecurityUtils.currentTraegerIdRequired();
+        if (!traegerId.equals(b.getTraegerId())) {
+            throw DomainException.forbidden(ErrorCode.ACCESS_DENIED, "No access.");
+        }
+
+        if (kindBezugRepo.existsByBezugspersonId(id)) {
+            throw DomainException.conflict(ErrorCode.CONFLICT,
+                    "Bezugsperson kann nicht gelöscht werden, da sie mit Kindern verknüpft ist.");
+        }
+
+        String name = b.getDisplayName();
+        auditService.log(
+                AuditEventAction.BEZUGSPERSON_DELETED,
+                "Bezugsperson",
+                id,
+                b.getOwnerEinrichtungOrgUnitId(),
+                String.format("Bezugsperson gelöscht: %s (ID %d)", name, id)
+        );
+
+        repo.delete(b);
     }
 
     // ---------------------------------------------------------

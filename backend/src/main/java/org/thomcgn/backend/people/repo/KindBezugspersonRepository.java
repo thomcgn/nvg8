@@ -69,7 +69,8 @@ public interface KindBezugspersonRepository extends JpaRepository<KindBezugspers
             link.kind.id,
             link.kind.vorname,
             link.kind.nachname,
-            link.kind.geburtsdatum)
+            link.kind.geburtsdatum,
+            link.sorgerecht)
         from KindBezugsperson link
         where link.bezugsperson.id in :bpIds
           and link.enabled = true
@@ -83,11 +84,14 @@ public interface KindBezugspersonRepository extends JpaRepository<KindBezugspers
             link.kind.id,
             link.kind.vorname,
             link.kind.nachname,
-            link.kind.geburtsdatum
+            link.kind.geburtsdatum,
+            link.sorgerecht
         )
         from KindBezugsperson link
         where link.bezugsperson.id in :bpIds
           and link.enabled = true
     """)
     List<BpKindRow> findAllKinderForBezugspersonen(@Param("bpIds") List<Long> bpIds);
+
+    boolean existsByBezugspersonId(Long bezugspersonId);
 }
