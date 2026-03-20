@@ -632,7 +632,7 @@ VALUES
 ((SELECT id FROM traeger WHERE slug='demo-traeger'),
  (SELECT id FROM org_units WHERE name='KiTa Regenbogen' AND type='EINRICHTUNG'),
  'Lucia', 'Torres', '1995-04-25', 'WEIBLICH',
- '0157 3344550', 'lucia.torres@example.de', 'TANTE',
+ '0157 3344550', 'lucia.torres@example.de', 'SONSTIGE',
  'Frankfurter Straße', '122', '51065', 'Köln', now(), now()),
 
 ((SELECT id FROM traeger WHERE slug='demo-traeger'),
@@ -644,7 +644,7 @@ VALUES
 ((SELECT id FROM traeger WHERE slug='demo-traeger'),
  (SELECT id FROM org_units WHERE name='KiTa Regenbogen' AND type='EINRICHTUNG'),
  'Farah', 'Mansour', '1990-08-17', 'WEIBLICH',
- '0160 1112244', 'farah.mansour@example.de', 'TANTE',
+ '0160 1112244', 'farah.mansour@example.de', 'SONSTIGE',
  'Severinstraße', '8', '50678', 'Köln', now(), now()),
 
 ((SELECT id FROM traeger WHERE slug='demo-traeger'),
@@ -697,7 +697,7 @@ VALUES
 
 ((SELECT id FROM kinder WHERE vorname='Elena' AND nachname='Paredes'),
  (SELECT id FROM bezugspersonen WHERE vorname='Lucia' AND nachname='Torres'),
- 'TANTE', 'KEIN', '2025-02-04', false, false, true, now(), now()),
+ 'SONSTIGE', 'KEIN', '2025-02-04', false, false, true, now(), now()),
 
 ((SELECT id FROM kinder WHERE vorname='Tariq' AND nachname='Mansour'),
  (SELECT id FROM bezugspersonen WHERE vorname='Samir' AND nachname='Mansour'),
@@ -705,7 +705,7 @@ VALUES
 
 ((SELECT id FROM kinder WHERE vorname='Tariq' AND nachname='Mansour'),
  (SELECT id FROM bezugspersonen WHERE vorname='Farah' AND nachname='Mansour'),
- 'TANTE', 'KEIN', '2024-09-01', false, false, true, now(), now()),
+ 'SONSTIGE', 'KEIN', '2024-09-01', false, false, true, now(), now()),
 
 ((SELECT id FROM kinder WHERE vorname='Lena' AND nachname='Vogt'),
  (SELECT id FROM bezugspersonen WHERE vorname='Claudia' AND nachname='Vogt'),
