@@ -5,6 +5,7 @@ import org.thomcgn.backend.people.model.BezugspersonBeziehung;
 import org.thomcgn.backend.people.model.Gender;
 
 import java.time.LocalDate;
+import java.util.List;
 
 public record BezugspersonResponse(
         Long id,
@@ -18,5 +19,6 @@ public record BezugspersonResponse(
         String hausnummer,
         String plz,
         String ort,
-        BezugspersonBeziehung beziehung
+        BezugspersonBeziehung beziehung,
+        List<KindMini> kinder
 ) {}

@@ -162,7 +162,12 @@ public class BezugspersonService {
             throw DomainException.forbidden(ErrorCode.ACCESS_DENIED, "No access.");
         }
 
-        return toDto(b);
+        List<KindMini> kinder = kindBezugRepo.findAllKinderForBezugspersonen(List.of(id))
+                .stream()
+                .map(r -> new KindMini(r.kindId(), r.kindVorname(), r.kindNachname(), r.kindGeburtsdatum()))
+                .toList();
+
+        return toDto(b, kinder);
     }
 
     // ---------------------------------------------------------
@@ -179,7 +184,7 @@ public class BezugspersonService {
         );
     }
 
-    private BezugspersonResponse toDto(Bezugsperson b) {
+    private BezugspersonResponse toDto(Bezugsperson b, List<KindMini> kinder) {
         return new BezugspersonResponse(
                 b.getId(),
                 b.getVorname(),
@@ -192,7 +197,8 @@ public class BezugspersonService {
                 b.getHausnummer(),
                 b.getPlz(),
                 b.getOrt(),
-                b.getBeziehung()
+                b.getBeziehung(),
+                kinder
         );
     }
 
