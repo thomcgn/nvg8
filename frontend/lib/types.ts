@@ -111,13 +111,22 @@ export type BezugspersonBeziehung =
 
 export type BezugspersonResponse = {
   id: number;
-  displayName: string;
-  vorname: string;
-  nachname: string;
+  vorname: string | null;
+  nachname: string | null;
   geburtsdatum: string | null;
   gender: Gender;
   telefon: string | null;
   kontaktEmail: string | null;
+  strasse: string | null;
+  hausnummer: string | null;
+  plz: string | null;
+  ort: string | null;
+  beziehung: BezugspersonBeziehung | null;
+  kinder: Array<{
+    id: number;
+    displayName: string;
+    geburtsdatum: string | null;
+  }> | null;
 };
 
 export type BezugspersonListItem = {
