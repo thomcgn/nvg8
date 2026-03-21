@@ -3,24 +3,7 @@
 import * as React from "react";
 import type { MeldungDraftRequest, MeldungResponse } from "@/lib/api/meldung";
 import { ANLASS_CATALOG, ANLASS_CODES, ANLASS_DEFAULT_SEVERITY, anlassLabel } from "@/lib/anlass/catalog";
-import { kinderschutzbogenApi, type KatalogResponse } from "@/lib/api/kinderschutzbogen";
-import { djiApi, type DjiKatalogResponse } from "@/lib/api/dji";
 import { meldebogenApi } from "@/lib/api/meldebogen";
-import { schutzplanApi } from "@/lib/api/schutzplan";
-import { hausbesuchApi } from "@/lib/api/hausbesuch";
-import {
-    KinderschutzbogenTabContent,
-    type KinderschutzbogenState,
-    defaultKinderschutzbogenState,
-} from "./KinderschutzbogenTabContent";
-import {
-    DjiTabContent,
-    type DjiFormState,
-    defaultDjiFormState,
-    initDjiPositionen,
-} from "./DjiTabContent";
-import { SchutzplanTabContent, type SchutzplanState, defaultSchutzplanState } from "./SchutzplanTabContent";
-import { HausbesuchTabContent, type HausbesuchState, defaultHausbesuchState } from "./HausbesuchTabContent";
 
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -64,16 +47,14 @@ import {
     nowIso,
     pick,
     toErrorMessage,
-    toLocalDate,
-    todayLocalDate,
 } from "./meldungEditor.helpers";
 import { MeldungBasisSection } from "./MeldungBasisSection";
 import { FieldRow, SectionCard } from "./MeldungEditor.ui";
 import type { MelderInfo, ObservationDraft, StepStatus, TagDraft, WorkflowStepKey } from "./meldungEditor.types";
+import { COMPANION_BOGEN_PLUGINS } from "./meldungEditor.plugins";
 
 import {
     FileText,
-    ShieldAlert,
     ClipboardCheck,
     Save,
     CheckCircle2,
@@ -117,15 +98,6 @@ import {
  * goToAkte(updated). Das sollte in den Parent verlagert werden, nachdem der
  * Editor seinen gesamten Persistenzlauf beendet hat.
  */
-
-type CompanionIds = {
-    meldebogenId: number | null;
-    stuttgarterId: number | null;
-    djiSicherheitId: number | null;
-    djiRisikoId: number | null;
-    schutzplanId: number | null;
-    hausbesuchId: number | null;
-};
 
 type ContactDraft = NonNullable<MeldungDraftRequest["contacts"]>[number];
 type JugendamtDraft = NonNullable<MeldungDraftRequest["jugendamt"]>;
@@ -365,85 +337,6 @@ function mapToMeldebogenRequest(form: MeldungDraftRequest, melderInfo: MelderInf
     };
 }
 
-function mapToKinderschutzbogenRequest(form: KinderschutzbogenState) {
-    return {
-        bewertungsdatum: form.bewertungsdatum,
-        bewertungen: Object.entries(form.bewertungen).map(([itemCode, b]) => ({
-            itemCode,
-            rating: b.rating,
-            notiz: b.notiz || null,
-        })),
-        gesamteinschaetzungManuell: form.gesamteinschaetzungManuell,
-        gesamteinschaetzungFreitext: form.gesamteinschaetzungFreitext || null,
-    };
-}
-
-function mapToDjiRequest(formTyp: "SICHERHEITSEINSCHAETZUNG" | "RISIKOEINSCHAETZUNG", form: DjiFormState, katalog: DjiKatalogResponse) {
-    return {
-        formTyp,
-        bewertungsdatum: form.bewertungsdatum,
-        positionen: katalog.positionen.map((item) => {
-            const state = form.positionen[item.code];
-            return {
-                positionCode: item.code,
-                belege: state?.belege || undefined,
-                bewertungBool: item.bewertungstyp === "BOOLEAN_MIT_BELEGE" ? state?.bewertungBool ?? null : undefined,
-                bewertungStufe: item.bewertungstyp === "SECHSSTUFEN" ? state?.bewertungStufe ?? null : undefined,
-            };
-        }),
-        gesamteinschaetzung: form.gesamteinschaetzung,
-        gesamtfreitext: form.gesamtfreitext || null,
-    };
-}
-
-function mapToSchutzplanRequest(form: SchutzplanState) {
-    return {
-        erstelltAm: form.erstelltAm,
-        gueltigBis: toLocalDate(form.gueltigBis),
-        status: form.status || "AKTIV",
-        gefaehrdungssituation: form.gefaehrdungssituation || null,
-        vereinbarungen: form.vereinbarungen || null,
-        beteiligte: form.beteiligte || null,
-        naechsterTermin: toLocalDate(form.naechsterTermin),
-        gesamtfreitext: form.gesamtfreitext || null,
-        massnahmen: form.massnahmen
-            .filter((m) => String(m.massnahme ?? "").trim())
-            .map((m) => ({
-                massnahme: m.massnahme,
-                verantwortlich: m.verantwortlich || undefined,
-                bisDatum: toLocalDate(m.bisDatum),
-                status: m.status,
-            })),
-    };
-}
-
-function mapToHausbesuchRequest(form: HausbesuchState) {
-    return {
-        besuchsdatum: form.besuchsdatum,
-        besuchszeitVon: form.besuchszeitVon || null,
-        besuchszeitBis: form.besuchszeitBis || null,
-        anwesende: form.anwesende || null,
-        whgOrdnung: form.whgOrdnung || null,
-        whgHygiene: form.whgHygiene || null,
-        whgNahrungsversorgung: form.whgNahrungsversorgung || null,
-        whgUnfallgefahren: form.whgUnfallgefahren || null,
-        whgSonstiges: form.whgSonstiges || null,
-        kindErscheinungsbild: form.kindErscheinungsbild || null,
-        kindVerhalten: form.kindVerhalten || null,
-        kindStimmung: form.kindStimmung || null,
-        kindAeusserungen: form.kindAeusserungen || null,
-        kindHinweiseGefaehrdung: form.kindHinweiseGefaehrdung || null,
-        bpErscheinungsbild: form.bpErscheinungsbild || null,
-        bpVerhalten: form.bpVerhalten || null,
-        bpUmgangKind: form.bpUmgangKind || null,
-        bpKooperation: form.bpKooperation || null,
-        einschaetzungAmpel: form.einschaetzungAmpel,
-        einschaetzungText: form.einschaetzungText || null,
-        naechsteSchritte: form.naechsteSchritte || null,
-        naechsterTermin: toLocalDate(form.naechsterTermin),
-    };
-}
-
 /* ---------------- UI bits ---------------- */
 
 function PageCard(props: { title: string; icon?: React.ReactNode; children: React.ReactNode; description?: string }) {
@@ -518,80 +411,28 @@ export function MeldungEditor(props: {
         belastungSonstiges: "",
     });
 
-    const [companionIds, setCompanionIds] = React.useState<CompanionIds>({
+    const [companionIds, setCompanionIds] = React.useState<{ meldebogenId: number | null }>({
         meldebogenId: null,
-        stuttgarterId: null,
-        djiSicherheitId: null,
-        djiRisikoId: null,
-        schutzplanId: null,
-        hausbesuchId: null,
     });
 
-    const [stuttgarterKatalog, setStuttgarterKatalog] = React.useState<KatalogResponse | null>(null);
-    const [stuttgarterKatalogLoading, setStuttgarterKatalogLoading] = React.useState(false);
-    const [stuttgarterForm, setStuttgarterForm] = React.useState<KinderschutzbogenState>(defaultKinderschutzbogenState);
-
-    const [djiSicherheitKatalog, setDjiSicherheitKatalog] = React.useState<DjiKatalogResponse | null>(null);
-    const [djiSicherheitLoading, setDjiSicherheitLoading] = React.useState(false);
-    const [djiSicherheitForm, setDjiSicherheitForm] = React.useState<DjiFormState>(defaultDjiFormState);
-
-    const [djiRisikoKatalog, setDjiRisikoKatalog] = React.useState<DjiKatalogResponse | null>(null);
-    const [djiRisikoLoading, setDjiRisikoLoading] = React.useState(false);
-    const [djiRisikoForm, setDjiRisikoForm] = React.useState<DjiFormState>(defaultDjiFormState);
-
-    const [schutzplanForm, setSchutzplanForm] = React.useState<SchutzplanState>(defaultSchutzplanState);
-    const [hausbesuchForm, setHausbesuchForm] = React.useState<HausbesuchState>(defaultHausbesuchState);
+    /* -----------------------------------------------------------------------
+     * Plugin slot state: one entry per registered CompanionBogenPlugin.
+     * Each slot holds the id of the persisted record (null = not yet created)
+     * and the current form state managed by the plugin.
+     * --------------------------------------------------------------------- */
+    const [pluginSlots, setPluginSlots] = React.useState<Record<string, { id: number | null; state: unknown }>>(
+        () => Object.fromEntries(COMPANION_BOGEN_PLUGINS.map((p) => [p.key, { id: null, state: p.defaultState() }])),
+    );
 
     /* ------------------------------------------------------------------------
-     * Kataloge laden
-     * ---------------------------------------------------------------------- */
-    React.useEffect(() => {
-        setStuttgarterKatalogLoading(true);
-        kinderschutzbogenApi
-            .katalog(fallId)
-            .then((k) => {
-                setStuttgarterKatalog(k);
-                const init: KinderschutzbogenState["bewertungen"] = {};
-                k.items.forEach((item) => {
-                    init[item.code] = { rating: null, notiz: "" };
-                });
-                setStuttgarterForm((prev) => ({ ...prev, bewertungen: init }));
-            })
-            .catch(() => {})
-            .finally(() => setStuttgarterKatalogLoading(false));
-    }, [fallId]);
-
-    React.useEffect(() => {
-        setDjiSicherheitLoading(true);
-        djiApi
-            .katalog(fallId, "SICHERHEITSEINSCHAETZUNG")
-            .then((k) => {
-                setDjiSicherheitKatalog(k);
-                setDjiSicherheitForm((prev) => ({ ...prev, positionen: initDjiPositionen(k) }));
-            })
-            .catch(() => {})
-            .finally(() => setDjiSicherheitLoading(false));
-    }, [fallId]);
-
-    React.useEffect(() => {
-        setDjiRisikoLoading(true);
-        djiApi
-            .katalog(fallId, "RISIKOEINSCHAETZUNG")
-            .then((k) => {
-                setDjiRisikoKatalog(k);
-                setDjiRisikoForm((prev) => ({ ...prev, positionen: initDjiPositionen(k) }));
-            })
-            .catch(() => {})
-            .finally(() => setDjiRisikoLoading(false));
-    }, [fallId]);
-
-    /* ------------------------------------------------------------------------
-     * Bestehende Companion-Datensätze laden
+     * Load companion Bögen: catalogs + any existing records for this fall.
+     * Each registered plugin's loadInitial() handles its own catalog and data
+     * fetching, so adding a new Bogen requires no changes here.
      * ---------------------------------------------------------------------- */
     React.useEffect(() => {
         let cancelled = false;
 
-        async function loadExistingCompanions() {
+        async function loadAll() {
             const hasMeaningfulDraftData =
                 Boolean(String(value.kurzbeschreibung ?? "").trim()) ||
                 Boolean((value.observations ?? []).length) ||
@@ -599,176 +440,53 @@ export function MeldungEditor(props: {
                 Boolean(value.jugendamt) ||
                 Boolean(String(value.zusammenfassung ?? "").trim());
 
-            if (!isCorrection && !hasMeaningfulDraftData) {
-                return;
-            }
+            if (!isCorrection && !hasMeaningfulDraftData) return;
 
+            // Load all plugins in parallel – each plugin owns its catalog + data loading
+            const pluginResults = await Promise.allSettled(
+                COMPANION_BOGEN_PLUGINS.map((plugin) =>
+                    plugin.loadInitial(fallId).then((result) => ({ key: plugin.key, ...result })),
+                ),
+            );
+
+            if (cancelled) return;
+
+            setPluginSlots((prev) => {
+                const next = { ...prev };
+                for (const r of pluginResults) {
+                    if (r.status === "fulfilled") {
+                        next[r.value.key] = { id: r.value.id, state: r.value.state };
+                    }
+                }
+                return next;
+            });
+
+            // Meldebogen is loaded inline (it feeds into MeldungBasisSection)
             try {
-                const [meldeboegen, kinderschutzboegen, djiAssessments, schutzplaene, hausbesuche] = await Promise.all([
-                    meldebogenApi.list?.(fallId).catch?.(() => []) ?? [],
-                    kinderschutzbogenApi.list?.(fallId).catch?.(() => []) ?? [],
-                    djiApi.list?.(fallId).catch?.(() => []) ?? [],
-                    schutzplanApi.list?.(fallId).catch?.(() => []) ?? [],
-                    hausbesuchApi.list?.(fallId).catch?.(() => []) ?? [],
-                ]);
-
+                const meldeboegen = await (meldebogenApi.list?.(fallId).catch(() => []) ?? []);
                 if (cancelled) return;
-
                 const meldebogenItem = Array.isArray(meldeboegen) && meldeboegen.length ? meldeboegen[0] : null;
-                const stuttgarterItem = Array.isArray(kinderschutzboegen) && kinderschutzboegen.length ? kinderschutzboegen[0] : null;
-                const schutzplanItem = Array.isArray(schutzplaene) && schutzplaene.length ? schutzplaene[0] : null;
-                const hausbesuchItem = Array.isArray(hausbesuche) && hausbesuche.length ? hausbesuche[0] : null;
-
-                const djiSicherheitItem = Array.isArray(djiAssessments)
-                    ? djiAssessments.find((x) => String(x.formTyp ?? "").toUpperCase() === "SICHERHEITSEINSCHAETZUNG") ?? null
-                    : null;
-                const djiRisikoItem = Array.isArray(djiAssessments)
-                    ? djiAssessments.find((x) => String(x.formTyp ?? "").toUpperCase() === "RISIKOEINSCHAETZUNG") ?? null
-                    : null;
-
-                setCompanionIds({
-                    meldebogenId: meldebogenItem?.id ?? null,
-                    stuttgarterId: stuttgarterItem?.id ?? null,
-                    djiSicherheitId: djiSicherheitItem?.id ?? null,
-                    djiRisikoId: djiRisikoItem?.id ?? null,
-                    schutzplanId: schutzplanItem?.id ?? null,
-                    hausbesuchId: hausbesuchItem?.id ?? null,
-                });
-
-                if (meldebogenItem?.id && meldebogenApi.get) {
-                    const mb = await meldebogenApi.get(fallId, meldebogenItem.id).catch(() => null);
-                    if (!cancelled && mb) {
-                        setMelderInfo({
-                            melderName: mb.melderName ?? "",
-                            melderKontakt: mb.melderKontakt ?? "",
-                            melderBeziehungKind: mb.melderBeziehungKind ?? "",
-                            melderGlaubwuerdigkeit: mb.melderGlaubwuerdigkeit ?? null,
-                            kindAktuellerAufenthalt: mb.kindAktuellerAufenthalt ?? "",
-                            belastungKoerperlErkrankung: Boolean(mb.belastungKoerperlErkrankung),
-                            belastungPsychErkrankung: Boolean(mb.belastungPsychErkrankung),
-                            belastungSucht: Boolean(mb.belastungSucht),
-                            belastungHaeuslicheGewalt: Boolean(mb.belastungHaeuslicheGewalt),
-                            belastungSuizidgefahr: Boolean(mb.belastungSuizidgefahr),
-                            belastungGewalttaetigeErz: Boolean(mb.belastungGewalttaetigeErz),
-                            belastungSozialeIsolation: Boolean(mb.belastungSozialeIsolation),
-                            belastungSonstiges: mb.belastungSonstiges ?? "",
-                        });
-                    }
-                }
-
-                if (stuttgarterItem?.id && kinderschutzbogenApi.get) {
-                    const ksb = await kinderschutzbogenApi.get(fallId, stuttgarterItem.id).catch(() => null);
-                    if (!cancelled && ksb) {
-                        const bewertungen: KinderschutzbogenState["bewertungen"] = {};
-                        ksb.bewertungen.forEach((b) => {
-                            bewertungen[b.itemCode] = { rating: b.rating ?? null, notiz: b.notiz ?? "" };
-                        });
-
-                        setStuttgarterForm({
-                            bewertungsdatum: ksb.bewertungsdatum ?? todayLocalDate(),
-                            bewertungen,
-                            gesamteinschaetzungManuell: ksb.gesamteinschaetzungManuell ?? null,
-                            gesamteinschaetzungFreitext: ksb.gesamteinschaetzungFreitext ?? "",
-                        });
-                    }
-                }
-
-                if (djiSicherheitItem?.id && djiApi.get) {
-                    const dji = await djiApi.get(fallId, djiSicherheitItem.id).catch(() => null);
-                    if (!cancelled && dji) {
-                        setDjiSicherheitForm({
-                            bewertungsdatum: dji.bewertungsdatum ?? todayLocalDate(),
-                            gesamteinschaetzung: dji.gesamteinschaetzung ?? null,
-                            gesamtfreitext: dji.gesamtfreitext ?? "",
-                            positionen: Object.fromEntries(
-                                dji.positionen.map((p) => [
-                                    p.positionCode,
-                                    {
-                                        belege: p.belege ?? "",
-                                        bewertungBool: p.bewertungBool ?? null,
-                                        bewertungStufe: p.bewertungStufe ?? null,
-                                        open: true,
-                                    },
-                                ]),
-                            ),
-                        });
-                    }
-                }
-
-                if (djiRisikoItem?.id && djiApi.get) {
-                    const dji = await djiApi.get(fallId, djiRisikoItem.id).catch(() => null);
-                    if (!cancelled && dji) {
-                        setDjiRisikoForm({
-                            bewertungsdatum: dji.bewertungsdatum ?? todayLocalDate(),
-                            gesamteinschaetzung: dji.gesamteinschaetzung ?? null,
-                            gesamtfreitext: dji.gesamtfreitext ?? "",
-                            positionen: Object.fromEntries(
-                                dji.positionen.map((p) => [
-                                    p.positionCode,
-                                    {
-                                        belege: p.belege ?? "",
-                                        bewertungBool: p.bewertungBool ?? null,
-                                        bewertungStufe: p.bewertungStufe ?? null,
-                                        open: true,
-                                    },
-                                ]),
-                            ),
-                        });
-                    }
-                }
-
-                if (schutzplanItem?.id && schutzplanApi.get) {
-                    const sp = await schutzplanApi.get(fallId, schutzplanItem.id).catch(() => null);
-                    if (!cancelled && sp) {
-                        setSchutzplanForm({
-                            erstelltAm: sp.erstelltAm ?? todayLocalDate(),
-                            gueltigBis: sp.gueltigBis ?? "",
-                            status: sp.status ?? "AKTIV",
-                            gefaehrdungssituation: sp.gefaehrdungssituation ?? "",
-                            vereinbarungen: sp.vereinbarungen ?? "",
-                            beteiligte: sp.beteiligte ?? "",
-                            naechsterTermin: sp.naechsterTermin ?? "",
-                            gesamtfreitext: sp.gesamtfreitext ?? "",
-                            massnahmen: Array.isArray(sp.massnahmen) && sp.massnahmen.length
-                                ? sp.massnahmen.map((m) => ({
-                                    massnahme: m.massnahme ?? "",
-                                    verantwortlich: m.verantwortlich ?? "",
-                                    bisDatum: m.bisDatum ?? "",
-                                    status: m.status ?? "OFFEN",
-                                }))
-                                : defaultSchutzplanState().massnahmen,
-                        });
-                    }
-                }
-
-                if (hausbesuchItem?.id && hausbesuchApi.get) {
-                    const hb = await hausbesuchApi.get(fallId, hausbesuchItem.id).catch(() => null);
-                    if (!cancelled && hb) {
-                        setHausbesuchEnabled(true);
-                        setHausbesuchForm({
-                            besuchsdatum: hb.besuchsdatum ?? todayLocalDate(),
-                            besuchszeitVon: hb.besuchszeitVon ?? "",
-                            besuchszeitBis: hb.besuchszeitBis ?? "",
-                            anwesende: hb.anwesende ?? "",
-                            whgOrdnung: hb.whgOrdnung ?? "",
-                            whgHygiene: hb.whgHygiene ?? "",
-                            whgNahrungsversorgung: hb.whgNahrungsversorgung ?? "",
-                            whgUnfallgefahren: hb.whgUnfallgefahren ?? "",
-                            whgSonstiges: hb.whgSonstiges ?? "",
-                            kindErscheinungsbild: hb.kindErscheinungsbild ?? "",
-                            kindVerhalten: hb.kindVerhalten ?? "",
-                            kindStimmung: hb.kindStimmung ?? "",
-                            kindAeusserungen: hb.kindAeusserungen ?? "",
-                            kindHinweiseGefaehrdung: hb.kindHinweiseGefaehrdung ?? "",
-                            bpErscheinungsbild: hb.bpErscheinungsbild ?? "",
-                            bpVerhalten: hb.bpVerhalten ?? "",
-                            bpUmgangKind: hb.bpUmgangKind ?? "",
-                            bpKooperation: hb.bpKooperation ?? "",
-                            einschaetzungAmpel: hb.einschaetzungAmpel ?? "GELB",
-                            einschaetzungText: hb.einschaetzungText ?? "",
-                            naechsteSchritte: hb.naechsteSchritte ?? "",
-                            naechsterTermin: hb.naechsterTermin ?? "",
-                        });
+                if (meldebogenItem?.id) {
+                    setCompanionIds((prev) => ({ ...prev, meldebogenId: meldebogenItem.id }));
+                    if (meldebogenApi.get) {
+                        const mb = await meldebogenApi.get(fallId, meldebogenItem.id).catch(() => null);
+                        if (!cancelled && mb) {
+                            setMelderInfo({
+                                melderName: mb.melderName ?? "",
+                                melderKontakt: mb.melderKontakt ?? "",
+                                melderBeziehungKind: mb.melderBeziehungKind ?? "",
+                                melderGlaubwuerdigkeit: mb.melderGlaubwuerdigkeit ?? null,
+                                kindAktuellerAufenthalt: mb.kindAktuellerAufenthalt ?? "",
+                                belastungKoerperlErkrankung: Boolean(mb.belastungKoerperlErkrankung),
+                                belastungPsychErkrankung: Boolean(mb.belastungPsychErkrankung),
+                                belastungSucht: Boolean(mb.belastungSucht),
+                                belastungHaeuslicheGewalt: Boolean(mb.belastungHaeuslicheGewalt),
+                                belastungSuizidgefahr: Boolean(mb.belastungSuizidgefahr),
+                                belastungGewalttaetigeErz: Boolean(mb.belastungGewalttaetigeErz),
+                                belastungSozialeIsolation: Boolean(mb.belastungSozialeIsolation),
+                                belastungSonstiges: mb.belastungSonstiges ?? "",
+                            });
+                        }
                     }
                 }
             } catch {
@@ -776,7 +494,7 @@ export function MeldungEditor(props: {
             }
         }
 
-        loadExistingCompanions();
+        loadAll();
         return () => {
             cancelled = true;
         };
