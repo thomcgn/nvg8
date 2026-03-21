@@ -433,15 +433,6 @@ export function MeldungEditor(props: {
         let cancelled = false;
 
         async function loadAll() {
-            const hasMeaningfulDraftData =
-                Boolean(String(value.kurzbeschreibung ?? "").trim()) ||
-                Boolean((value.observations ?? []).length) ||
-                Boolean((value.contacts ?? []).length) ||
-                Boolean(value.jugendamt) ||
-                Boolean(String(value.zusammenfassung ?? "").trim());
-
-            if (!isCorrection && !hasMeaningfulDraftData) return;
-
             // Load all plugins in parallel – each plugin owns its catalog + data loading
             const pluginResults = await Promise.allSettled(
                 COMPANION_BOGEN_PLUGINS.map((plugin) =>
@@ -501,12 +492,6 @@ export function MeldungEditor(props: {
     }, [
         fallId,
         value.id,
-        value.kurzbeschreibung,
-        value.observations,
-        value.contacts,
-        value.jugendamt,
-        value.zusammenfassung,
-        isCorrection,
     ]);
 
     React.useEffect(() => {
