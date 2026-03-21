@@ -381,7 +381,6 @@ export function MeldungEditor(props: {
     }, [value]);
 
     const [activeStep, setActiveStep] = React.useState<WorkflowStepKey>("aufnahme");
-    const [hausbesuchEnabled, setHausbesuchEnabled] = React.useState(false);
 
     const [form, setForm] = React.useState<MeldungDraftRequest>(() => syncAllObservations(toDraftFromResponse(value)));
     const initialDraftRef = React.useRef<MeldungDraftRequest>(syncAllObservations(toDraftFromResponse(value)));
@@ -533,19 +532,11 @@ export function MeldungEditor(props: {
 
         setCompanionIds({
             meldebogenId: null,
-            stuttgarterId: null,
-            djiSicherheitId: null,
-            djiRisikoId: null,
-            schutzplanId: null,
-            hausbesuchId: null,
         });
 
-        setStuttgarterForm(defaultKinderschutzbogenState);
-        setDjiSicherheitForm(defaultDjiFormState);
-        setDjiRisikoForm(defaultDjiFormState);
-        setSchutzplanForm(defaultSchutzplanState);
-        setHausbesuchForm(defaultHausbesuchState);
-        setHausbesuchEnabled(false);
+        setPluginSlots(
+            Object.fromEntries(COMPANION_BOGEN_PLUGINS.map((p) => [p.key, { id: null, state: p.defaultState() }])),
+        );
 
         setSaveMsg(null);
         setValidationErr(null);
@@ -726,78 +717,26 @@ export function MeldungEditor(props: {
             }
         } catch {}
 
-        if (stuttgarterKatalog) {
-            try {
-                const req = mapToKinderschutzbogenRequest(stuttgarterForm);
-                if (companionIds.stuttgarterId) {
-                    await kinderschutzbogenApi.update(fallId, companionIds.stuttgarterId, req);
-                } else {
-                    const result = await kinderschutzbogenApi.create(fallId, req);
-                    setCompanionIds((prev) => ({ ...prev, stuttgarterId: result.id }));
-                }
-            } catch {}
-        }
-
-        if (djiSicherheitKatalog) {
-            try {
-                const req = mapToDjiRequest("SICHERHEITSEINSCHAETZUNG", djiSicherheitForm, djiSicherheitKatalog);
-                if (companionIds.djiSicherheitId) {
-                    await djiApi.update(fallId, companionIds.djiSicherheitId, req);
-                } else {
-                    const result = await djiApi.create(fallId, req);
-                    setCompanionIds((prev) => ({ ...prev, djiSicherheitId: result.id }));
-                }
-            } catch {}
-        }
-
-        if (djiRisikoKatalog) {
-            try {
-                const req = mapToDjiRequest("RISIKOEINSCHAETZUNG", djiRisikoForm, djiRisikoKatalog);
-                if (companionIds.djiRisikoId) {
-                    await djiApi.update(fallId, companionIds.djiRisikoId, req);
-                } else {
-                    const result = await djiApi.create(fallId, req);
-                    setCompanionIds((prev) => ({ ...prev, djiRisikoId: result.id }));
-                }
-            } catch {}
-        }
-
-        try {
-            const req = mapToSchutzplanRequest(schutzplanForm);
-            if (companionIds.schutzplanId) {
-                await schutzplanApi.update(fallId, companionIds.schutzplanId, req);
-            } else {
-                const result = await schutzplanApi.create(fallId, req);
-                setCompanionIds((prev) => ({ ...prev, schutzplanId: result.id }));
-            }
-        } catch {}
-
-        if (hausbesuchEnabled) {
-            try {
-                const req = mapToHausbesuchRequest(hausbesuchForm);
-                if (companionIds.hausbesuchId) {
-                    await hausbesuchApi.update(fallId, companionIds.hausbesuchId, req);
-                } else {
-                    const result = await hausbesuchApi.create(fallId, req);
-                    setCompanionIds((prev) => ({ ...prev, hausbesuchId: result.id }));
-                }
-            } catch {}
-        }
+        await Promise.allSettled(
+            COMPANION_BOGEN_PLUGINS.map(async (plugin) => {
+                const slot = pluginSlots[plugin.key];
+                if (!slot) return;
+                if (plugin.isEnabled && !plugin.isEnabled({ mainForm: normalized, state: slot.state })) return;
+                try {
+                    const newId = await plugin.save(fallId, slot.id, slot.state);
+                    if (newId !== slot.id) {
+                        setPluginSlots((prev) => ({ ...prev, [plugin.key]: { ...prev[plugin.key], id: newId } }));
+                    }
+                } catch {}
+            }),
+        );
     }, [
         companionIds,
-        djiRisikoForm,
-        djiRisikoKatalog,
-        djiSicherheitForm,
-        djiSicherheitKatalog,
         fallId,
         form,
-        hausbesuchEnabled,
-        hausbesuchForm,
         melderInfo,
+        pluginSlots,
         saveDraftFn,
-        schutzplanForm,
-        stuttgarterForm,
-        stuttgarterKatalog,
     ]);
 
     const doSave = async () => {
@@ -1372,16 +1311,6 @@ export function MeldungEditor(props: {
                     </div>
                 ))}
             </div>
-
-            <Separator className="my-3" />
-
-            <div className={`rounded-2xl border p-3 flex items-center justify-between ${hausbesuchEnabled ? "border-blue-300 bg-blue-50" : "border-brand-border/25 bg-white"}`}>
-                <div className="min-w-0">
-                    <div className={`text-sm font-semibold ${hausbesuchEnabled ? "text-blue-800" : "text-brand-text"}`}>Hausbesuch / Elterngespräch zu Hause</div>
-                    <div className="text-xs text-brand-text2 mt-0.5">Aktivieren, um das Protokoll als Teil desselben Prozesses auszufüllen.</div>
-                </div>
-                <Switch checked={hausbesuchEnabled} onCheckedChange={setHausbesuchEnabled} disabled={disabled || statusIsDone} />
-            </div>
         </SectionCard>
     );
 
@@ -1486,33 +1415,23 @@ export function MeldungEditor(props: {
                 return (
                     <div className="space-y-4">
                         {renderFachSection()}
-                        <PageCard title="Stuttgarter Kinderschutzbogen" icon={<ShieldAlert className="h-4 w-4 text-brand-text2" />}>
-                            <KinderschutzbogenTabContent
-                                katalog={stuttgarterKatalog}
-                                katalogLoading={stuttgarterKatalogLoading}
-                                form={stuttgarterForm}
-                                onChange={setStuttgarterForm}
-                                disabled={disabled || statusIsDone}
-                            />
-                        </PageCard>
-                        <PageCard title="DJI · Sicherheitseinschätzung" icon={<ShieldAlert className="h-4 w-4 text-brand-text2" />}>
-                            <DjiTabContent
-                                katalog={djiSicherheitKatalog}
-                                katalogLoading={djiSicherheitLoading}
-                                form={djiSicherheitForm}
-                                onChange={setDjiSicherheitForm}
-                                disabled={disabled || statusIsDone}
-                            />
-                        </PageCard>
-                        <PageCard title="DJI · Risikoeinschätzung" icon={<ShieldAlert className="h-4 w-4 text-brand-text2" />}>
-                            <DjiTabContent
-                                katalog={djiRisikoKatalog}
-                                katalogLoading={djiRisikoLoading}
-                                form={djiRisikoForm}
-                                onChange={setDjiRisikoForm}
-                                disabled={disabled || statusIsDone}
-                            />
-                        </PageCard>
+                        {COMPANION_BOGEN_PLUGINS.filter((p) => p.step === "einschaetzung").map((plugin) => {
+                            const slot = pluginSlots[plugin.key];
+                            if (!slot) return null;
+                            return (
+                                <PageCard key={plugin.key} title={plugin.label} icon={plugin.icon}>
+                                    {plugin.render({
+                                        state: slot.state,
+                                        onChange: (next) =>
+                                            setPluginSlots((prev) => ({
+                                                ...prev,
+                                                [plugin.key]: { ...prev[plugin.key], state: next },
+                                            })),
+                                        disabled: disabled || statusIsDone,
+                                    })}
+                                </PageCard>
+                            );
+                        })}
                     </div>
                 );
             case "massnahmen":
@@ -1520,14 +1439,23 @@ export function MeldungEditor(props: {
                     <div className="space-y-4">
                         {renderAkutSection()}
                         {renderContactsSection()}
-                        <PageCard title="Schutzplan" icon={<CheckCircle2 className="h-4 w-4 text-brand-text2" />}>
-                            <SchutzplanTabContent form={schutzplanForm} onChange={setSchutzplanForm} disabled={disabled || statusIsDone} />
-                        </PageCard>
-                        {hausbesuchEnabled ? (
-                            <PageCard title="Hausbesuch / Elterngespräch" icon={<Building2 className="h-4 w-4 text-brand-text2" />}>
-                                <HausbesuchTabContent form={hausbesuchForm} onChange={setHausbesuchForm} disabled={disabled || statusIsDone} />
-                            </PageCard>
-                        ) : null}
+                        {COMPANION_BOGEN_PLUGINS.filter((p) => p.step === "massnahmen").map((plugin) => {
+                            const slot = pluginSlots[plugin.key];
+                            if (!slot) return null;
+                            return (
+                                <PageCard key={plugin.key} title={plugin.label} icon={plugin.icon}>
+                                    {plugin.render({
+                                        state: slot.state,
+                                        onChange: (next) =>
+                                            setPluginSlots((prev) => ({
+                                                ...prev,
+                                                [plugin.key]: { ...prev[plugin.key], state: next },
+                                            })),
+                                        disabled: disabled || statusIsDone,
+                                    })}
+                                </PageCard>
+                            );
+                        })}
                     </div>
                 );
             case "planung":
@@ -1647,7 +1575,10 @@ export function MeldungEditor(props: {
                             <Badge tone="info">DJI Sicherheit</Badge>
                             <Badge tone="info">DJI Risiko</Badge>
                             <Badge tone="info">Schutzplan</Badge>
-                            {hausbesuchEnabled ? <Badge tone="info">Hausbesuch</Badge> : null}
+                            {COMPANION_BOGEN_PLUGINS.find((p) => p.key === "hausbesuch")?.isEnabled?.({
+                                mainForm: form,
+                                state: pluginSlots["hausbesuch"]?.state,
+                            }) ? <Badge tone="info">Hausbesuch</Badge> : null}
                         </div>
                     </PageCard>
                 </div>
